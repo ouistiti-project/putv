@@ -136,6 +136,7 @@ static sink_ctx_t *alsa_init(mediaplayer_ctx_t *mctx, const char *soundcard)
 	jitter_t *jitter = jitter_scattergather_init(jitter_name, 10, size);
 	ctx->in = jitter;
 	jitter->format = format;
+	jitter->ctx->thredhold = 5;
 
 	ctx->ctx = mctx;
 

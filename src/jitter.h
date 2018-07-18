@@ -9,7 +9,7 @@ struct jitter_ctx_s
 	const char *name;
 	unsigned int count;
 	size_t size;
-	size_t thredhold;
+	unsigned int thredhold;
 	consume_t consume;
 	void *consumer;
 	produce_t produce;

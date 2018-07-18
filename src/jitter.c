@@ -57,13 +57,20 @@ typedef struct jitter_private_s jitter_private_t;
 struct jitter_private_s
 {
 	unsigned char *buffer;
-	size_t offset;
 	scatter_t *sg;
 	scatter_t *in;
 	scatter_t *out;
 	pthread_mutex_t mutex;
 	pthread_cond_t condpush;
 	pthread_cond_t condpeer;
+	unsigned int level; 
+	enum
+	{
+		JITTER_STOP,
+		JITTER_FILLING,
+		JITTER_RUNNING,
+		JITTER_OVERFLOW,
+	} state;
 };
 
 static const jitter_ops_t *jitter_scattergather;
@@ -132,10 +139,24 @@ void jitter_scattergather_destroy(jitter_t *jitter)
 	free(jitter);
 }
 
+static void _jitter_init(jitter_ctx_t *jitter)
+{
+	jitter_private_t *private = (jitter_private_t *)jitter->private;
+
+	if (jitter->thredhold == 0)
+		private->state = JITTER_RUNNING;
+	else
+		private->state = JITTER_FILLING;
+}
+
 unsigned char *jitter_pull(jitter_ctx_t *jitter)
 {
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
 
+	pthread_mutex_lock(&private->mutex);
+	if (private->state == JITTER_STOP)
+		_jitter_init(jitter);
+	pthread_mutex_unlock(&private->mutex);
 	if ((private->in == private->out) &&
 		(private->in->state == SCATTER_READY) &&
 		(jitter->consume != NULL))
@@ -171,13 +192,28 @@ void jitter_push(jitter_ctx_t *jitter)
 
 	private->in->state = SCATTER_READY;
 	private->in = private->in->next;
-	pthread_cond_broadcast(&private->condpeer);
+	pthread_mutex_lock(&private->mutex);
+	private->level++;
+	pthread_mutex_unlock(&private->mutex);
+	if (private->state == JITTER_RUNNING)
+	{
+		pthread_cond_broadcast(&private->condpeer);
+	}
+	else if (private->state == JITTER_FILLING &&
+			private->level == jitter->thredhold)
+	{
+		private->state = JITTER_RUNNING;
+	}
 }
 
 unsigned char *jitter_peer(jitter_ctx_t *jitter)
 {
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
 
+	pthread_mutex_lock(&private->mutex);
+	if (private->state == JITTER_STOP)
+		_jitter_init(jitter);
+	pthread_mutex_unlock(&private->mutex);
 	if ((private->in == private->out) &&
 		(private->out->state == SCATTER_FREE) &&
 		(jitter->produce != NULL))
@@ -213,7 +249,16 @@ void jitter_pop(jitter_ctx_t *jitter)
 
 	private->out->state = SCATTER_FREE;
 	private->out = private->out->next;
-	pthread_cond_broadcast(&private->condpush);
+	pthread_mutex_lock(&private->mutex);
+	private->level--;
+	pthread_mutex_unlock(&private->mutex);
+	if (private->state == JITTER_RUNNING)
+	{
+		pthread_cond_broadcast(&private->condpush);
+		if (private->level == 0 &&
+			jitter->thredhold > 0)
+			private->state = JITTER_FILLING;
+	}
 }
 
 void jitter_reset(jitter_ctx_t *jitter)

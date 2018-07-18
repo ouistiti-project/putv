@@ -1,4 +1,4 @@
 include scripts.mk
 
-subdir-y+=lib/jsonrpc
+subdir-$(JSONRPC)+=lib/jsonrpc
 subdir-y+=src

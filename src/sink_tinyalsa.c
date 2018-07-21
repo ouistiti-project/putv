@@ -100,13 +100,13 @@ static void *alsa_thread(void *arg)
 		unsigned char *buff = ctx->in->ops->peer(ctx->in->ctx);
 		dbg("sink: play %d", ctx->in->ctx->size);
 		ret = pcm_write(ctx->playback_handle, buff, ctx->in->ctx->size);
+		ctx->in->ops->pop(ctx->in->ctx, ret);
 		if (ret < 0)
 			ctx->state = STATE_ERROR;
 		else
 		{
 			dbg("sink: play %d", ret);
 		}
-		ctx->in->ops->pop(ctx->in->ctx);
 	}
 	return NULL;
 }

@@ -22,9 +22,9 @@ struct jitter_ops_s
 {
 	void (*reset)(jitter_ctx_t *);
 	unsigned char *(*pull)(jitter_ctx_t *);
-	void (*push)(jitter_ctx_t *);
+	void (*push)(jitter_ctx_t *, size_t len, void *beat);
 	unsigned char *(*peer)(jitter_ctx_t *);
-	void (*pop)(jitter_ctx_t *);
+	void (*pop)(jitter_ctx_t *, size_t len);
 	int (*empty)(jitter_ctx_t *);
 	int (*wait)(jitter_ctx_t *);
 };

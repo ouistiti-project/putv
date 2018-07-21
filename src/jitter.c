@@ -50,6 +50,7 @@ struct scatter_s
 		SCATTER_READY,
 	} state;
 	unsigned char *data;
+	size_t len;
 	scatter_t *next;
 };
 
@@ -173,7 +174,10 @@ unsigned char *jitter_pull(jitter_ctx_t *jitter)
 				break;
 		} while (len < jitter->size);
 		if (len >= jitter->size)
+		{
 			private->out->state = SCATTER_FREE;
+			private->out = private->out->next;
+		}
 	}
 	pthread_mutex_lock(&private->mutex);
 	while (private->in->state != SCATTER_FREE)
@@ -186,10 +190,11 @@ unsigned char *jitter_pull(jitter_ctx_t *jitter)
 	return private->in->data;
 }
 
-void jitter_push(jitter_ctx_t *jitter)
+void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 {
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
 
+	private->in->len = len;
 	private->in->state = SCATTER_READY;
 	private->in = private->in->next;
 	pthread_mutex_lock(&private->mutex);
@@ -230,7 +235,10 @@ unsigned char *jitter_peer(jitter_ctx_t *jitter)
 				return NULL;
 		} while (len < jitter->size);
 		if (len >= jitter->size)
+		{
 			private->in->state = SCATTER_READY;
+			private->in = private->in->next;
+		}
 	}
 	pthread_mutex_lock(&private->mutex);
 	while (private->out->state != SCATTER_READY)
@@ -243,10 +251,14 @@ unsigned char *jitter_peer(jitter_ctx_t *jitter)
 	return private->out->data;
 }
 
-void jitter_pop(jitter_ctx_t *jitter)
+void jitter_pop(jitter_ctx_t *jitter, size_t len)
 {
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
 
+	if (private->out->len > len)
+	{
+		dbg("buffer not empty");
+	}
 	private->out->state = SCATTER_FREE;
 	private->out = private->out->next;
 	pthread_mutex_lock(&private->mutex);

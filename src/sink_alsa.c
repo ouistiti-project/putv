@@ -177,9 +177,10 @@ static void *alsa_thread(void *arg)
 
 		unsigned char *buff = ctx->in->ops->peer(ctx->in->ctx);
 		ret = snd_pcm_writei(ctx->playback_handle, buff, ctx->in->ctx->size / divider);
-		ctx->in->ops->pop(ctx->in->ctx);
+		ctx->in->ops->pop(ctx->in->ctx, ret);
 		if (ret == -EPIPE)
 		{
+			warn("pcm recover");
 			ret = snd_pcm_recover(ctx->playback_handle, ret, 0);
 		}
 		if (ret < 0)

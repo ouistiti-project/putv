@@ -60,20 +60,23 @@ struct decoder_ctx_s
 #define dbg(...)
 #endif
 
-#define BUFFERSIZE 1500
+#define BUFFERSIZE (4*MAD_BUFFER_MDLEN)
 static
 enum mad_flow input(void *data,
 		    struct mad_stream *stream)
 {
 	decoder_ctx_t *decoder = (decoder_ctx_t *)data;
+	size_t len = 0;
 
 	unsigned char *buff = decoder->in->ops->peer(decoder->in->ctx);
 	if (buff == NULL)
 	{
 		return MAD_FLOW_STOP;
 	}
+	if (stream->next_frame)
+		len = stream->next_frame - stream->this_frame;
 	mad_stream_buffer(stream, buff, decoder->in->ctx->size);
-	decoder->in->ops->pop(decoder->in->ctx);
+	decoder->in->ops->pop(decoder->in->ctx, len);
 
 	return MAD_FLOW_CONTINUE;
 }
@@ -187,7 +190,7 @@ enum mad_flow output(void *data,
 		if (decoder->bufferlen >= decoder->out->ctx->size)
 		{
 			decoder->buffer = NULL;
-			decoder->out->ops->push(decoder->out->ctx);
+			decoder->out->ops->push(decoder->out->ctx, decoder->out->ctx->size, NULL);
 			if (player_waiton(decoder->ctx, STATE_PAUSE) < 0)
 				return MAD_FLOW_BREAK;
 		}
@@ -228,7 +231,7 @@ static decoder_ctx_t *mad_init(mediaplayer_ctx_t *ctx)
 			input, 0 /* header */, 0 /* filter */, output,
 			error, 0 /* message */);
 
-	jitter_t *jitter = jitter_scattergather_init(jitter_name, 1, 8*MAD_BUFFER_MDLEN);
+	jitter_t *jitter = jitter_scattergather_init(jitter_name, 2, BUFFERSIZE);
 	decoder->in = jitter;
 	jitter->format = MPEG2_3_MP3;
 

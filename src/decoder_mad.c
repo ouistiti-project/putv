@@ -139,10 +139,15 @@ enum mad_flow output(void *data,
 	right_ch  = pcm->samples[1];
 	if (decoder->out->format == PCM_16bits_LE_mono)
 		nchannels = 1;
-	if (decoder->out->format == PCM_24bits_LE_stereo)
+	else if (decoder->out->format == PCM_24bits_LE_stereo)
 		scale = scale_24bits;
-	if (decoder->out->format == PCM_32bits_LE_stereo)
+	else if (decoder->out->format == PCM_32bits_LE_stereo)
 		scale = scale_32bits;
+	else if (decoder->out->format != PCM_16bits_LE_stereo)
+	{
+		err("decoder out format not supported %d", decoder->out->format);
+		return MAD_FLOW_BREAK;
+	}
 
 	while (nsamples--)
 	{
@@ -158,8 +163,7 @@ enum mad_flow output(void *data,
 			(sample >> 0) & 0xff;
 		decoder->buffer[decoder->bufferlen++] =
 			(sample >> 8) & 0xff;
-		if ((decoder->out->format == PCM_24bits_LE_stereo) ||
-			(decoder->out->format == PCM_32bits_LE_stereo))
+		if (decoder->out->format >= PCM_24bits_LE_stereo)
 		{
 			decoder->buffer[decoder->bufferlen++] =
 				(sample >> 16) & 0xff;
@@ -175,8 +179,7 @@ enum mad_flow output(void *data,
 				(sample >> 0) & 0xff;
 			decoder->buffer[decoder->bufferlen++] =
 				(sample >> 8) & 0xff;
-			if ((decoder->out->format == PCM_24bits_LE_stereo) ||
-				(decoder->out->format == PCM_32bits_LE_stereo))
+			if (decoder->out->format >= PCM_24bits_LE_stereo)
 			{
 				decoder->buffer[decoder->bufferlen++] =
 					(sample >> 16) & 0xff;

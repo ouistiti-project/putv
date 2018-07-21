@@ -51,6 +51,7 @@ struct scatter_s
 	} state;
 	unsigned char *data;
 	size_t len;
+	void *beat;
 	scatter_t *next;
 };
 
@@ -195,6 +196,7 @@ void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
 
 	private->in->len = len;
+	private->in->beat = beat;
 	private->in->state = SCATTER_READY;
 	private->in = private->in->next;
 	pthread_mutex_lock(&private->mutex);
@@ -248,6 +250,8 @@ unsigned char *jitter_peer(jitter_ctx_t *jitter)
 	}
 	pthread_mutex_unlock(&private->mutex);
 	private->out->state = SCATTER_PULL;
+	if (private->out->beat)
+		jitter->heartbeat(jitter->heart, private->out->beat);
 	return private->out->data;
 }
 

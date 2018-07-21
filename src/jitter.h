@@ -1,8 +1,9 @@
 #ifndef __JITTER_H__
 #define __JITTER_H__
 
-typedef int (*consume_t)(void *, unsigned char *buffer, size_t size);
-typedef int (*produce_t)(void *, unsigned char *buffer, size_t size);
+typedef int (*consume_t)(void *consumer, unsigned char *buffer, size_t size);
+typedef int (*produce_t)(void *producter, unsigned char *buffer, size_t size);
+typedef int (*heartbeat_t)(void *heart, void *beat);
 typedef struct jitter_ctx_s jitter_ctx_t;
 struct jitter_ctx_s
 {
@@ -14,6 +15,8 @@ struct jitter_ctx_s
 	void *consumer;
 	produce_t produce;
 	void *producter;
+	heartbeat_t heartbeat;
+	void *heart;
 	void *private;
 };
 

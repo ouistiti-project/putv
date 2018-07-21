@@ -99,7 +99,6 @@ int cmds_line_run(mediaplayer_ctx_t *ctx)
 	player_onchange(ctx, cmds_line_onchange, NULL);
 	while (run)
 	{
-		dbg("run");
 		int ret;
 		fd_set rfds;
 		FD_ZERO(&rfds);
@@ -144,6 +143,11 @@ int cmds_line_run(mediaplayer_ctx_t *ctx)
 				if (!strncmp(buffer + i, "stop",4))
 				{
 					method = method_stop;
+					i += 4;
+				}
+				if (!strncmp(buffer + i, "next",4))
+				{
+					method = method_next;
 					i += 4;
 				}
 				if (!strncmp(buffer + i, "quit",4))

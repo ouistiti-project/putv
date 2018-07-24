@@ -54,4 +54,6 @@ struct jitter_s
 
 jitter_t *jitter_scattergather_init(const char *name, unsigned count, size_t size);
 void jitter_scattergather_destroy(jitter_t *);
+jitter_t *jitter_ringbuffer_init(const char *name, unsigned count, size_t size);
+void jitter_ringbuffer_destroy(jitter_t *);
 #endif

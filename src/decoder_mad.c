@@ -236,7 +236,7 @@ static decoder_ctx_t *mad_init(mediaplayer_ctx_t *ctx)
 			input, 0 /* header */, 0 /* filter */, output,
 			error, 0 /* message */);
 
-	jitter_t *jitter = jitter_scattergather_init(jitter_name, 2, BUFFERSIZE);
+	jitter_t *jitter = jitter_ringbuffer_init(jitter_name, 3, BUFFERSIZE);
 	decoder->in = jitter;
 	jitter->format = MPEG2_3_MP3;
 
@@ -269,7 +269,7 @@ static void mad_destroy(decoder_ctx_t *decoder)
 	pthread_join(decoder->thread, NULL);
 	/* release the decoder */
 	mad_decoder_finish(&decoder->decoder);
-	jitter_scattergather_destroy(decoder->in);
+	jitter_ringbuffer_destroy(decoder->in);
 	free(decoder);
 }
 

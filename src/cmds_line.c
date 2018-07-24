@@ -33,6 +33,14 @@
 #include <sys/ioctl.h>
 
 #include "putv.h"
+typedef struct cmds_ctx_s cmds_ctx_t;
+struct cmds_ctx_s
+{
+	mediaplayer_ctx_t *putv;
+	media_ctx_t *media;
+};
+#define CMDS_CTX
+#include "cmds.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -42,41 +50,42 @@
 #define dbg(...)
 #endif
 
-typedef int (*method_t)(mediaplayer_ctx_t *ctx, char *arg);
+typedef int (*method_t)(cmds_ctx_t *ctx, char *arg);
 
-int method_append(mediaplayer_ctx_t *ctx, char *arg)
+static int method_append(cmds_ctx_t *ctx, char *arg)
 {
 	dbg("cmdline: insert");
-	return media_insert(ctx, arg, NULL, NULL);
+	return media_insert(ctx->media, arg, NULL, NULL);
 }
 
-int method_play(mediaplayer_ctx_t *ctx, char *arg)
+static int method_play(cmds_ctx_t *ctx, char *arg)
 {
 	dbg("cmdline: play");
-	return (player_state(ctx, STATE_PLAY) == STATE_PLAY);
+	return (player_state(ctx->putv, STATE_PLAY) == STATE_PLAY);
 }
 
-int method_pause(mediaplayer_ctx_t *ctx, char *arg)
+static int method_pause(cmds_ctx_t *ctx, char *arg)
 {
 	dbg("cmdline: pause");
-	return (player_state(ctx, STATE_PAUSE) == STATE_PAUSE);
+	return (player_state(ctx->putv, STATE_PAUSE) == STATE_PAUSE);
 }
 
-int method_stop(mediaplayer_ctx_t *ctx, char *arg)
+static int method_stop(cmds_ctx_t *ctx, char *arg)
 {
 	dbg("cmdline: stop");
-	return (player_state(ctx, STATE_STOP) == STATE_STOP);
+	return (player_state(ctx->putv, STATE_STOP) == STATE_STOP);
 }
 
-int method_next(mediaplayer_ctx_t *ctx, char *arg)
+static int method_next(cmds_ctx_t *ctx, char *arg)
 {
 	dbg("cmdline: next");
-	return media_next(ctx);
+	return media_next(ctx->media);
 }
 
-void cmds_line_onchange(void *info, mediaplayer_ctx_t *ctx)
+void cmds_line_onchange(void *arg, mediaplayer_ctx_t *putv)
 {
-	state_t state = player_state(ctx, STATE_UNKNOWN);
+	cmds_ctx_t *ctx = (cmds_ctx_t*)arg;
+	state_t state = player_state(putv, STATE_UNKNOWN);
 	switch (state)
 	{
 	case STATE_PLAY:
@@ -91,12 +100,20 @@ void cmds_line_onchange(void *info, mediaplayer_ctx_t *ctx)
 	}
 }
 
-int cmds_line_run(mediaplayer_ctx_t *ctx)
+cmds_ctx_t *cmds_line_init(mediaplayer_ctx_t *putv, media_ctx_t *media, void *arg)
+{
+	cmds_ctx_t *ctx = calloc(1, sizeof(*ctx));
+	ctx->putv = putv;
+	ctx->media = media;
+	return ctx;
+}
+
+int cmds_line_run(cmds_ctx_t *ctx)
 {
 	int fd = 0;
 	int run = 1;
 
-	player_onchange(ctx, cmds_line_onchange, NULL);
+	player_onchange(ctx->putv, cmds_line_onchange, ctx);
 	while (run)
 	{
 		int ret;
@@ -166,3 +183,15 @@ int cmds_line_run(mediaplayer_ctx_t *ctx)
 	}
 	return 0;
 }
+
+static void cmds_line_destroy(cmds_ctx_t *ctx)
+{
+	free(ctx);
+}
+
+cmds_t *cmds_line = &(cmds_t)
+{
+	.init = cmds_line_init,
+	.run = cmds_line_run,
+	.destroy = cmds_line_destroy,
+};

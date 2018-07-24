@@ -32,6 +32,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
 
 #include "putv.h"
 typedef struct src_s src_t;
@@ -59,6 +60,8 @@ static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 	int ret;
 	ret = read(ctx->fd, buff, len);
 	dbg("src: read %d", ret);
+	if (ret < 0)
+		err("src file %d error: %s", ctx->fd, strerror(errno));
 	if (ret == 0)
 		dbg("src: end of file");
 	return ret;
@@ -80,6 +83,7 @@ static src_ctx_t *src_init(mediaplayer_ctx_t *ctx, const char *path)
 		src->ctx = ctx;
 		return src;
 	}
+	err("src file error: %s", strerror(errno));
 	return NULL;
 }
 

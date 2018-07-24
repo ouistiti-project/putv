@@ -258,6 +258,37 @@ int media_next(mediaplayer_ctx_t *ctx)
 	return ctx->mediaid;
 }
 
+typedef int (*play_fcn_t)(void *arg, const char *url, const char *info, const char *mime);
+int media_play(mediaplayer_ctx_t *ctx, play_fcn_t play, void *data)
+{
+	int ret = -1;
+	sqlite3_stmt *statement;
+	int size = 256;
+	char *sql = sqlite3_malloc(size);
+	snprintf(sql, size, "select \"url\" \"mime\" from \"media\" where id = @ID");
+	sqlite3_prepare_v2(ctx->db, sql, size, &statement, NULL);
+
+	int index = sqlite3_bind_parameter_index(statement, "@ID");
+	sqlite3_bind_int(statement, index, ctx->mediaid);
+
+	const char *url = NULL;
+	const char *info = NULL;
+	const char *mime = NULL;
+	int sqlret = sqlite3_step(statement);
+	if (sqlret == SQLITE_ROW)
+	{
+		url = (const char *)sqlite3_column_text(statement, 0);
+		mime = (const char *)sqlite3_column_text(statement, 1);
+	}
+	if (url != NULL)
+	{
+		ret = play(data, url, info, mime);
+	}
+	sqlite3_finalize(statement);
+	sqlite3_free(sql);
+	return ret;
+}
+
 mediaplayer_ctx_t *player_init(const char *dbpath)
 {
 	mediaplayer_ctx_t *ctx = calloc(1, sizeof(*ctx));
@@ -351,6 +382,45 @@ int player_waiton(mediaplayer_ctx_t *ctx, int state)
 	return 0;
 }
 
+struct _player_play_t
+{
+	mediaplayer_ctx_t *ctx;
+	jitter_t *jitter_encoder;
+};
+
+static int _player_play(void* arg, const char *url, const char *info, const char *mime)
+{
+	struct _player_play_t *player = (struct _player_play_t *)arg;
+	mediaplayer_ctx_t *ctx = player->ctx;
+	const decoder_t *decoder = NULL;
+	const src_t *src = SRC;
+	src_ctx_t *src_ctx = NULL;
+	decoder_ctx_t *decoder_ctx = NULL;
+
+	dbg("putv: play %s", url);
+
+#ifdef DECODER_MAD
+	if (mime && !strcmp(mime, mime_mp3))
+		decoder = decoder_mad;
+#endif
+	if (decoder == NULL)
+		decoder = DECODER;
+
+	if (decoder != NULL)
+	{
+		decoder_ctx = decoder->init(ctx);
+		src_ctx = src->init(ctx, url);
+	}
+	if (src_ctx != NULL)
+	{
+		decoder->run(decoder_ctx, player->jitter_encoder);
+		src->run(src_ctx, decoder->jitter(decoder_ctx));
+		decoder->destroy(decoder_ctx);
+		src->destroy(src_ctx);
+	}
+	return 0;
+}
+
 int player_run(mediaplayer_ctx_t *ctx)
 {
 	const sink_t *sink;
@@ -358,17 +428,17 @@ int player_run(mediaplayer_ctx_t *ctx)
 	const encoder_t *encoder;
 	encoder_ctx_t *encoder_ctx;
 
+	jitter_t *jitter[3];
+
 	sink = SINK;
 	sink_ctx = sink->init(ctx, "default");
+	sink->run(sink_ctx);
+	jitter[0] = sink->jitter(sink_ctx);
 
 	encoder = ENCODER;
 	encoder_ctx = encoder->init(ctx);
-
-	jitter_t *jitter[3];
-	jitter[0] = sink->jitter(sink_ctx);
-
-	sink->run(sink_ctx);
 	encoder->run(encoder_ctx,jitter[0]);
+	jitter[1] = encoder->jitter(encoder_ctx);
 
 	while (ctx->state != STATE_ERROR)
 	{
@@ -380,64 +450,19 @@ int player_run(mediaplayer_ctx_t *ctx)
 		}
 		pthread_mutex_unlock(&ctx->mutex);
 
-		sqlite3_stmt *statement;
-		int size = 256;
-		char *sql = sqlite3_malloc(size);
-		snprintf(sql, size, "select \"url\" \"mime\" from \"media\" where id = @ID");
-		sqlite3_prepare_v2(ctx->db, sql, size, &statement, NULL);
-
-		int index = sqlite3_bind_parameter_index(statement, "@ID");
-		sqlite3_bind_int(statement, index, ctx->mediaid);
-
-		const char *url = NULL;
-		const char *mime = NULL;
-		int ret = sqlite3_step(statement);
-		if (ret == SQLITE_ROW)
+		jitter[0]->ops->reset(jitter[0]->ctx);
+		jitter[1]->ops->reset(jitter[1]->ctx);
+		struct _player_play_t player =
 		{
-			url = (const char *)sqlite3_column_text(statement, 0);
-			mime = (const char *)sqlite3_column_text(statement, 1);
-		}
-		if (url != NULL)
-		{
-			dbg("putv: play %s", url);
-			const decoder_t *decoder = NULL;
-			const src_t *src = SRC;
-			src_ctx_t *src_ctx = NULL;
-			decoder_ctx_t *decoder_ctx = NULL;
-
-			jitter[0]->ops->reset(jitter[0]->ctx);
-#ifdef DECODER_MAD
-			if (mime && !strcmp(mime, mime_mp3))
-				decoder = decoder_mad;
-#endif
-			if (decoder == NULL)
-				decoder = DECODER;
-
-			if (decoder != NULL)
-			{
-				decoder_ctx = decoder->init(ctx);
-
-				src_ctx = src->init(ctx, url);
-			}
-			if (src_ctx != NULL)
-			{
-				jitter[1] = encoder->jitter(encoder_ctx);
-				jitter[2] = decoder->jitter(decoder_ctx);
-
-				src->run(src_ctx, jitter[2]);
-				decoder->run(decoder_ctx, jitter[1]);
-				decoder->destroy(decoder_ctx);
-				src->destroy(src_ctx);
-			}
-		}
-		sqlite3_finalize(statement);
-		sqlite3_free(sql);
-
-		if (ctx->state == STATE_STOP)
-			ctx->mediaid = -1;
+			.ctx = ctx,
+			.jitter_encoder = jitter[1],
+		};
 		if (media_next(ctx) == -1)
 			ctx->state = STATE_STOP;
+		else
+			media_play(ctx, _player_play, &player);
 	}
+	encoder->destroy(encoder_ctx);
 	sink->destroy(sink_ctx);
 	pthread_exit(0);
 	return 0;

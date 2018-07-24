@@ -1,6 +1,9 @@
 #ifndef __PUTV_H__
 #define __PUTV_H__
 
+extern const char const *mime_mp3;
+extern const char const *mime_octetstream;
+
 typedef enum
 {
 	STATE_UNKNOWN,
@@ -21,20 +24,16 @@ typedef struct decoder_s decoder_t;
 typedef struct encoder_s encoder_t;
 typedef struct sink_s sink_t;
 
+typedef struct media_ctx_s media_ctx_t;
 typedef struct mediaplayer_ctx_s mediaplayer_ctx_t;
 typedef void (*player_event_cb_t)(void *ctx, mediaplayer_ctx_t *);
 
-mediaplayer_ctx_t *player_init(const char *dbpath);
+mediaplayer_ctx_t *player_init(media_ctx_t *media);
 int player_run(mediaplayer_ctx_t *userdata);
 void player_destroy(mediaplayer_ctx_t *ctx);
 int player_waiton(mediaplayer_ctx_t *ctx, int state);
 state_t player_state(mediaplayer_ctx_t *ctx, state_t state);
 void player_next(mediaplayer_ctx_t *ctx);
 void player_onchange(mediaplayer_ctx_t *ctx, player_event_cb_t callback, void *cbctx);
-
-int media_insert(mediaplayer_ctx_t *ctx, const char *path, const char *info, const char *mime);
-int media_find(mediaplayer_ctx_t *ctx, int id, char *url, int *urllen, char *info, int *infolen);
-int media_current(mediaplayer_ctx_t *ctx, char *url, int *urllen, char *info, int *infolen);
-int media_count(mediaplayer_ctx_t *ctx);
 
 #endif

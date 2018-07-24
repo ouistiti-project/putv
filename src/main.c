@@ -31,6 +31,7 @@
 #include <pthread.h>
 
 #include "putv.h"
+#include "media.h"
 #include "cmds_line.h"
 #include "cmds_json.h"
 #include "../version.h"
@@ -55,9 +56,9 @@ void *player_thread(void *arg)
 #define SRC_STDIN 0x02
 int main(int argc, char **argv)
 {
-	char socketpath[256];
 	const char *dbpath = SYSCONFDIR"/putv.db";
 	mediaplayer_ctx_t *ctx;
+	media_ctx_t *media;
 	pthread_t thread;
 	const char *root = "/tmp";
 	int mode = 0;
@@ -94,22 +95,23 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
-	ctx = player_init(dbpath);
+	media = media_init(dbpath);
+	ctx = player_init(media);
 
 	if (mode & SRC_STDIN)
 	{
 		dbg("insert stdin");
-		media_insert(ctx, "-", NULL, "audio/mp3");
+		media_insert(media, "-", NULL, "audio/mp3");
 	}
 	pthread_create(&thread, NULL, player_thread, (void *)ctx);
 
-	snprintf(socketpath, sizeof(socketpath) - 1, "%s/%s", root, name);
 #ifdef CMDLINE
 	cmds_line_run(ctx);
 #endif
 #ifdef JSONRPC
+	char socketpath[256];
+	snprintf(socketpath, sizeof(socketpath) - 1, "%s/%s", root, name);
 	cmds_json_run(ctx, socketpath);
 #endif
-	dbg("application ended");
 	return 0;
 }

@@ -59,7 +59,7 @@ static const char *jitter_name = "tinyalsa";
 static sink_ctx_t *alsa_init(mediaplayer_ctx_t *mctx, const char *soundcard)
 {
 	int ret;
-	jitter_format_t format = PCM_24bits_LE_stereo;
+	jitter_format_t format = SINK_ALSA_FORMAT;
 	sink_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->ops = sink_tinyalsa;
 
@@ -70,8 +70,28 @@ static sink_ctx_t *alsa_init(mediaplayer_ctx_t *mctx, const char *soundcard)
 		.rate = 44100,
 		.period_size = 1024,
 		.period_count = 4,
-		.format = PCM_FORMAT_S24_LE,
+		.format = PCM_FORMAT_S16_LE,
 	};
+	switch (format)
+	{
+		case PCM_32bits_LE_stereo:
+			config.format = PCM_FORMAT_S32_LE;
+			config.count = 4;
+		break;
+		case PCM_24bits_LE_stereo:
+			config.format = PCM_FORMAT_S24_LE;
+			config.count = 3;
+		break;
+		case PCM_16bits_LE_stereo:
+			config.format = PCM_FORMAT_S16_LE;
+			config.count = 2;
+		break;
+		case PCM_16bits_LE_mono:
+			config.format = PCM_FORMAT_S16_LE;
+			config.channels = 1;
+			config.count = 2;
+		break;
+	}
 	ctx->playback_handle = pcm_open(0, 0, PCM_OUT, &config);
 
 	jitter_t *jitter = jitter_scattergather_init(jitter_name, 10, size);

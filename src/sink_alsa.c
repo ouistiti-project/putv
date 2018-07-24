@@ -62,6 +62,7 @@ static sink_ctx_t *alsa_init(mediaplayer_ctx_t *mctx, const char *soundcard)
 	int ret;
 	jitter_format_t format = SINK_ALSA_FORMAT;
 	int nchannels = 2;
+	int count = 2;
 	sink_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->ops = sink_alsa;
 	ret = snd_pcm_open(&ctx->playback_handle, soundcard, SND_PCM_STREAM_PLAYBACK, 0);
@@ -88,16 +89,20 @@ static sink_ctx_t *alsa_init(mediaplayer_ctx_t *mctx, const char *soundcard)
 	{
 		case PCM_32bits_LE_stereo:
 			pcm_format = SND_PCM_FORMAT_S32_LE;
+			count = 4;
 		break;
 		case PCM_24bits_LE_stereo:
 			pcm_format = SND_PCM_FORMAT_S24_LE;
+			count = 3;
 		break;
 		case PCM_16bits_LE_stereo:
 			pcm_format = SND_PCM_FORMAT_S16_LE;
+			count = 2;
 		break;
 		case PCM_16bits_LE_mono:
 			pcm_format = SND_PCM_FORMAT_S16_LE;
 			nchannels = 1;
+			count = 2;
 		break;
 	}
 	ret = snd_pcm_hw_params_set_format(ctx->playback_handle, hw_params, pcm_format);
@@ -133,7 +138,7 @@ static sink_ctx_t *alsa_init(mediaplayer_ctx_t *mctx, const char *soundcard)
 		goto error;
 	}
 
-	jitter_t *jitter = jitter_scattergather_init(jitter_name, 10, size);
+	jitter_t *jitter = jitter_scattergather_init(jitter_name, 10, size * count);
 	ctx->in = jitter;
 	jitter->format = format;
 	jitter->ctx->thredhold = 5;
@@ -177,7 +182,7 @@ static void *alsa_thread(void *arg)
 
 		unsigned char *buff = ctx->in->ops->peer(ctx->in->ctx);
 		ret = snd_pcm_writei(ctx->playback_handle, buff, ctx->in->ctx->size / divider);
-		ctx->in->ops->pop(ctx->in->ctx, ret);
+		ctx->in->ops->pop(ctx->in->ctx, ret * divider);
 		if (ret == -EPIPE)
 		{
 			warn("pcm recover");

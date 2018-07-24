@@ -44,6 +44,7 @@ struct decoder_ctx_s
 	pthread_t thread;
 	mediaplayer_ctx_t *ctx;
 	jitter_t *in;
+	unsigned char *inbuffer;
 	jitter_t *out;
 	unsigned char *buffer;
 	size_t bufferlen;
@@ -60,23 +61,24 @@ struct decoder_ctx_s
 #define dbg(...)
 #endif
 
-#define BUFFERSIZE (4*MAD_BUFFER_MDLEN)
+#define BUFFERSIZE (1*MAD_BUFFER_MDLEN)
 static
 enum mad_flow input(void *data,
 		    struct mad_stream *stream)
 {
 	decoder_ctx_t *decoder = (decoder_ctx_t *)data;
-	size_t len = 0;
+	size_t len = decoder->in->ctx->size;
 
-	unsigned char *buff = decoder->in->ops->peer(decoder->in->ctx);
-	if (buff == NULL)
+	if (stream->next_frame)
+		len = stream->next_frame - decoder->inbuffer;
+	decoder->in->ops->pop(decoder->in->ctx, len);
+
+	decoder->inbuffer = decoder->in->ops->peer(decoder->in->ctx);
+	if (decoder->inbuffer == NULL)
 	{
 		return MAD_FLOW_STOP;
 	}
-	if (stream->next_frame)
-		len = stream->next_frame - stream->this_frame;
-	mad_stream_buffer(stream, buff, decoder->in->ctx->size);
-	decoder->in->ops->pop(decoder->in->ctx, len);
+	mad_stream_buffer(stream, decoder->inbuffer, decoder->in->ctx->size);
 
 	return MAD_FLOW_CONTINUE;
 }

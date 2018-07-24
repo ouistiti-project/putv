@@ -2,7 +2,7 @@
 bin-y+=putv
 putv_SOURCES+=putv.c
 putv_SOURCES+=main.c
-putv_SOURCES+=jitter.c
+putv_SOURCES+=jitter_sg.c
 putv_LIBRARY+=pthread sqlite3
 putv_SOURCES-$(SRC_FILE)+=src_file.c
 putv_CFLAGS-$(SRC_FILE)+=-DSRC_FILE

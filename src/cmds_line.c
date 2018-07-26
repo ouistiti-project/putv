@@ -37,10 +37,11 @@ typedef struct cmds_ctx_s cmds_ctx_t;
 struct cmds_ctx_s
 {
 	mediaplayer_ctx_t *putv;
-	media_ctx_t *media;
+	media_t *media;
 };
 #define CMDS_CTX
 #include "cmds.h"
+#include "media.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -55,7 +56,7 @@ typedef int (*method_t)(cmds_ctx_t *ctx, char *arg);
 static int method_append(cmds_ctx_t *ctx, char *arg)
 {
 	dbg("cmdline: insert");
-	return media_insert(ctx->media, arg, NULL, NULL);
+	return ctx->media->ops->insert(ctx->media->ctx, arg, NULL, NULL);
 }
 
 static int method_play(cmds_ctx_t *ctx, char *arg)
@@ -79,7 +80,7 @@ static int method_stop(cmds_ctx_t *ctx, char *arg)
 static int method_next(cmds_ctx_t *ctx, char *arg)
 {
 	dbg("cmdline: next");
-	return media_next(ctx->media);
+	return ctx->media->ops->next(ctx->media->ctx);
 }
 
 void cmds_line_onchange(void *arg, mediaplayer_ctx_t *putv)
@@ -100,7 +101,7 @@ void cmds_line_onchange(void *arg, mediaplayer_ctx_t *putv)
 	}
 }
 
-cmds_ctx_t *cmds_line_init(mediaplayer_ctx_t *putv, media_ctx_t *media, void *arg)
+cmds_ctx_t *cmds_line_init(mediaplayer_ctx_t *putv, media_t *media, void *arg)
 {
 	cmds_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->putv = putv;

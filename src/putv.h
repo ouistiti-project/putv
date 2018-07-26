@@ -23,12 +23,12 @@ typedef struct src_s src_t;
 typedef struct decoder_s decoder_t;
 typedef struct encoder_s encoder_t;
 typedef struct sink_s sink_t;
+typedef struct media_s media_t;
 
-typedef struct media_ctx_s media_ctx_t;
 typedef struct mediaplayer_ctx_s mediaplayer_ctx_t;
 typedef void (*player_event_cb_t)(void *ctx, mediaplayer_ctx_t *);
 
-mediaplayer_ctx_t *player_init(media_ctx_t *media);
+mediaplayer_ctx_t *player_init(media_t *media);
 int player_run(mediaplayer_ctx_t *userdata);
 void player_destroy(mediaplayer_ctx_t *ctx);
 int player_waiton(mediaplayer_ctx_t *ctx, int state);

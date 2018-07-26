@@ -39,11 +39,12 @@ typedef struct cmds_ctx_s cmds_ctx_t;
 struct cmds_ctx_s
 {
 	mediaplayer_ctx_t *putv;
-	media_ctx_t *media;
+	media_t *media;
 	const char *socketpath;
 };
 #define CMDS_CTX
 #include "cmds.h"
+#include "media.h"
 #include "unix_server.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -72,14 +73,14 @@ static int method_append(json_t *json_params, json_t **result, void *userdata)
 			if (json_is_string(value))
 			{
 				const char *str = json_string_value(value);
-				ret = media_insert(ctx->media, str, "", NULL);
+				ret = ctx->media->ops->insert(ctx->media->ctx, str, "", NULL);
 			}
 			else if (json_is_object(value))
 			{
 				json_t * path = json_object_get(value, "url");
 				json_t * info = json_object_get(value, "info");
 				json_t * mime = json_object_get(value, "mime");
-				ret = media_insert(ctx->media, 
+				ret = ctx->media->ops->insert(ctx->media->ctx, 
 						json_string_value(path),
 						json_string_value(info),
 						json_string_value(mime));
@@ -98,7 +99,7 @@ static int method_append(json_t *json_params, json_t **result, void *userdata)
 static int method_play(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
-	if (media_count(ctx->media) > 0)
+	if (ctx->media->ops->count(ctx->media->ctx) > 0)
 		player_state(ctx->putv, STATE_PLAY);
 	else
 		player_state(ctx->putv, STATE_STOP);
@@ -130,7 +131,7 @@ static int method_stop(json_t *json_params, json_t **result, void *userdata)
 static int method_next(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
-	media_next(ctx->media);
+	ctx->media->ops->next(ctx->media->ctx);
 	return 0;
 }
 
@@ -142,7 +143,7 @@ static int method_change(json_t *json_params, json_t **result, void *userdata)
 	char info[1024];
 	int infolen = 1024;
 
-	if (media_current(ctx->media, url, &urllen, info, &infolen) == 0)
+	if (ctx->media->ops->current(ctx->media->ctx, url, &urllen, info, &infolen) == 0)
 	{
 		const char *state_str = str_stop;
 		state_t state = player_state(ctx->putv, STATE_UNKNOWN);
@@ -235,7 +236,7 @@ int jsonrpc_command(thread_info_t *info)
 	return ret;
 }
 
-cmds_ctx_t *cmds_json_init(mediaplayer_ctx_t *putv, media_ctx_t *media, void *arg)
+cmds_ctx_t *cmds_json_init(mediaplayer_ctx_t *putv, media_t *media, void *arg)
 {
 	cmds_ctx_t *ctx = NULL;
 	ctx = calloc(1, sizeof(*ctx));

@@ -58,7 +58,7 @@ struct player_event_s
 
 struct mediaplayer_ctx_s
 {
-	media_ctx_t *media;
+	media_t *media;
 	state_t state;
 	player_event_t *events;
 	pthread_cond_t cond;
@@ -68,7 +68,7 @@ struct mediaplayer_ctx_s
 const char const *mime_mp3 = "audio/mp3";
 const char const *mime_octetstream = "octet/stream";
 
-mediaplayer_ctx_t *player_init(media_ctx_t *media)
+mediaplayer_ctx_t *player_init(media_t *media)
 {
 	mediaplayer_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	pthread_mutex_init(&ctx->mutex, NULL);
@@ -199,10 +199,10 @@ int player_run(mediaplayer_ctx_t *ctx)
 			.ctx = ctx,
 			.jitter_encoder = jitter[1],
 		};
-		if (media_next(ctx->media) == -1)
+		if (ctx->media->ops->next(ctx->media->ctx) == -1)
 			ctx->state = STATE_STOP;
 		else
-			media_play(ctx->media, _player_play, &player);
+			ctx->media->ops->play(ctx->media->ctx, _player_play, &player);
 	}
 	encoder->destroy(encoder_ctx);
 	sink->destroy(sink_ctx);

@@ -123,7 +123,7 @@ static int findmedia(sqlite3 *db, const char *path)
 	return id;
 }
 
-int media_insert(media_ctx_t *ctx, const char *path, const char *info, const char *mime)
+static int media_insert(media_ctx_t *ctx, const char *path, const char *info, const char *mime)
 {
 	sqlite3 *db = ctx->db;
 
@@ -174,7 +174,7 @@ int media_insert(media_ctx_t *ctx, const char *path, const char *info, const cha
 	return ret;
 }
 
-int media_find(media_ctx_t *ctx, int id, char *url, int *urllen, char *info, int *infolen)
+static int media_find(media_ctx_t *ctx, int id, char *url, int *urllen, char *info, int *infolen)
 {
 	sqlite3_stmt *statement;
 	int size = 256;
@@ -203,12 +203,12 @@ int media_find(media_ctx_t *ctx, int id, char *url, int *urllen, char *info, int
 	return ret;
 }
 
-int media_current(media_ctx_t *ctx, char *url, int *urllen, char *info, int *infolen)
+static int media_current(media_ctx_t *ctx, char *url, int *urllen, char *info, int *infolen)
 {
 	return media_find(ctx, ctx->mediaid, url, urllen, info, infolen);
 }
 
-int media_play(media_ctx_t *ctx, play_fcn_t play, void *data)
+static int media_play(media_ctx_t *ctx, play_fcn_t play, void *data)
 {
 	int ret = -1;
 	sqlite3_stmt *statement;
@@ -238,7 +238,7 @@ int media_play(media_ctx_t *ctx, play_fcn_t play, void *data)
 	return ret;
 }
 
-int media_next(media_ctx_t *ctx)
+static int media_next(media_ctx_t *ctx)
 {
 	sqlite3_stmt *statement;
 	int size = 256;
@@ -269,7 +269,7 @@ int media_next(media_ctx_t *ctx)
 	return ctx->mediaid;
 }
 
-media_ctx_t *media_init(const char *dbpath)
+static media_ctx_t *media_init(const char *dbpath)
 {
 	media_ctx_t *ctx = NULL;
 	if (dbpath)
@@ -315,9 +315,21 @@ media_ctx_t *media_init(const char *dbpath)
 	return ctx;
 }
 
-void media_destroy(media_ctx_t *ctx)
+static void media_destroy(media_ctx_t *ctx)
 {
 	if (ctx->db)
 		sqlite3_close_v2(ctx->db);
 	free(ctx);
 }
+
+media_ops_t *media_sqlite = &(media_ops_t)
+{
+	.init = media_init,
+	.destroy = media_destroy,
+	.next = media_next,
+	.play = media_play,
+	.current = media_current,
+	.find = media_find,
+	.insert = media_insert,
+	.count = media_count,
+};

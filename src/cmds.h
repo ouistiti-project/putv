@@ -7,7 +7,7 @@ typedef void cmds_ctx_t;
 typedef struct cmds_s cmds_t;
 struct cmds_s
 {
-	cmds_ctx_t *(*init)(mediaplayer_ctx_t *, media_ctx_t *, void *arg);
+	cmds_ctx_t *(*init)(mediaplayer_ctx_t *, media_t *, void *arg);
 	int (*run)(cmds_ctx_t *);
 	void (*destroy)(cmds_ctx_t *);
 };

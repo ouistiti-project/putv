@@ -99,10 +99,13 @@ void cmds_line_onchange(void *arg, mediaplayer_ctx_t *putv)
 	case STATE_STOP:
 		printf("player: stop\n");
 	break;
+	case STATE_CHANGE:
+		printf("player: change\n");
+	break;
 	}
 }
 
-cmds_ctx_t *cmds_line_init(mediaplayer_ctx_t *putv, media_t *media, void *arg)
+static cmds_ctx_t *cmds_line_init(mediaplayer_ctx_t *putv, media_t *media, void *arg)
 {
 	cmds_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->putv = putv;
@@ -110,7 +113,7 @@ cmds_ctx_t *cmds_line_init(mediaplayer_ctx_t *putv, media_t *media, void *arg)
 	return ctx;
 }
 
-int cmds_line_run(cmds_ctx_t *ctx)
+static int cmds_line_run(cmds_ctx_t *ctx)
 {
 	int fd = 0;
 	int run = 1;

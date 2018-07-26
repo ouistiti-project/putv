@@ -113,7 +113,7 @@ state_t player_state(mediaplayer_ctx_t *ctx, state_t state)
 
 int player_waiton(mediaplayer_ctx_t *ctx, int state)
 {
-	if (ctx->state == STATE_STOP)
+	if (ctx->state == STATE_STOP || ctx->state == STATE_CHANGE)
 		return -1;
 	pthread_mutex_lock(&ctx->mutex);
 	while (ctx->state == state)
@@ -185,6 +185,8 @@ int player_run(mediaplayer_ctx_t *ctx)
 	while (ctx->state != STATE_ERROR)
 	{
 		pthread_mutex_lock(&ctx->mutex);
+		if (ctx->state == STATE_CHANGE)
+			ctx->state = STATE_PLAY;
 		while (ctx->state == STATE_STOP)
 		{
 			dbg("putv: stop");
@@ -199,10 +201,9 @@ int player_run(mediaplayer_ctx_t *ctx)
 			.ctx = ctx,
 			.jitter_encoder = jitter[1],
 		};
+		ctx->media->ops->play(ctx->media->ctx, _player_play, &player);
 		if (ctx->media->ops->next(ctx->media->ctx) == -1)
-			ctx->state = STATE_STOP;
-		else
-			ctx->media->ops->play(ctx->media->ctx, _player_play, &player);
+			player_state(ctx, STATE_STOP);
 	}
 	encoder->destroy(encoder_ctx);
 	sink->destroy(sink_ctx);

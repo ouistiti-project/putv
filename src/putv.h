@@ -10,6 +10,7 @@ typedef enum
 	STATE_STOP,
 	STATE_PLAY,
 	STATE_PAUSE,
+	STATE_CHANGE,
 	STATE_ERROR,
 } state_t;
 

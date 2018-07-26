@@ -40,6 +40,8 @@
 #define dbg(...)
 #endif
 
+#define jitter_dbg(...)
+
 typedef struct scatter_s scatter_t;
 struct scatter_s
 {
@@ -190,7 +192,7 @@ static unsigned char *jitter_pull(jitter_ctx_t *jitter)
 	pthread_mutex_lock(&private->mutex);
 	while (private->in->state != SCATTER_FREE)
 	{
-		dbg("jitter %s push block on %d", jitter->name, private->in->state);
+		jitter_dbg("jitter %s pull block on %p", jitter->name, private->in);
 		pthread_cond_wait(&private->condpush, &private->mutex);
 	}
 	pthread_mutex_unlock(&private->mutex);
@@ -254,7 +256,7 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter)
 	pthread_mutex_lock(&private->mutex);
 	while (private->out->state != SCATTER_READY)
 	{
-		dbg("jitter %s peer block on %p", jitter->name, private->out);
+		jitter_dbg("jitter %s peer block on %p", jitter->name, private->out);
 		pthread_cond_wait(&private->condpeer, &private->mutex);
 	}
 	pthread_mutex_unlock(&private->mutex);
@@ -308,7 +310,7 @@ static void jitter_reset(jitter_ctx_t *jitter)
 	}
 	while (private->in->state == SCATTER_PULL)
 	{
-		pthread_cond_wait(&private->condpeer, &private->mutex);
+		pthread_cond_wait(&private->condpush, &private->mutex);
 	}
 	private->in = private->out = private->sg;
 	pthread_mutex_unlock(&private->mutex);

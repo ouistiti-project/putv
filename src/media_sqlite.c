@@ -64,7 +64,6 @@ static int _execute(sqlite3_stmt *statement)
 	int id = -1;
 	int ret;
 	ret = sqlite3_step(statement);
-	dbg("execute %d", ret);
 	while (ret == SQLITE_ROW)
 	{
 		int i = 0, nbColumns = sqlite3_column_count(statement);

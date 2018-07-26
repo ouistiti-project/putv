@@ -54,12 +54,13 @@ struct src_ctx_s
 #else
 #define dbg(...)
 #endif
+#define src_dbg(...)
 
 static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 {
 	int ret;
 	ret = read(ctx->fd, buff, len);
-	dbg("src: read %d", ret);
+	src_dbg("src: read %d", ret);
 	if (ret < 0)
 		err("src file %d error: %s", ctx->fd, strerror(errno));
 	if (ret == 0)

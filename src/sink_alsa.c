@@ -56,6 +56,8 @@ struct sink_ctx_s
 #define dbg(...)
 #endif
 
+#define sink_dbg(...)
+
 static const char *jitter_name = "alsa";
 static sink_ctx_t *alsa_init(mediaplayer_ctx_t *mctx, const char *soundcard)
 {
@@ -178,7 +180,9 @@ static void *alsa_thread(void *arg)
 	while (ctx->state != STATE_ERROR)
 	{
 		if (player_waiton(ctx->ctx, STATE_PAUSE) < 0)
+		{
 			snd_pcm_prepare(ctx->playback_handle);
+		}
 
 		unsigned char *buff = ctx->in->ops->peer(ctx->in->ctx);
 		ret = snd_pcm_writei(ctx->playback_handle, buff, ctx->in->ctx->size / divider);
@@ -195,7 +199,7 @@ static void *alsa_thread(void *arg)
 		}
 		else
 		{
-			dbg("sink: play %d", ret);
+			sink_dbg("sink: play %d", ret);
 		}
 	}
 	dbg("sink: thread end");

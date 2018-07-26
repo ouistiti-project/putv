@@ -41,6 +41,8 @@
 #define dbg(...)
 #endif
 
+#define jitter_dbg(...)
+
 #define VARIATIC_OUTPUT 1
 
 static unsigned char *jitter_pull(jitter_ctx_t *jitter);
@@ -150,7 +152,7 @@ static unsigned char *jitter_pull(jitter_ctx_t *jitter)
 	pthread_mutex_lock(&private->mutex);
 	while ((private->in + jitter->size) < private->out)
 	{
-		dbg("jitter %s push block on %p", jitter->name, private->in);
+		jitter_dbg("jitter %s pull block on %p", jitter->name, private->in);
 		pthread_cond_wait(&private->condpush, &private->mutex);
 	}
 	pthread_mutex_unlock(&private->mutex);
@@ -213,6 +215,7 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter)
 	while((private->in > private->out) &&
 		(private->out + jitter->size) > private->in)
 	{
+		jitter_dbg("jitter %s peer block on %p", jitter->name, private->out);
 		pthread_cond_wait(&private->condpeer, &private->mutex);
 	}
 	pthread_mutex_unlock(&private->mutex);

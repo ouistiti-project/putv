@@ -17,6 +17,7 @@ struct media_ops_s
 	int (*current)(media_ctx_t *ctx, char *url, int *urllen, char *info, int *infolen);
 	int (*play)(media_ctx_t *ctx, play_fcn_t play, void *data);
 	int (*next)(media_ctx_t *ctx);
+	int (*end)(media_ctx_t *ctx);
 };
 
 typedef struct media_s media_t;

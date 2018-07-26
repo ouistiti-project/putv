@@ -269,6 +269,12 @@ static int media_next(media_ctx_t *ctx)
 	return ctx->mediaid;
 }
 
+static int media_end(media_ctx_t *ctx)
+{
+	ctx->mediaid = -1;
+	return 0;
+}
+
 static media_ctx_t *media_init(const char *dbpath)
 {
 	media_ctx_t *ctx = NULL;
@@ -332,4 +338,5 @@ media_ops_t *media_sqlite = &(media_ops_t)
 	.find = media_find,
 	.insert = media_insert,
 	.count = media_count,
+	.end = media_end,
 };

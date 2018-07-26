@@ -74,13 +74,14 @@ static int method_pause(cmds_ctx_t *ctx, char *arg)
 static int method_stop(cmds_ctx_t *ctx, char *arg)
 {
 	dbg("cmdline: stop");
+	ctx->media->ops->end(ctx->media->ctx);
 	return (player_state(ctx->putv, STATE_STOP) == STATE_STOP);
 }
 
 static int method_next(cmds_ctx_t *ctx, char *arg)
 {
 	dbg("cmdline: next");
-	return ctx->media->ops->next(ctx->media->ctx);
+	return (player_state(ctx->putv, STATE_CHANGE) == STATE_CHANGE);
 }
 
 void cmds_line_onchange(void *arg, mediaplayer_ctx_t *putv)

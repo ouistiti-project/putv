@@ -1,5 +1,5 @@
 /*****************************************************************************
- * putv.c
+ * media_sqlite.c
  * this file is part of https://github.com/ouistiti-project/putv
  *****************************************************************************
  * Copyright (C) 2016-2017
@@ -40,8 +40,13 @@ struct media_ctx_s
 {
 	sqlite3 *db;
 	int mediaid;
+	unsigned int options;
 	mediaplayer_ctx_t *ctx;
 };
+
+#define OPTION_LOOP 0x0001
+#define OPTION_RANDOM 0x0002
+#define OPTION_AUTOSTART 0x0004
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -50,6 +55,14 @@ struct media_ctx_s
 #else
 #define dbg(...)
 #endif
+
+static int media_count(media_ctx_t *ctx);
+static int media_insert(media_ctx_t *ctx, const char *path, const char *info, const char *mime);
+static int media_find(media_ctx_t *ctx, int id, char *url, int *urllen, char *info, int *infolen);
+static int media_current(media_ctx_t *ctx, char *url, int *urllen, char *info, int *infolen);
+static int media_play(media_ctx_t *ctx, play_fcn_t play, void *data);
+static int media_next(media_ctx_t *ctx);
+static int media_end(media_ctx_t *ctx);
 
 static const char *utils_getmime(const char *path)
 {
@@ -80,7 +93,7 @@ static int _execute(sqlite3_stmt *statement)
 	return id;
 }
 
-int media_count(media_ctx_t *ctx)
+static int media_count(media_ctx_t *ctx)
 {
 	sqlite3 *db = ctx->db;
 	int count = 0;
@@ -210,6 +223,10 @@ static int media_current(media_ctx_t *ctx, char *url, int *urllen, char *info, i
 static int media_play(media_ctx_t *ctx, play_fcn_t play, void *data)
 {
 	int ret = -1;
+
+	if (ctx->mediaid == 0 && (ctx->options & OPTION_AUTOSTART)) //start ID
+		media_next(ctx);
+
 	sqlite3_stmt *statement;
 	int size = 256;
 	char *sql = sqlite3_malloc(size);
@@ -274,6 +291,30 @@ static int media_end(media_ctx_t *ctx)
 	return 0;
 }
 
+static void media_autostart(media_ctx_t *ctx, int enable)
+{
+	if (enable)
+		ctx->options |= OPTION_AUTOSTART;
+	else
+		ctx->options &= ~OPTION_AUTOSTART;
+}
+
+static void media_loop(media_ctx_t *ctx, int enable)
+{
+	if (enable)
+		ctx->options |= OPTION_LOOP;
+	else
+		ctx->options &= ~OPTION_LOOP;
+}
+
+static void media_random(media_ctx_t *ctx, int enable)
+{
+	if (enable)
+		ctx->options |= OPTION_RANDOM;
+	else
+		ctx->options &= ~OPTION_RANDOM;
+}
+
 static media_ctx_t *media_init(const char *dbpath)
 {
 	media_ctx_t *ctx = NULL;
@@ -315,6 +356,7 @@ static media_ctx_t *media_init(const char *dbpath)
 			ctx = calloc(1, sizeof(*ctx));
 			ctx->db = db;
 			ctx->mediaid = 0;
+			ctx->options = OPTION_AUTOSTART;
 		}
 	}
 	return ctx;
@@ -338,4 +380,7 @@ media_ops_t *media_sqlite = &(media_ops_t)
 	.insert = media_insert,
 	.count = media_count,
 	.end = media_end,
+	.autostart = media_autostart,
+	.loop = media_loop,
+	.random = media_random,
 };

@@ -18,6 +18,9 @@ struct media_ops_s
 	int (*play)(media_ctx_t *ctx, play_fcn_t play, void *data);
 	int (*next)(media_ctx_t *ctx);
 	int (*end)(media_ctx_t *ctx);
+	void (*autostart)(media_ctx_t *ctx, int enable);
+	void (*loop)(media_ctx_t *ctx, int enable);
+	void (*random)(media_ctx_t *ctx, int enable);
 };
 
 typedef struct media_s media_t;

@@ -296,25 +296,22 @@ static void jitter_reset(jitter_ctx_t *jitter)
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
 
 	pthread_mutex_lock(&private->mutex);
-	private->in->state = SCATTER_FREE;
-	private->out->state = SCATTER_FREE;
+	int i = 0;
+	for (i = 0; i < jitter->count; i++)
+	{
+		private->in->state = SCATTER_FREE;
+		private->in = private->in->next;
+	}
 	pthread_mutex_unlock(&private->mutex);
 
 	pthread_cond_broadcast(&private->condpeer);
 	pthread_cond_broadcast(&private->condpush);
 
 	pthread_mutex_lock(&private->mutex);
-	while (private->out->state == SCATTER_PULL)
-	{
-		pthread_cond_wait(&private->condpeer, &private->mutex);
-	}
-	while (private->in->state == SCATTER_PULL)
-	{
-		pthread_cond_wait(&private->condpush, &private->mutex);
-	}
+	private->level = 0;
+	private->state = JITTER_FILLING;
 	private->in = private->out = private->sg;
 	pthread_mutex_unlock(&private->mutex);
-dbg("jitter %s reset", jitter->name);
 }
 
 static const jitter_ops_t *jitter_scattergather = &(jitter_ops_t)

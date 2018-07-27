@@ -314,6 +314,12 @@ static void jitter_reset(jitter_ctx_t *jitter)
 	pthread_mutex_unlock(&private->mutex);
 }
 
+static int jitter_empty(jitter_ctx_t *jitter)
+{
+	jitter_private_t *private = (jitter_private_t *)jitter->private;
+	return (private->out->state != SCATTER_READY);
+}
+
 static const jitter_ops_t *jitter_scattergather = &(jitter_ops_t)
 {
 	.reset = jitter_reset,
@@ -321,4 +327,5 @@ static const jitter_ops_t *jitter_scattergather = &(jitter_ops_t)
 	.push = jitter_push,
 	.peer = jitter_peer,
 	.pop = jitter_pop,
+	.empty = jitter_empty,
 };

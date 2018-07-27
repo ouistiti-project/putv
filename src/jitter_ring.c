@@ -262,6 +262,13 @@ static void jitter_reset(jitter_ctx_t *jitter)
 	pthread_cond_broadcast(&private->condpush);
 }
 
+static int jitter_empty(jitter_ctx_t *jitter)
+{
+	jitter_private_t *private = (jitter_private_t *)jitter->private;
+	return ((private->in > private->out) &&
+		(private->out + jitter->size) > private->in);
+}
+
 static const jitter_ops_t *jitter_ringbuffer = &(jitter_ops_t)
 {
 	.reset = jitter_reset,
@@ -269,4 +276,5 @@ static const jitter_ops_t *jitter_ringbuffer = &(jitter_ops_t)
 	.push = jitter_push,
 	.peer = jitter_peer,
 	.pop = jitter_pop,
+	.empty = jitter_empty,
 };

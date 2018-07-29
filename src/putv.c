@@ -205,6 +205,8 @@ int player_run(mediaplayer_ctx_t *ctx)
 		while (ctx->state == STATE_STOP)
 		{
 			dbg("putv: stop");
+			jitter[0]->ops->reset(jitter[0]->ctx);
+			jitter[1]->ops->reset(jitter[1]->ctx);
 			pthread_cond_wait(&ctx->cond, &ctx->mutex);
 		}
 		pthread_mutex_unlock(&ctx->mutex);
@@ -218,8 +220,6 @@ int player_run(mediaplayer_ctx_t *ctx)
 			current_dec->src->destroy(current_dec->src_ctx);
 			free(current_dec);
 			current_dec = NULL;
-			jitter[0]->ops->reset(jitter[0]->ctx);
-			jitter[1]->ops->reset(jitter[1]->ctx);
 		}
 		if (player.dec != NULL)
 		{

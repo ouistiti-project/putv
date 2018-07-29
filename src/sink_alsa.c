@@ -140,10 +140,10 @@ static sink_ctx_t *alsa_init(mediaplayer_ctx_t *mctx, const char *soundcard)
 		goto error;
 	}
 
-	jitter_t *jitter = jitter_scattergather_init(jitter_name, 10, size * count);
+	jitter_t *jitter = jitter_scattergather_init(jitter_name, 5, size * count);
 	ctx->in = jitter;
 	jitter->format = format;
-	jitter->ctx->thredhold = 5;
+	jitter->ctx->thredhold = 2;
 
 	ctx->ctx = mctx;
 

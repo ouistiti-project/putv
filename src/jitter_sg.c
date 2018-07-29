@@ -302,6 +302,9 @@ static void jitter_reset(jitter_ctx_t *jitter)
 {
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
 
+	private->out->state = SCATTER_READY;
+	pthread_cond_broadcast(&private->condpeer);
+	pthread_yield();
 	pthread_mutex_lock(&private->mutex);
 	int i = 0;
 	for (i = 0; i < jitter->count; i++)
@@ -311,7 +314,6 @@ static void jitter_reset(jitter_ctx_t *jitter)
 	}
 	pthread_mutex_unlock(&private->mutex);
 
-	pthread_cond_broadcast(&private->condpeer);
 	pthread_cond_broadcast(&private->condpush);
 
 	pthread_mutex_lock(&private->mutex);

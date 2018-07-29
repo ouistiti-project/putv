@@ -204,13 +204,20 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 {
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
 
-	private->in->len = len;
-	private->in->beat = beat;
-	private->in->state = SCATTER_READY;
-	private->in = private->in->next;
-	pthread_mutex_lock(&private->mutex);
-	private->level++;
-	pthread_mutex_unlock(&private->mutex);
+	if (len == 0)
+	{
+		private->in->state = SCATTER_FREE;
+	}
+	else
+	{
+		private->in->len = len;
+		private->in->beat = beat;
+		private->in->state = SCATTER_READY;
+		private->in = private->in->next;
+		pthread_mutex_lock(&private->mutex);
+		private->level++;
+		pthread_mutex_unlock(&private->mutex);
+	}
 	if (private->state == JITTER_RUNNING)
 	{
 		pthread_cond_broadcast(&private->condpeer);

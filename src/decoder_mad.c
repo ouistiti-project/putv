@@ -155,7 +155,6 @@ enum mad_flow output(void *data,
 	{
 		if (decoder->buffer == NULL)
 		{
-			decoder->bufferlen = 0;
 			decoder->buffer = decoder->out->ops->pull(decoder->out->ctx);
 		}
 		signed int sample;
@@ -195,6 +194,7 @@ enum mad_flow output(void *data,
 		if (decoder->bufferlen >= decoder->out->ctx->size)
 		{
 			decoder->buffer = NULL;
+			decoder->bufferlen = 0;
 			decoder->out->ops->push(decoder->out->ctx, decoder->out->ctx->size, NULL);
 			if (player_waiton(decoder->ctx, STATE_PAUSE) < 0)
 				return MAD_FLOW_BREAK;
@@ -254,6 +254,11 @@ static void *mad_thread(void *arg)
 	decoder_ctx_t *decoder = (decoder_ctx_t *)arg;
 	/* start decoding */
 	result = mad_decoder_run(&decoder->decoder, MAD_DECODER_MODE_SYNC);
+	if (decoder->bufferlen > 0)
+	{
+		decoder->buffer = NULL;
+		decoder->out->ops->push(decoder->out->ctx, decoder->bufferlen, NULL);
+	}
 	return (void *)result;
 }
 

@@ -206,16 +206,18 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 
 	if (len == 0)
 	{
+		pthread_mutex_lock(&private->mutex);
 		private->in->state = SCATTER_FREE;
+		pthread_mutex_unlock(&private->mutex);
 	}
 	else
 	{
+		pthread_mutex_lock(&private->mutex);
 		private->in->len = len;
 		private->in->beat = beat;
 		private->in->state = SCATTER_READY;
-		private->in = private->in->next;
-		pthread_mutex_lock(&private->mutex);
 		private->level++;
+		private->in = private->in->next;
 		pthread_mutex_unlock(&private->mutex);
 	}
 	if (private->state == JITTER_RUNNING)
@@ -261,13 +263,14 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter)
 			return NULL;
 	}
 	pthread_mutex_lock(&private->mutex);
-	while (private->out->state != SCATTER_READY)
+	while ((private->state == JITTER_FILLING) &&
+			(private->out->state != SCATTER_READY))
 	{
 		jitter_dbg("jitter %s peer block on %p", jitter->name, private->out);
 		pthread_cond_wait(&private->condpeer, &private->mutex);
 	}
-	pthread_mutex_unlock(&private->mutex);
 	private->out->state = SCATTER_PULL;
+	pthread_mutex_unlock(&private->mutex);
 	if (private->out->beat)
 		jitter->heartbeat(jitter->heart, private->out->beat);
 	return private->out->data;
@@ -284,10 +287,10 @@ static void jitter_pop(jitter_ctx_t *jitter, size_t len)
 	{
 		dbg("buffer not empty %ld %ld", private->out->len, len);
 	}
-	private->out->state = SCATTER_FREE;
-	private->out = private->out->next;
 	pthread_mutex_lock(&private->mutex);
+	private->out->state = SCATTER_FREE;
 	private->level--;
+	private->out = private->out->next;
 	pthread_mutex_unlock(&private->mutex);
 	if (private->state == JITTER_RUNNING)
 	{
@@ -302,9 +305,18 @@ static void jitter_reset(jitter_ctx_t *jitter)
 {
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
 
-	private->out->state = SCATTER_READY;
-	pthread_cond_broadcast(&private->condpeer);
-	pthread_yield();
+	if (private->out->state == SCATTER_PULL)
+	{
+		pthread_mutex_lock(&private->mutex);
+		private->out->state = SCATTER_READY;
+		pthread_mutex_unlock(&private->mutex);
+		pthread_cond_broadcast(&private->condpeer);
+		pthread_yield();
+		pthread_mutex_lock(&private->mutex);
+		while (private->out->state != SCATTER_FREE)
+			pthread_cond_wait(&private->condpush, &private->mutex);
+		pthread_mutex_unlock(&private->mutex);
+	}
 	pthread_mutex_lock(&private->mutex);
 	int i = 0;
 	for (i = 0; i < jitter->count; i++)

@@ -38,6 +38,7 @@ typedef enum
 	PCM_16bits_LE_stereo,
 	PCM_24bits_LE_stereo,
 	PCM_32bits_LE_stereo,
+	PCM_32bits_BE_stereo,
 	MPEG2_1,
 	MPEG2_2,
 	MPEG2_3_MP3,

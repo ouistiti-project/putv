@@ -65,6 +65,18 @@ struct decoder_ctx_s
 #define dbg(...)
 #endif
 
+#define ENDIAN le
+#define RENDIAN be
+
+#define WRITEFUNC(END,BITS)	write_ ## END ## BITS
+//#define WRITE_ENDIAN16 WRITEFUNC(ENDIAN,16)
+#define WRITE_ENDIAN16 write_le16
+#define WRITE_ENDIAN24 write_le24
+#define WRITE_ENDIAN32 write_le32
+#define WRITE_RENDIAN16 write_be16
+#define WRITE_RENDIAN24 write_be24
+#define WRITE_RENDIAN32 write_be32
+
 #define BUFFERSIZE (1*MAD_BUFFER_MDLEN)
 static
 enum mad_flow input(void *data,
@@ -119,7 +131,36 @@ signed int scale_24bits(mad_fixed_t sample)
 	return sample >> (MAD_F_FRACBITS + 1 - 24);
 }
 
-static int write_le32(signed int sample, unsigned char *out)
+static int WRITE_RENDIAN32(signed int sample, unsigned char *out)
+{
+	int offset = 0;
+	out[offset++] = (sample >> 24) & 0xff;
+	out[offset++] = (sample >>16) & 0xff;
+	out[offset++] = (sample >> 8) & 0xff;
+	out[offset++] = (sample >> 0) & 0xff;
+	return offset;
+}
+
+static int WRITE_RENDIAN24(signed int sample, unsigned char *out)
+{
+	signed int scaled = scale_24bits(sample);
+	int offset = 0;
+	out[offset++] = (scaled >> 16) & 0xff;
+	out[offset++] = (scaled >> 8) & 0xff;
+	out[offset++] = (scaled >> 0) & 0xff;
+	return offset;
+}
+
+static int WRITE_RENDIAN16(signed int sample, unsigned char *out)
+{
+	signed int scaled = scale_16bits(sample);
+	int offset = 0;
+	out[offset++] = (scaled >> 8) & 0xff;
+	out[offset++] = (scaled >> 0) & 0xff;
+	return offset;
+}
+
+static int WRITE_ENDIAN32(signed int sample, unsigned char *out)
 {
 	int offset = 0;
 	out[offset++] = (sample >> 0) & 0xff;
@@ -129,7 +170,7 @@ static int write_le32(signed int sample, unsigned char *out)
 	return offset;
 }
 
-static int write_le24(signed int sample, unsigned char *out)
+static int WRITE_ENDIAN24(signed int sample, unsigned char *out)
 {
 	signed int scaled = scale_24bits(sample);
 	int offset = 0;
@@ -139,7 +180,7 @@ static int write_le24(signed int sample, unsigned char *out)
 	return offset;
 }
 
-static int write_le16(signed int sample, unsigned char *out)
+static int WRITE_ENDIAN16(signed int sample, unsigned char *out)
 {
 	signed int scaled = scale_16bits(sample);
 	int offset = 0;
@@ -260,11 +301,15 @@ static int mad_run(decoder_ctx_t *decoder, jitter_t *jitter)
 		decoder->nchannels = 1;
 	else if (decoder->out->format == PCM_24bits_LE_stereo)
 	{
-		decoder->write_sample = write_le16;
+		decoder->write_sample = write_le24;
 	}
 	else if (decoder->out->format == PCM_32bits_LE_stereo)
 	{
 		decoder->write_sample = write_le32;
+	}
+	else if (decoder->out->format == PCM_32bits_BE_stereo)
+	{
+		decoder->write_sample = write_be32;
 	}
 	else if (decoder->out->format != PCM_16bits_LE_stereo)
 	{

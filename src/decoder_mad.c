@@ -33,14 +33,17 @@
 #include <stdlib.h>
 
 #include <mad.h>
+#include <id3tag.h>
 
 #include "putv.h"
+typedef int (*write_sample_t)(signed int sample, unsigned char *out);
 typedef struct decoder_s decoder_t;
 typedef struct decoder_ctx_s decoder_ctx_t;
 struct decoder_ctx_s
 {
 	const decoder_t *ops;
 	struct mad_decoder decoder;
+	int nchannels;
 	pthread_t thread;
 	mediaplayer_ctx_t *ctx;
 	jitter_t *in;
@@ -48,6 +51,7 @@ struct decoder_ctx_s
 	jitter_t *out;
 	unsigned char *buffer;
 	size_t bufferlen;
+	write_sample_t write_sample;
 };
 #define DECODER_CTX
 #include "decoder.h"
@@ -83,8 +87,6 @@ enum mad_flow input(void *data,
 	return MAD_FLOW_CONTINUE;
 }
 
-typedef signed int (*pcm_scale_t)(mad_fixed_t sample);
-
 static
 signed int scale_16bits(mad_fixed_t sample)
 {
@@ -117,10 +119,33 @@ signed int scale_24bits(mad_fixed_t sample)
 	return sample >> (MAD_F_FRACBITS + 1 - 24);
 }
 
-static
-signed int scale_32bits(mad_fixed_t sample)
+static int write_le32(signed int sample, unsigned char *out)
 {
-	return sample;
+	int offset = 0;
+	out[offset++] = (sample >> 0) & 0xff;
+	out[offset++] = (sample >> 8) & 0xff;
+	out[offset++] = (sample >> 16) & 0xff;
+	out[offset++] = (sample >> 24) & 0xff;
+	return offset;
+}
+
+static int write_le24(signed int sample, unsigned char *out)
+{
+	signed int scaled = scale_24bits(sample);
+	int offset = 0;
+	out[offset++] = (scaled >> 0) & 0xff;
+	out[offset++] = (scaled >> 8) & 0xff;
+	out[offset++] = (scaled >> 16) & 0xff;
+	return offset;
+}
+
+static int write_le16(signed int sample, unsigned char *out)
+{
+	signed int scaled = scale_16bits(sample);
+	int offset = 0;
+	out[offset++] = (scaled >> 0) & 0xff;
+	out[offset++] = (scaled >> 8) & 0xff;
+	return offset;
 }
 
 static
@@ -131,7 +156,7 @@ enum mad_flow output(void *data,
 	decoder_ctx_t *decoder = (decoder_ctx_t *)data;
 	unsigned int nchannels, nsamples;
 	mad_fixed_t const *left_ch, *right_ch;
-	pcm_scale_t scale = scale_16bits;
+	write_sample_t write_sample = decoder->write_sample;
 
 	/* pcm->samplerate contains the sampling frequency */
 
@@ -139,17 +164,6 @@ enum mad_flow output(void *data,
 	nsamples  = pcm->length;
 	left_ch   = pcm->samples[0];
 	right_ch  = pcm->samples[1];
-	if (decoder->out->format == PCM_16bits_LE_mono)
-		nchannels = 1;
-	else if (decoder->out->format == PCM_24bits_LE_stereo)
-		scale = scale_24bits;
-	else if (decoder->out->format == PCM_32bits_LE_stereo)
-		scale = scale_32bits;
-	else if (decoder->out->format != PCM_16bits_LE_stereo)
-	{
-		err("decoder out format not supported %d", decoder->out->format);
-		return MAD_FLOW_BREAK;
-	}
 
 	while (nsamples--)
 	{
@@ -159,37 +173,12 @@ enum mad_flow output(void *data,
 		}
 		signed int sample;
 
-		sample = scale(*left_ch++);
-		decoder->buffer[decoder->bufferlen++] =
-			(sample >> 0) & 0xff;
-		decoder->buffer[decoder->bufferlen++] =
-			(sample >> 8) & 0xff;
-		if (decoder->out->format >= PCM_24bits_LE_stereo)
-		{
-			decoder->buffer[decoder->bufferlen++] =
-				(sample >> 16) & 0xff;
-			if (decoder->out->format == PCM_32bits_LE_stereo)
-			{
-				decoder->buffer[decoder->bufferlen++] =
-					(sample >> 24) & 0xff;
-			}
-		}
-		if (nchannels == 2) {
-			sample = scale(*right_ch++);
-			decoder->buffer[decoder->bufferlen++] =
-				(sample >> 0) & 0xff;
-			decoder->buffer[decoder->bufferlen++] =
-				(sample >> 8) & 0xff;
-			if (decoder->out->format >= PCM_24bits_LE_stereo)
-			{
-				decoder->buffer[decoder->bufferlen++] =
-					(sample >> 16) & 0xff;
-				if (decoder->out->format == PCM_32bits_LE_stereo)
-				{
-					decoder->buffer[decoder->bufferlen++] =
-						(sample >> 24) & 0xff;
-				}
-			}
+		sample = (signed int)*left_ch++;
+		decoder->bufferlen += write_sample(sample, decoder->buffer + decoder->bufferlen);
+		if (decoder->nchannels == 2) {
+			if (nchannels == 2)
+				sample = (signed int)*right_ch++;
+			decoder->bufferlen += write_sample(sample, decoder->buffer + decoder->bufferlen);
 		}
 		if (decoder->bufferlen >= decoder->out->ctx->size)
 		{
@@ -231,6 +220,8 @@ static decoder_ctx_t *mad_init(mediaplayer_ctx_t *ctx)
 	decoder_ctx_t *decoder = calloc(1, sizeof(*decoder));
 	decoder->ops = decoder_mad;
 	decoder->ctx = ctx;
+	decoder->write_sample = write_le16;
+	decoder->nchannels = 2;
 
 	mad_decoder_init(&decoder->decoder, decoder,
 			input, 0 /* header */, 0 /* filter */, output,
@@ -265,6 +256,21 @@ static void *mad_thread(void *arg)
 static int mad_run(decoder_ctx_t *decoder, jitter_t *jitter)
 {
 	decoder->out = jitter;
+	if (decoder->out->format == PCM_16bits_LE_mono)
+		decoder->nchannels = 1;
+	else if (decoder->out->format == PCM_24bits_LE_stereo)
+	{
+		decoder->write_sample = write_le16;
+	}
+	else if (decoder->out->format == PCM_32bits_LE_stereo)
+	{
+		decoder->write_sample = write_le32;
+	}
+	else if (decoder->out->format != PCM_16bits_LE_stereo)
+	{
+		err("decoder out format not supported %d", decoder->out->format);
+		return -1;
+	}
 	pthread_create(&decoder->thread, NULL, mad_thread, decoder);
 	return 0;
 }

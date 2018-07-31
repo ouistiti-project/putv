@@ -241,9 +241,32 @@ enum mad_flow error(void *data,
 {
 	if (MAD_RECOVERABLE(stream->error))
 	{
-		dbg("decoding error 0x%04x (%s) at byte offset %p",
-			stream->error, mad_stream_errorstr(stream),
-			stream->this_frame );
+#ifdef USE_ID3TAG
+		if (stream->error == MAD_ERROR_LOSTSYNC)
+		{
+			signed long tagsize;
+			tagsize = id3_tag_query(stream->this_frame,
+					stream->bufend - stream->this_frame);
+			if (tagsize > 0)
+			{
+#ifdef PROCESS_ID3
+				struct id3_tag *tag;
+
+				tag = get_id3(stream, tagsize, decoder);
+				if (tag) {
+					//process_id3(tag, player);
+					id3_tag_delete(tag);
+				}
+#else
+				mad_stream_skip(stream, tagsize);
+#endif
+			}
+		}
+		else
+#endif
+			dbg("decoding error 0x%04x (%s) at byte offset %p",
+				stream->error, mad_stream_errorstr(stream),
+				stream->this_frame );
 		return MAD_FLOW_CONTINUE;
 	}
 	else

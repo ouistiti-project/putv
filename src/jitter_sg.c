@@ -49,6 +49,7 @@ struct scatter_s
 	{
 		SCATTER_FREE,
 		SCATTER_PULL,
+		SCATTER_POP,
 		SCATTER_READY,
 	} state;
 	unsigned char *data;
@@ -195,15 +196,19 @@ static unsigned char *jitter_pull(jitter_ctx_t *jitter)
 		jitter_dbg("jitter %s pull block on %p", jitter->name, private->in);
 		pthread_cond_wait(&private->condpush, &private->mutex);
 	}
-	pthread_mutex_unlock(&private->mutex);
 	private->in->state = SCATTER_PULL;
+	pthread_mutex_unlock(&private->mutex);
 	return private->in->data;
 }
 
 static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 {
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
-
+	if (private->in->state != SCATTER_PULL)
+	{
+		pthread_cond_broadcast(&private->condpeer);
+		return;
+	}
 	if (len == 0)
 	{
 		pthread_mutex_lock(&private->mutex);
@@ -269,7 +274,7 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter)
 		jitter_dbg("jitter %s peer block on %p", jitter->name, private->out);
 		pthread_cond_wait(&private->condpeer, &private->mutex);
 	}
-	private->out->state = SCATTER_PULL;
+	private->out->state = SCATTER_POP;
 	pthread_mutex_unlock(&private->mutex);
 	if (private->out->beat)
 		jitter->heartbeat(jitter->heart, private->out->beat);
@@ -280,8 +285,12 @@ static void jitter_pop(jitter_ctx_t *jitter, size_t len)
 {
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
 
-	if (private->state == JITTER_STOP)
+	if ((private->state == JITTER_STOP) ||
+		(private->out->state != SCATTER_POP))
+	{
+		pthread_cond_broadcast(&private->condpush);
 		return;
+	}
 
 	if (private->out->len > len)
 	{

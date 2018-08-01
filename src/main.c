@@ -118,10 +118,10 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
-	media_ctx = media_sqlite->init(dbpath);
+	media_ctx = MEDIA->init(dbpath);
 	media_t *media = &(media_t)
 	{
-		.ops = media_sqlite,
+		.ops = MEDIA,
 		.ctx = media_ctx,
 	};
 

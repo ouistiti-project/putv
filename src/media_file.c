@@ -1,0 +1,177 @@
+/*****************************************************************************
+ * media_file.c
+ * this file is part of https://github.com/ouistiti-project/putv
+ *****************************************************************************
+ * Copyright (C) 2016-2017
+ *
+ * Authors: Marc Chalain <marc.chalain@gmail.com>
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining
+ * a copy of this software and associated documentation files (the
+ * "Software"), to deal in the Software without restriction, including
+ * without limitation the rights to use, copy, modify, merge, publish,
+ * distribute, sublicense, and/or sell copies of the Software, and to
+ * permit persons to whom the Software is furnished to do so, subject
+ * to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ * IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+ * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+ * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ *****************************************************************************/
+#include <string.h>
+#include <stdlib.h>
+#include <pthread.h>
+#include <stdio.h>
+#include <unistd.h>
+
+#include "putv.h"
+#include "media.h"
+
+struct media_ctx_s
+{
+	const char *url;
+	int mediaid;
+	unsigned int options;
+};
+
+#define OPTION_LOOP 0x0001
+#define OPTION_RANDOM 0x0002
+#define OPTION_AUTOSTART 0x0004
+
+#define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
+#define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
+#ifdef DEBUG
+#define dbg(format, ...) fprintf(stderr, "\x1B[32m"format"\x1B[0m\n",  ##__VA_ARGS__)
+#else
+#define dbg(...)
+#endif
+
+static int media_count(media_ctx_t *ctx);
+static int media_insert(media_ctx_t *ctx, const char *path, const char *info, const char *mime);
+static int media_find(media_ctx_t *ctx, int id, char *url, int *urllen, char *info, int *infolen);
+static int media_current(media_ctx_t *ctx, char *url, int *urllen, char *info, int *infolen);
+static int media_play(media_ctx_t *ctx, play_fcn_t play, void *data);
+static int media_next(media_ctx_t *ctx);
+static int media_end(media_ctx_t *ctx);
+
+static const char *utils_getmime(const char *path)
+{
+	char *ext = strrchr(path, '.');
+	if (!strcmp(ext, ".mp3"))
+		return mime_mp3;
+	return mime_octetstream;
+}
+
+static int media_count(media_ctx_t *ctx)
+{
+	return 1;
+}
+
+static int media_insert(media_ctx_t *ctx, const char *path, const char *info, const char *mime)
+{
+	ctx->url = path;
+	return 0;
+}
+
+static int media_find(media_ctx_t *ctx, int id, char *url, int *urllen, char *info, int *infolen)
+{
+	int len = strlen(ctx->url);
+	*urllen = (*urllen > len)? len: *urllen;
+	strncpy(url, ctx->url, *urllen);
+	return 0;
+}
+
+static int media_current(media_ctx_t *ctx, char *url, int *urllen, char *info, int *infolen)
+{
+	return media_find(ctx, ctx->mediaid, url, urllen, info, infolen);
+}
+
+static int media_play(media_ctx_t *ctx, play_fcn_t play, void *data)
+{
+	int ret = -1;
+
+	if (ctx->mediaid == 0 && (ctx->options & OPTION_AUTOSTART)) //start ID
+		media_next(ctx);
+
+	if (ctx->mediaid == 1 && ctx->url != NULL)
+	{
+		ret = play(data, ctx->url, NULL, utils_getmime(ctx->url));
+	}
+	return ret;
+}
+
+static int media_next(media_ctx_t *ctx)
+{
+	if (ctx->mediaid == 1)
+		media_end(ctx);
+	else
+		ctx->mediaid = 1;
+	return ctx->mediaid;
+}
+
+static int media_end(media_ctx_t *ctx)
+{
+	ctx->mediaid = -1;
+	return 0;
+}
+
+static void media_autostart(media_ctx_t *ctx, int enable)
+{
+	if (enable)
+		ctx->options |= OPTION_AUTOSTART;
+	else
+		ctx->options &= ~OPTION_AUTOSTART;
+}
+
+static void media_loop(media_ctx_t *ctx, int enable)
+{
+	if (enable)
+		ctx->options |= OPTION_LOOP;
+	else
+		ctx->options &= ~OPTION_LOOP;
+}
+
+static void media_random(media_ctx_t *ctx, int enable)
+{
+}
+
+static media_ctx_t *media_init(const char *url)
+{
+	media_ctx_t *ctx = NULL;
+	if (url)
+	{
+		ctx = calloc(1, sizeof(*ctx));
+		ctx->mediaid = 0;
+		ctx->url = url;
+		ctx->options = OPTION_AUTOSTART;
+	}
+	return ctx;
+}
+
+static void media_destroy(media_ctx_t *ctx)
+{
+	free(ctx);
+}
+
+media_ops_t *media_file = &(media_ops_t)
+{
+	.init = media_init,
+	.destroy = media_destroy,
+	.next = media_next,
+	.play = media_play,
+	.current = media_current,
+	.find = media_find,
+	.insert = media_insert,
+	.count = media_count,
+	.end = media_end,
+	.autostart = media_autostart,
+	.loop = media_loop,
+	.random = media_random,
+};

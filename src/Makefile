@@ -2,7 +2,10 @@
 bin-y+=putv
 putv_SOURCES+=putv.c
 putv_SOURCES+=main.c
-putv_SOURCES+=media_sqlite.c
+putv_SOURCES-$(MEDIA_SQLITE)+=media_sqlite.c
+putv_CFLAGS-$(MEDIA_SQLITE)+=-DMEDIA=media_sqlite
+putv_SOURCES-$(MEDIA_FILE)+=media_file.c
+putv_CFLAGS-$(MEDIA_FILE)+=-DMEDIA=media_file
 putv_SOURCES+=jitter_sg.c
 putv_SOURCES+=jitter_ring.c
 putv_LIBRARY+=pthread sqlite3

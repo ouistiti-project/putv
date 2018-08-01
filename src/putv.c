@@ -172,25 +172,8 @@ static int _player_play(void* arg, const char *url, const char *info, const char
 	return -1;
 }
 
-int player_run(mediaplayer_ctx_t *ctx)
+int player_run(mediaplayer_ctx_t *ctx, jitter_t *encoder_jitter)
 {
-	const sink_t *sink;
-	sink_ctx_t *sink_ctx;
-	const encoder_t *encoder;
-	encoder_ctx_t *encoder_ctx;
-
-	jitter_t *jitter[3];
-
-	sink = SINK;
-	sink_ctx = sink->init(ctx, "default");
-	sink->run(sink_ctx);
-	jitter[0] = sink->jitter(sink_ctx);
-
-	encoder = ENCODER;
-	encoder_ctx = encoder->init(ctx);
-	encoder->run(encoder_ctx,jitter[0]);
-	jitter[1] = encoder->jitter(encoder_ctx);
-
 	struct _player_play_s player =
 	{
 		.ctx = ctx,
@@ -205,8 +188,7 @@ int player_run(mediaplayer_ctx_t *ctx)
 		while (ctx->state == STATE_STOP)
 		{
 			dbg("putv: stop");
-			jitter[0]->ops->reset(jitter[0]->ctx);
-			jitter[1]->ops->reset(jitter[1]->ctx);
+			encoder_jitter->ops->reset(encoder_jitter->ctx);
 			pthread_cond_wait(&ctx->cond, &ctx->mutex);
 		}
 		pthread_mutex_unlock(&ctx->mutex);
@@ -225,15 +207,12 @@ int player_run(mediaplayer_ctx_t *ctx)
 		{
 			current_dec = player.dec;
 			dbg("putv: play");
-			current_dec->decoder->run(current_dec->decoder_ctx, jitter[1]);
+			current_dec->decoder->run(current_dec->decoder_ctx, encoder_jitter);
 			current_dec->src->run(current_dec->src_ctx, current_dec->decoder->jitter(current_dec->decoder_ctx));
 		}
 		else
 			player_state(ctx, STATE_STOP);
 		ctx->media->ops->next(ctx->media->ctx);
 	}
-	encoder->destroy(encoder_ctx);
-	sink->destroy(sink_ctx);
-	pthread_exit(0);
 	return 0;
 }

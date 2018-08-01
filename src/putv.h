@@ -30,7 +30,7 @@ typedef struct mediaplayer_ctx_s mediaplayer_ctx_t;
 typedef void (*player_event_cb_t)(void *ctx, mediaplayer_ctx_t *);
 
 mediaplayer_ctx_t *player_init(media_t *media);
-int player_run(mediaplayer_ctx_t *userdata);
+int player_run(mediaplayer_ctx_t *userdata, jitter_t *encoder_jitter);
 void player_destroy(mediaplayer_ctx_t *ctx);
 int player_waiton(mediaplayer_ctx_t *ctx, int state);
 state_t player_state(mediaplayer_ctx_t *ctx, state_t state);

@@ -31,6 +31,8 @@
 #include <pthread.h>
 
 #include "putv.h"
+#include "encoder.h"
+#include "sink.h"
 #include "media.h"
 #include "cmds.h"
 #include "../version.h"
@@ -43,11 +45,31 @@
 #define dbg(...)
 #endif
 
+typedef struct putv_s putv_t;
+struct putv_s
+{
+	mediaplayer_ctx_t *player;
+	jitter_t *sink_jitter;
+};
+
 void *player_thread(void *arg)
 {
 	int ret;
-	ret = player_run((mediaplayer_ctx_t*)arg);
+	putv_t *putv = (putv_t *)arg;
+	const encoder_t *encoder;
+	encoder_ctx_t *encoder_ctx;
+	jitter_t *jitter = NULL;
+
+	encoder = ENCODER;
+	encoder_ctx = encoder->init(putv->player);
+	encoder->run(encoder_ctx, putv->sink_jitter);
+	jitter = encoder->jitter(encoder_ctx);
+
+	if (jitter != NULL)
+		ret = player_run(putv->player, jitter);
+	encoder->destroy(encoder_ctx);
 	player_destroy((mediaplayer_ctx_t*)arg);
+	pthread_exit(0);
 	return (void *)ret;
 }
 
@@ -106,7 +128,19 @@ int main(int argc, char **argv)
 		dbg("insert stdin");
 		media->ops->insert(media_ctx, "-", NULL, "audio/mp3");
 	}
-	pthread_create(&thread, NULL, player_thread, (void *)ctx);
+
+	const sink_t *sink;
+	sink_ctx_t *sink_ctx;
+
+	sink = SINK;
+	sink_ctx = sink->init(ctx, "default");
+	sink->run(sink_ctx);
+
+	putv_t putv = {
+		.player = ctx,
+		.sink_jitter = sink->jitter(sink_ctx),
+	};
+	pthread_create(&thread, NULL, player_thread, (void *)&putv);
 
 #ifdef CMDLINE
 	cmds_t *cmds = cmds_line;
@@ -119,5 +153,7 @@ int main(int argc, char **argv)
 	cmds_ctx_t *cmds_ctx = cmds->init(ctx, media, arg);
 	cmds->run(cmds_ctx);
 	cmds->destroy(cmds_ctx);
+
+	sink->destroy(sink_ctx);
 	return 0;
 }

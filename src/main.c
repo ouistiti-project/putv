@@ -78,6 +78,7 @@ void *player_thread(void *arg)
 int main(int argc, char **argv)
 {
 	const char *dbpath = SYSCONFDIR"/putv.db";
+	const char *outarg = "default";
 	mediaplayer_ctx_t *ctx;
 	media_ctx_t *media_ctx;
 	pthread_t thread;
@@ -88,7 +89,7 @@ int main(int argc, char **argv)
 	int opt;
 	do
 	{
-		opt = getopt(argc, argv, "R:d:hDVx");
+		opt = getopt(argc, argv, "R:d:o:hDVx");
 		switch (opt)
 		{
 			case 'R':
@@ -96,6 +97,9 @@ int main(int argc, char **argv)
 			break;
 			case 'd':
 				dbpath = optarg;
+			break;
+			case 'o':
+				outarg = optarg;
 			break;
 			case 'h':
 				return -1;
@@ -133,7 +137,7 @@ int main(int argc, char **argv)
 	sink_ctx_t *sink_ctx;
 
 	sink = SINK;
-	sink_ctx = sink->init(ctx, "default");
+	sink_ctx = sink->init(ctx, outarg);
 	sink->run(sink_ctx);
 
 	putv_t putv = {

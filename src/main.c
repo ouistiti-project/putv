@@ -77,7 +77,7 @@ void *player_thread(void *arg)
 #define SRC_STDIN 0x02
 int main(int argc, char **argv)
 {
-	const char *dbpath = SYSCONFDIR"/putv.db";
+	const char *mediapath = SYSCONFDIR"/putv.db";
 	const char *outarg = "default";
 	mediaplayer_ctx_t *ctx;
 	media_ctx_t *media_ctx;
@@ -89,14 +89,14 @@ int main(int argc, char **argv)
 	int opt;
 	do
 	{
-		opt = getopt(argc, argv, "R:d:o:hDVx");
+		opt = getopt(argc, argv, "R:m:o:hDVx");
 		switch (opt)
 		{
 			case 'R':
 				root = optarg;
 			break;
-			case 'd':
-				dbpath = optarg;
+			case 'm':
+				mediapath = optarg;
 			break;
 			case 'o':
 				outarg = optarg;
@@ -118,7 +118,7 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
-	media_ctx = MEDIA->init(dbpath);
+	media_ctx = MEDIA->init(mediapath);
 	media_t *media = &(media_t)
 	{
 		.ops = MEDIA,

@@ -20,4 +20,5 @@ struct encoder_s
 const encoder_t *encoder_get(encoder_ctx_t *ctx);
 
 extern const encoder_t *encoder_passthrough;
+extern const encoder_t *encoder_lame;
 #endif

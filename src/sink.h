@@ -20,4 +20,5 @@ const sink_t *sink_get(sink_ctx_t *ctx);
 
 extern const sink_t *sink_alsa;
 extern const sink_t *sink_tinyalsa;
+extern const sink_t *sink_file;
 #endif

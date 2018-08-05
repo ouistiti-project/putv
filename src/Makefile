@@ -35,6 +35,9 @@ putv_SOURCES-$(SINK_TINYALSA)+=sink_tinyalsa.c
 putv_CFLAGS-$(SINK_TINYALSA)+=-DSINK_TINYALSA
 putv_CFLAGS-$(SINK_TINYALSA)+=-DSINK=sink_tinyalsa
 putv_LIBRARY-$(SINK_TINYALSA)+=tinyalsa
+putv_SOURCES-$(SINK_FILE)+=sink_file.c
+putv_CFLAGS-$(SINK_FILE)+=-DSINK_FILE
+putv_CFLAGS-$(SINK_FILE)+=-DSINK=sink_file
 putv_SOURCES-$(CMDLINE)+=cmds_line.c
 putv_CFLAGS-$(CMDLINE)+=-DCMDLINE
 putv_SOURCES-$(JSONRPC)+=cmds_json.c

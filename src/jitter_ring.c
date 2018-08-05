@@ -137,17 +137,6 @@ static unsigned char *jitter_pull(jitter_ctx_t *jitter)
 	if (private->state == JITTER_STOP)
 		_jitter_init(jitter);
 	pthread_mutex_unlock(&private->mutex);
-	if ((private->in == private->out) &&
-		(jitter->consume != NULL))
-	{
-		int len;
-		len = jitter->consume(jitter->consumer, 
-			private->out, jitter->size);
-		if (len > 0)
-			jitter_pop(jitter, len);
-		else
-			return NULL;
-	}
 	if (private->in == NULL)
 		return NULL;
 	pthread_mutex_lock(&private->mutex);
@@ -179,6 +168,20 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 		private->state = JITTER_STOP;
 	}
 	pthread_mutex_unlock(&private->mutex);
+	if (jitter->consume != NULL)
+	{
+		len = jitter->consume(jitter->consumer,
+			private->out, len);
+		if (len > 0)
+		{
+			private->out = private->in;
+			private->level -= len;
+		}
+		else
+		{
+			private->state = JITTER_STOP;
+		}
+	}
 	if (private->state == JITTER_RUNNING)
 	{
 		pthread_cond_broadcast(&private->condpeer);

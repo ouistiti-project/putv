@@ -166,31 +166,6 @@ static unsigned char *jitter_pull(jitter_ctx_t *jitter)
 	pthread_mutex_lock(&private->mutex);
 	if (private->state == JITTER_STOP)
 		_jitter_init(jitter);
-	pthread_mutex_unlock(&private->mutex);
-	if ((private->in == private->out) &&
-		(private->in->state == SCATTER_READY) &&
-		(jitter->consume != NULL))
-	{
-		int len = 0;
-		do
-		{
-			int ret;
-			ret = jitter->consume(jitter->consumer, 
-				private->out->data + len, jitter->size - len);
-			if (ret > 0)
-				len += ret;
-			if (ret <= 0)
-			{
-				len = ret;
-				break;
-			}
-		} while (len < jitter->size);
-		if (len > 0)
-			jitter_pop(jitter, len);
-		else
-			return NULL;
-	}
-	pthread_mutex_lock(&private->mutex);
 	while (private->in->state != SCATTER_FREE)
 	{
 		jitter_dbg("jitter %s pull block on %p", jitter->name, private->in);
@@ -224,6 +199,28 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 		private->level++;
 		private->in = private->in->next;
 		pthread_mutex_unlock(&private->mutex);
+		if (jitter->consume != NULL)
+		{
+			private->out->state = SCATTER_POP;
+			int tlen = 0;
+			do
+			{
+				int ret;
+				ret = jitter->consume(jitter->consumer,
+					private->out->data + tlen, len - tlen);
+				if (ret > 0)
+					tlen += ret;
+				if (ret <= 0)
+				{
+					tlen = ret;
+					break;
+				}
+			} while (tlen < len);
+			if (tlen > 0)
+				jitter_pop(jitter, tlen);
+			else
+				return;
+		}
 	}
 	if (private->state == JITTER_RUNNING)
 	{
@@ -265,7 +262,10 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter)
 		if (len > 0)
 			jitter_push(jitter, len, NULL);
 		else
+		{
+			dbg("produce nothing");
 			return NULL;
+		}
 	}
 	pthread_mutex_lock(&private->mutex);
 	while ((private->state == JITTER_FILLING) &&

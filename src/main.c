@@ -30,7 +30,7 @@
 
 #include <pthread.h>
 
-#include "putv.h"
+#include "player.h"
 #include "encoder.h"
 #include "sink.h"
 #include "media.h"
@@ -45,32 +45,22 @@
 #define dbg(...)
 #endif
 
-typedef struct putv_s putv_t;
-struct putv_s
-{
-	mediaplayer_ctx_t *player;
-	jitter_t *sink_jitter;
-};
-
-void *player_thread(void *arg)
+static int run_player(player_ctx_t *player, jitter_t *sink_jitter)
 {
 	int ret;
-	putv_t *putv = (putv_t *)arg;
 	const encoder_t *encoder;
 	encoder_ctx_t *encoder_ctx;
-	jitter_t *jitter = NULL;
+	jitter_t *encoder_jitter = NULL;
 
 	encoder = ENCODER;
-	encoder_ctx = encoder->init(putv->player);
-	encoder->run(encoder_ctx, putv->sink_jitter);
-	jitter = encoder->jitter(encoder_ctx);
+	encoder_ctx = encoder->init(player);
+	encoder->run(encoder_ctx, sink_jitter);
+	encoder_jitter = encoder->jitter(encoder_ctx);
 
-	if (jitter != NULL)
-		ret = player_run(putv->player, jitter);
+	if (encoder_jitter != NULL)
+		ret = player_run(player, encoder_jitter);
 	encoder->destroy(encoder_ctx);
-	player_destroy((mediaplayer_ctx_t*)arg);
-	pthread_exit(0);
-	return (void *)ret;
+	return ret;
 }
 
 #define DAEMONIZE 0x01
@@ -79,7 +69,6 @@ int main(int argc, char **argv)
 {
 	const char *mediapath = SYSCONFDIR"/putv.db";
 	const char *outarg = "default";
-	mediaplayer_ctx_t *ctx;
 	media_ctx_t *media_ctx;
 	pthread_t thread;
 	const char *root = "/tmp";
@@ -125,39 +114,50 @@ int main(int argc, char **argv)
 		.ctx = media_ctx,
 	};
 
-	ctx = player_init(media);
-
 	if (mode & SRC_STDIN)
 	{
 		dbg("insert stdin");
 		media->ops->insert(media_ctx, "-", NULL, "audio/mp3");
 	}
 
-	const sink_t *sink;
-	sink_ctx_t *sink_ctx;
+	player_ctx_t *player = player_init(media);
 
-	sink = SINK;
-	sink_ctx = sink->init(ctx, outarg);
-	sink->run(sink_ctx);
-
-	putv_t putv = {
-		.player = ctx,
-		.sink_jitter = sink->jitter(sink_ctx),
-	};
-	pthread_create(&thread, NULL, player_thread, (void *)&putv);
-
+	cmds_t cmds[3];
+	int nbcmds = 0;
 #ifdef CMDLINE
-	cmds_t *cmds = cmds_line;
-	void *arg = NULL;
-#elif defined(JSONRPC)
+	cmds[nbcmds].ops = cmds_line;
+	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, media, NULL);
+	nbcmds++;
+#endif
+#ifdef JSONRPC
 	char socketpath[256];
 	snprintf(socketpath, sizeof(socketpath) - 1, "%s/%s", root, name);
-	void *arg = socketpath;
+	cmds[nbcmds].ops = cmds_json;
+	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, media, (void *)socketpath);
+	nbcmds++;
 #endif
-	cmds_ctx_t *cmds_ctx = cmds->init(ctx, media, arg);
-	cmds->run(cmds_ctx);
-	cmds->destroy(cmds_ctx);
+
+	int i;
+	for (i = 0; i < nbcmds; i++)
+		cmds[i].ops->run(cmds[i].ctx);
+
+	const sink_t *sink;
+	sink_ctx_t *sink_ctx;
+	jitter_t *sink_jitter = NULL;
+
+	sink = SINK;
+	sink_ctx = sink->init(player, outarg);
+	sink->run(sink_ctx);
+	sink_jitter = sink->jitter(sink_ctx);
+
+	run_player(player, sink_jitter);
 
 	sink->destroy(sink_ctx);
+	player_destroy(player);
+
+	for (i = 0; i < nbcmds; i++)
+	{
+		cmds[i].ops->destroy(cmds[i].ctx);
+	}
 	return 0;
 }

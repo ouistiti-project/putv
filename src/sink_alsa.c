@@ -32,13 +32,13 @@
 #include <stdlib.h>
 #include <alsa/asoundlib.h>
 
-#include "putv.h"
+#include "player.h"
 #include "jitter.h"
 typedef struct sink_s sink_t;
 typedef struct sink_ctx_s sink_ctx_t;
 struct sink_ctx_s
 {
-	mediaplayer_ctx_t *ctx;
+	player_ctx_t *ctx;
 	const sink_t *ops;
 	snd_pcm_t *playback_handle;
 	pthread_t thread;
@@ -59,7 +59,7 @@ struct sink_ctx_s
 #define sink_dbg(...)
 
 static const char *jitter_name = "alsa";
-static sink_ctx_t *alsa_init(mediaplayer_ctx_t *mctx, const char *soundcard)
+static sink_ctx_t *alsa_init(player_ctx_t *mctx, const char *soundcard)
 {
 	int ret;
 	jitter_format_t format = SINK_ALSA_FORMAT;
@@ -182,6 +182,8 @@ static void *alsa_thread(void *arg)
 		if (player_waiton(ctx->ctx, STATE_PAUSE) < 0)
 		{
 			snd_pcm_prepare(ctx->playback_handle);
+			if (player_state(ctx->ctx, STATE_UNKNOWN) == STATE_ERROR)
+				ctx->state = STATE_ERROR;
 		}
 
 		unsigned char *buff = ctx->in->ops->peer(ctx->in->ctx);

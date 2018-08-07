@@ -50,6 +50,7 @@ static unsigned char *jitter_pull(jitter_ctx_t *jitter);
 static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat);
 static unsigned char *jitter_peer(jitter_ctx_t *jitter);
 static void jitter_pop(jitter_ctx_t *jitter, size_t len);
+static void jitter_reset(jitter_ctx_t *jitter);
 
 typedef struct jitter_private_s jitter_private_t;
 struct jitter_private_s
@@ -109,6 +110,8 @@ void jitter_ringbuffer_destroy(jitter_t *jitter)
 {
 	jitter_ctx_t *ctx = jitter->ctx;
 	jitter_private_t *private = (jitter_private_t *)ctx->private;
+
+	jitter_reset(ctx);
 
 	pthread_cond_destroy(&private->condpush);
 	pthread_cond_destroy(&private->condpeer);

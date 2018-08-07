@@ -32,7 +32,7 @@
 #include <stdlib.h>
 #include <tinyalsa/asoundlib.h>
 
-#include "putv.h"
+#include "player.h"
 #include "jitter.h"
 typedef struct sink_s sink_t;
 typedef struct sink_ctx_s sink_ctx_t;
@@ -56,7 +56,7 @@ struct sink_ctx_s
 #endif
 
 static const char *jitter_name = "tinyalsa";
-static sink_ctx_t *alsa_init(mediaplayer_ctx_t *mctx, const char *soundcard)
+static sink_ctx_t *alsa_init(player_ctx_t *mctx, const char *soundcard)
 {
 	int ret;
 	jitter_format_t format = SINK_ALSA_FORMAT;
@@ -117,6 +117,11 @@ static void *alsa_thread(void *arg)
 	/* start decoding */
 	while (ctx->state != STATE_ERROR)
 	{
+		if (player_waiton(ctx->ctx, STATE_PAUSE) < 0)
+		{
+			if (player_state(ctx->ctx, STATE_UNKNOWN) == STATE_ERROR)
+				ctx->state = STATE_ERROR;
+		}
 		unsigned char *buff = ctx->in->ops->peer(ctx->in->ctx);
 		dbg("sink: play %d", ctx->in->ctx->size);
 		ret = pcm_write(ctx->playback_handle, buff, ctx->in->ctx->size);

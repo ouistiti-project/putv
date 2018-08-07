@@ -35,7 +35,7 @@
 #include <mad.h>
 #include <id3tag.h>
 
-#include "putv.h"
+#include "player.h"
 typedef int (*write_sample_t)(signed int sample, unsigned char *out);
 typedef struct decoder_s decoder_t;
 typedef struct decoder_ctx_s decoder_ctx_t;
@@ -45,7 +45,7 @@ struct decoder_ctx_s
 	struct mad_decoder decoder;
 	int nchannels;
 	pthread_t thread;
-	mediaplayer_ctx_t *ctx;
+	player_ctx_t *ctx;
 	jitter_t *in;
 	unsigned char *inbuffer;
 	jitter_t *out;
@@ -279,7 +279,7 @@ enum mad_flow error(void *data,
 }
 
 static const char *jitter_name = "mad decoder";
-static decoder_ctx_t *mad_init(mediaplayer_ctx_t *ctx)
+static decoder_ctx_t *mad_init(player_ctx_t *ctx)
 {
 	decoder_ctx_t *decoder = calloc(1, sizeof(*decoder));
 	decoder->ops = decoder_mad;

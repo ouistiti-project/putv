@@ -34,14 +34,14 @@
 #include <string.h>
 #include <errno.h>
 
-#include "putv.h"
+#include "player.h"
 typedef struct sink_s sink_t;
 typedef struct sink_ctx_s sink_ctx_t;
 struct sink_ctx_s
 {
 	const sink_t *ops;
 	int fd;
-	mediaplayer_ctx_t *ctx;
+	player_ctx_t *ctx;
 	jitter_t *in;
 };
 #define SINK_CTX
@@ -57,7 +57,7 @@ struct sink_ctx_s
 #endif
 #define sink_dbg(...)
 
-#define BUFFERSIZE 1024
+#define BUFFERSIZE ENCODER_FRAME_SIZE
 
 static const char *jitter_name = "file output";
 
@@ -73,7 +73,7 @@ static int sink_write(sink_ctx_t *ctx, unsigned char *buff, int len)
 	return ret;
 }
 
-static sink_ctx_t *sink_init(mediaplayer_ctx_t *ctx, const char *path)
+static sink_ctx_t *sink_init(player_ctx_t *ctx, const char *path)
 {
 	int fd;
 	if (!strcmp(path, "-"))

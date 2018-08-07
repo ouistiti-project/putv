@@ -37,7 +37,7 @@
 
 #include <lame/lame.h>
 
-#include "putv.h"
+#include "player.h"
 typedef struct encoder_s encoder_t;
 typedef struct encoder_ctx_s encoder_ctx_t;
 struct encoder_ctx_s
@@ -47,7 +47,7 @@ struct encoder_ctx_s
 	int nsamples;
 	int dumpfd;
 	pthread_t thread;
-	mediaplayer_ctx_t *ctx;
+	player_ctx_t *ctx;
 	jitter_t *in;
 	unsigned char *inbuffer;
 	jitter_t *out;
@@ -72,7 +72,7 @@ void error_report(const char *format, va_list ap)
 	fprintf(stderr, format, ap);
 }
 
-static encoder_ctx_t *encoder_init(mediaplayer_ctx_t *ctx)
+static encoder_ctx_t *encoder_init(player_ctx_t *ctx)
 {
 	encoder_ctx_t *encoder = calloc(1, sizeof(*encoder));
 	encoder->ops = encoder_lame;

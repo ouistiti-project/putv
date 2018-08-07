@@ -32,12 +32,14 @@
 #include <sys/types.h>
 #include <sys/ioctl.h>
 
-#include "putv.h"
+#include "player.h"
 typedef struct cmds_ctx_s cmds_ctx_t;
 struct cmds_ctx_s
 {
-	mediaplayer_ctx_t *putv;
+	player_ctx_t *player;
 	media_t *media;
+	pthread_t thread;
+	int run;
 };
 #define CMDS_CTX
 #include "cmds.h"
@@ -55,39 +57,39 @@ typedef int (*method_t)(cmds_ctx_t *ctx, char *arg);
 
 static int method_append(cmds_ctx_t *ctx, char *arg)
 {
-	dbg("cmdline: insert");
 	return ctx->media->ops->insert(ctx->media->ctx, arg, NULL, NULL);
 }
 
 static int method_play(cmds_ctx_t *ctx, char *arg)
 {
-	dbg("cmdline: play");
-	return (player_state(ctx->putv, STATE_PLAY) == STATE_PLAY);
+	return (player_state(ctx->player, STATE_PLAY) == STATE_PLAY);
 }
 
 static int method_pause(cmds_ctx_t *ctx, char *arg)
 {
-	dbg("cmdline: pause");
-	return (player_state(ctx->putv, STATE_PAUSE) == STATE_PAUSE);
+	return (player_state(ctx->player, STATE_PAUSE) == STATE_PAUSE);
 }
 
 static int method_stop(cmds_ctx_t *ctx, char *arg)
 {
-	dbg("cmdline: stop");
 	ctx->media->ops->end(ctx->media->ctx);
-	return (player_state(ctx->putv, STATE_STOP) == STATE_STOP);
+	return (player_state(ctx->player, STATE_STOP) == STATE_STOP);
+}
+
+static int method_quit(cmds_ctx_t *ctx, char *arg)
+{
+	return (player_state(ctx->player, STATE_ERROR) == STATE_ERROR);
 }
 
 static int method_next(cmds_ctx_t *ctx, char *arg)
 {
-	dbg("cmdline: next");
-	return (player_state(ctx->putv, STATE_CHANGE) == STATE_CHANGE);
+	return (player_state(ctx->player, STATE_CHANGE) == STATE_CHANGE);
 }
 
-void cmds_line_onchange(void *arg, mediaplayer_ctx_t *putv)
+void cmds_line_onchange(void *arg, player_ctx_t *player)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t*)arg;
-	state_t state = player_state(putv, STATE_UNKNOWN);
+	state_t state = player_state(player, STATE_UNKNOWN);
 	switch (state)
 	{
 	case STATE_PLAY:
@@ -99,34 +101,39 @@ void cmds_line_onchange(void *arg, mediaplayer_ctx_t *putv)
 	case STATE_STOP:
 		printf("player: stop\n");
 	break;
+	case STATE_ERROR:
+		printf("player: error\n");
+	break;
 	case STATE_CHANGE:
 		printf("player: change\n");
 	break;
 	}
 }
 
-static cmds_ctx_t *cmds_line_init(mediaplayer_ctx_t *putv, media_t *media, void *arg)
+static cmds_ctx_t *cmds_line_init(player_ctx_t *player, media_t *media, void *arg)
 {
 	cmds_ctx_t *ctx = calloc(1, sizeof(*ctx));
-	ctx->putv = putv;
+	ctx->player = player;
 	ctx->media = media;
 	return ctx;
 }
 
-static int cmds_line_run(cmds_ctx_t *ctx)
+static int cmds_line_cmd(cmds_ctx_t *ctx)
 {
 	int fd = 0;
-	int run = 1;
+	ctx->run = 1;
 
-	player_onchange(ctx->putv, cmds_line_onchange, ctx);
-	while (run)
+	player_onchange(ctx->player, cmds_line_onchange, ctx);
+	while (ctx->run)
 	{
 		int ret;
 		fd_set rfds;
+		struct timeval timeout = {1, 0};
+
 		FD_ZERO(&rfds);
 		FD_SET(fd, &rfds);
 		int maxfd = fd;
-		ret = select(maxfd + 1, &rfds, NULL, NULL, NULL);
+		ret = select(maxfd + 1, &rfds, NULL, NULL, &timeout);
 		if (ret > 0 && FD_ISSET(fd, &rfds))
 		{
 			int length;
@@ -173,7 +180,10 @@ static int cmds_line_run(cmds_ctx_t *ctx)
 					i += 4;
 				}
 				if (!strncmp(buffer + i, "quit",4))
-					run = 0;
+				{
+					method = method_quit;
+					ctx->run = 0;
+				}
 			}
 			if (method)
 			{
@@ -189,12 +199,29 @@ static int cmds_line_run(cmds_ctx_t *ctx)
 	return 0;
 }
 
+static void *_cmds_line_pthread(void *arg)
+{
+	int ret;
+	cmds_ctx_t *ctx = (cmds_ctx_t *)arg;
+	ret = cmds_line_cmd(ctx);
+	return (void*)ret;
+}
+
+static int cmds_line_run(cmds_ctx_t *ctx)
+{
+	pthread_create(&ctx->thread, NULL, _cmds_line_pthread, (void *)ctx);
+
+	return 0;
+}
+
 static void cmds_line_destroy(cmds_ctx_t *ctx)
 {
+	ctx->run = 0;
+	pthread_join(ctx->thread, NULL);
 	free(ctx);
 }
 
-cmds_t *cmds_line = &(cmds_t)
+cmds_ops_t *cmds_line = &(cmds_ops_t)
 {
 	.init = cmds_line_init,
 	.run = cmds_line_run,

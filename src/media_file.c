@@ -31,7 +31,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#include "putv.h"
+#include "player.h"
 #include "media.h"
 
 struct media_ctx_s

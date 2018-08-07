@@ -1,7 +1,7 @@
 #ifndef __ENCODER_H__
 #define __ENCODER_H__
 
-typedef struct mediaplayer_ctx_s mediaplayer_ctx_t;
+typedef struct player_ctx_s player_ctx_t;
 typedef struct jitter_s jitter_t;
 typedef struct sink_s sink_t;
 
@@ -11,7 +11,7 @@ typedef void encoder_ctx_t;
 typedef struct encoder_s encoder_t;
 struct encoder_s
 {
-	encoder_ctx_t *(*init)(mediaplayer_ctx_t *);
+	encoder_ctx_t *(*init)(player_ctx_t *);
 	jitter_t *(*jitter)(encoder_ctx_t *encoder);
 	int (*run)(encoder_ctx_t *, jitter_t *);
 	void (*destroy)(encoder_ctx_t *);

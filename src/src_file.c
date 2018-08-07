@@ -34,14 +34,14 @@
 #include <string.h>
 #include <errno.h>
 
-#include "putv.h"
+#include "player.h"
 typedef struct src_s src_t;
 typedef struct src_ctx_s src_ctx_t;
 struct src_ctx_s
 {
 	const src_t *ops;
 	int fd;
-	mediaplayer_ctx_t *ctx;
+	player_ctx_t *ctx;
 };
 #define SRC_CTX
 #include "src.h"
@@ -68,7 +68,7 @@ static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 	return ret;
 }
 
-static src_ctx_t *src_init(mediaplayer_ctx_t *ctx, const char *path)
+static src_ctx_t *src_init(player_ctx_t *ctx, const char *path)
 {
 	int fd;
 	if (!strcmp(path, "-"))

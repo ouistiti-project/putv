@@ -1,5 +1,5 @@
 /*****************************************************************************
- * putv.c
+ * player.c
  * this file is part of https://github.com/ouistiti-project/putv
  *****************************************************************************
  * Copyright (C) 2016-2017
@@ -31,7 +31,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#include "putv.h"
+#include "player.h"
 #include "media.h"
 #include "jitter.h"
 #include "src.h"
@@ -56,7 +56,7 @@ struct player_event_s
 	player_event_t *next;
 };
 
-struct mediaplayer_ctx_s
+struct player_ctx_s
 {
 	media_t *media;
 	state_t state;
@@ -68,23 +68,25 @@ struct mediaplayer_ctx_s
 const char const *mime_mp3 = "audio/mp3";
 const char const *mime_octetstream = "octet/stream";
 
-mediaplayer_ctx_t *player_init(media_t *media)
+player_ctx_t *player_init(media_t *media)
 {
-	mediaplayer_ctx_t *ctx = calloc(1, sizeof(*ctx));
+	player_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	pthread_mutex_init(&ctx->mutex, NULL);
 	pthread_cond_init(&ctx->cond, NULL);
 	ctx->media = media;
 	return ctx;
 }
 
-void player_destroy(mediaplayer_ctx_t *ctx)
+void player_destroy(player_ctx_t *ctx)
 {
+	player_state(ctx, STATE_ERROR);
+	pthread_yield();
 	pthread_cond_destroy(&ctx->cond);
 	pthread_mutex_destroy(&ctx->mutex);
 	free(ctx);
 }
 
-void player_onchange(mediaplayer_ctx_t *ctx, player_event_cb_t callback, void *cbctx)
+void player_onchange(player_ctx_t *ctx, player_event_cb_t callback, void *cbctx)
 {
 	player_event_t *event = calloc(1, sizeof(*event));
 	event->cb = callback;
@@ -94,7 +96,7 @@ void player_onchange(mediaplayer_ctx_t *ctx, player_event_cb_t callback, void *c
 	ctx->events = event; 
 }
 
-state_t player_state(mediaplayer_ctx_t *ctx, state_t state)
+state_t player_state(player_ctx_t *ctx, state_t state)
 {
 	if ((state != STATE_UNKNOWN) && ctx->state != state)
 	{
@@ -111,9 +113,11 @@ state_t player_state(mediaplayer_ctx_t *ctx, state_t state)
 	return ctx->state;
 }
 
-int player_waiton(mediaplayer_ctx_t *ctx, int state)
+int player_waiton(player_ctx_t *ctx, int state)
 {
-	if (ctx->state == STATE_STOP || ctx->state == STATE_CHANGE)
+	if (ctx->state == STATE_STOP ||
+		ctx->state == STATE_CHANGE ||
+		ctx->state == STATE_ERROR)
 		return -1;
 	pthread_mutex_lock(&ctx->mutex);
 	while (ctx->state == state)
@@ -134,14 +138,14 @@ struct _player_decoder_s
 
 struct _player_play_s
 {
-	mediaplayer_ctx_t *ctx;
+	player_ctx_t *ctx;
 	struct _player_decoder_s *dec;
 };
 
 static int _player_play(void* arg, const char *url, const char *info, const char *mime)
 {
 	struct _player_play_s *player = (struct _player_play_s *)arg;
-	mediaplayer_ctx_t *ctx = player->ctx;
+	player_ctx_t *ctx = player->ctx;
 	struct _player_decoder_s *dec;
 
 	dec = calloc(1, sizeof(*dec));
@@ -156,7 +160,7 @@ static int _player_play(void* arg, const char *url, const char *info, const char
 	if (dec->decoder != NULL)
 	{
 		dec->decoder_ctx = dec->decoder->init(ctx);
-		dbg("putv: prepare %s", url);
+		dbg("player: prepare %s", url);
 		dec->src_ctx = dec->src->init(ctx, url);
 	}
 	if (dec->src_ctx != NULL)
@@ -172,7 +176,7 @@ static int _player_play(void* arg, const char *url, const char *info, const char
 	return -1;
 }
 
-int player_run(mediaplayer_ctx_t *ctx, jitter_t *encoder_jitter)
+int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 {
 	struct _player_play_s player =
 	{
@@ -187,7 +191,7 @@ int player_run(mediaplayer_ctx_t *ctx, jitter_t *encoder_jitter)
 			ctx->state = STATE_PLAY;
 		while (ctx->state == STATE_STOP)
 		{
-			dbg("putv: stop");
+			dbg("player: stop");
 			encoder_jitter->ops->reset(encoder_jitter->ctx);
 			pthread_cond_wait(&ctx->cond, &ctx->mutex);
 		}
@@ -197,7 +201,7 @@ int player_run(mediaplayer_ctx_t *ctx, jitter_t *encoder_jitter)
 		ctx->media->ops->play(ctx->media->ctx, _player_play, &player);
 		if (current_dec != NULL)
 		{
-			dbg("putv: wait");
+			dbg("player: wait");
 			current_dec->decoder->destroy(current_dec->decoder_ctx);
 			current_dec->src->destroy(current_dec->src_ctx);
 			free(current_dec);
@@ -206,7 +210,7 @@ int player_run(mediaplayer_ctx_t *ctx, jitter_t *encoder_jitter)
 		if (player.dec != NULL)
 		{
 			current_dec = player.dec;
-			dbg("putv: play");
+			dbg("player: play");
 			current_dec->decoder->run(current_dec->decoder_ctx, encoder_jitter);
 			current_dec->src->run(current_dec->src_ctx, current_dec->decoder->jitter(current_dec->decoder_ctx));
 		}

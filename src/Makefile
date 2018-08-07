@@ -1,7 +1,7 @@
 
 bin-y+=putv
-putv_SOURCES+=putv.c
 putv_SOURCES+=main.c
+putv_SOURCES+=player.c
 putv_SOURCES-$(MEDIA_SQLITE)+=media_sqlite.c
 putv_CFLAGS-$(MEDIA_SQLITE)+=-DMEDIA=media_sqlite
 putv_SOURCES-$(MEDIA_FILE)+=media_file.c
@@ -24,6 +24,7 @@ putv_CFLAGS-$(ENCODER_PASSTHROUGH)+=-DENCODER=encoder_passthrough
 putv_SOURCES-$(ENCODER_LAME)+=encoder_lame.c
 putv_CFLAGS-$(ENCODER_LAME)+=-DENCODER_LAME
 putv_CFLAGS-$(ENCODER_LAME)+=-DENCODER=encoder_lame
+putv_CFLAGES-$(ENCODER_LAME)+=-DENCODER_FRAME_SIZE=1024
 #putv_CFLAGS-$(ENCODER_LAME)+=-DLAME_DUMP
 putv_LIBRARY-$(ENCODER_LAME)+=mp3lame
 putv_SOURCES-$(SINK_ALSA)+=sink_alsa.c

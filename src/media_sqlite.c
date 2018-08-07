@@ -33,7 +33,7 @@
 
 #include <sqlite3.h>
 
-#include "putv.h"
+#include "player.h"
 #include "media.h"
 
 struct media_ctx_s
@@ -41,7 +41,7 @@ struct media_ctx_s
 	sqlite3 *db;
 	int mediaid;
 	unsigned int options;
-	mediaplayer_ctx_t *ctx;
+	player_ctx_t *ctx;
 };
 
 #define OPTION_LOOP 0x0001

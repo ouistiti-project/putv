@@ -82,6 +82,7 @@ static unsigned char *jitter_pull(jitter_ctx_t *jitter);
 static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat);
 static unsigned char *jitter_peer(jitter_ctx_t *jitter);
 static void jitter_pop(jitter_ctx_t *jitter, size_t len);
+static void jitter_reset(jitter_ctx_t *jitter);
 
 static const jitter_ops_t *jitter_scattergather;
 
@@ -137,6 +138,8 @@ void jitter_scattergather_destroy(jitter_t *jitter)
 {
 	jitter_ctx_t *ctx = jitter->ctx;
 	jitter_private_t *private = (jitter_private_t *)ctx->private;
+
+	jitter_reset(ctx);
 
 	pthread_cond_destroy(&private->condpush);
 	pthread_cond_destroy(&private->condpeer);

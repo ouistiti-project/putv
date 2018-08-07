@@ -31,13 +31,13 @@
 #include <fcntl.h>
 #include <stdlib.h>
 
-#include "putv.h"
+#include "player.h"
 typedef struct encoder_s encoder_t;
 typedef struct encoder_ctx_s encoder_ctx_t;
 struct encoder_ctx_s
 {
 	const encoder_t *ops;
-	mediaplayer_ctx_t *ctx;
+	player_ctx_t *ctx;
 	jitter_t *inout;
 };
 #define ENCODER_CTX
@@ -52,7 +52,7 @@ struct encoder_ctx_s
 #define dbg(...)
 #endif
 
-static encoder_ctx_t *encoder_init(mediaplayer_ctx_t *ctx)
+static encoder_ctx_t *encoder_init(player_ctx_t *ctx)
 {
 	encoder_ctx_t *encoder = calloc(1, sizeof(*encoder));
 	encoder->ops = encoder_passthrough;

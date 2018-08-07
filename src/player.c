@@ -196,6 +196,7 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 			pthread_cond_wait(&ctx->cond, &ctx->mutex);
 		}
 		pthread_mutex_unlock(&ctx->mutex);
+		ctx->media->ops->next(ctx->media->ctx);
 
 		player.dec = NULL;
 		ctx->media->ops->play(ctx->media->ctx, _player_play, &player);
@@ -216,7 +217,6 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 		}
 		else
 			player_state(ctx, STATE_STOP);
-		ctx->media->ops->next(ctx->media->ctx);
 	}
 	return 0;
 }

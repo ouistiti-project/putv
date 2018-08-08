@@ -93,7 +93,15 @@ static int media_current(media_ctx_t *ctx, char *url, int *urllen, char *info, i
 	return media_find(ctx, ctx->mediaid, url, urllen, info, infolen);
 }
 
-static int media_play(media_ctx_t *ctx, play_fcn_t play, void *data)
+static int media_list(media_ctx_t *ctx, media_parse_t cb, void *data)
+{
+	int ret = -1;
+	
+	ret = cb(data, ctx->url, NULL, utils_getmime(ctx->url));
+	return ret;
+}
+
+static int media_play(media_ctx_t *ctx, media_parse_t cb, void *data)
 {
 	int ret = -1;
 
@@ -102,7 +110,7 @@ static int media_play(media_ctx_t *ctx, play_fcn_t play, void *data)
 
 	if (ctx->mediaid == 1 && ctx->url != NULL)
 	{
-		ret = play(data, ctx->url, NULL, utils_getmime(ctx->url));
+		ret = cb(data, ctx->url, NULL, utils_getmime(ctx->url));
 	}
 	return ret;
 }
@@ -166,6 +174,7 @@ media_ops_t *media_file = &(media_ops_t)
 	.destroy = media_destroy,
 	.next = media_next,
 	.play = media_play,
+	.list = media_list,
 	.current = media_current,
 	.find = media_find,
 	.insert = media_insert,

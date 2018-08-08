@@ -60,7 +60,8 @@ static int media_count(media_ctx_t *ctx);
 static int media_insert(media_ctx_t *ctx, const char *path, const char *info, const char *mime);
 static int media_find(media_ctx_t *ctx, int id, char *url, int *urllen, char *info, int *infolen);
 static int media_current(media_ctx_t *ctx, char *url, int *urllen, char *info, int *infolen);
-static int media_play(media_ctx_t *ctx, play_fcn_t play, void *data);
+static int media_list(media_ctx_t *ctx, media_parse_t cb, void *data);
+static int media_play(media_ctx_t *ctx, media_parse_t cb, void *data);
 static int media_next(media_ctx_t *ctx);
 static int media_end(media_ctx_t *ctx);
 
@@ -191,7 +192,7 @@ static int media_find(media_ctx_t *ctx, int id, char *url, int *urllen, char *in
 	sqlite3_stmt *statement;
 	int size = 256;
 	char *sql = sqlite3_malloc(size);
-	snprintf(sql, size, "select \"url\" \"info\" from \"media\" where id = @ID");
+	snprintf(sql, size, "select \"url\", \"info\" from \"media\" where id = @ID");
 	sqlite3_prepare_v2(ctx->db, sql, size, &statement, NULL);
 
 	int index = sqlite3_bind_parameter_index(statement, "@ID");
@@ -220,7 +221,48 @@ static int media_current(media_ctx_t *ctx, char *url, int *urllen, char *info, i
 	return media_find(ctx, ctx->mediaid, url, urllen, info, infolen);
 }
 
-static int media_play(media_ctx_t *ctx, play_fcn_t play, void *data)
+static int media_list(media_ctx_t *ctx, media_parse_t cb, void *data)
+{
+	int ret = 0;
+	sqlite3 *db = ctx->db;
+	int count = 0;
+	sqlite3_stmt *statement;
+	int size = 256;
+	char *sql = sqlite3_malloc(size);
+	snprintf(sql, size, "select \"url\", \"info\", \"mime\" from \"media\" ");
+	ret = sqlite3_prepare_v2(db, sql, size, &statement, NULL);
+
+	ret = sqlite3_step(statement);
+	while (ret == SQLITE_ROW)
+	{
+		count++;
+		const char *url = NULL;
+		const void *info = NULL;
+		const char *mime = NULL;
+		int index = 0;
+		int type;
+		type = sqlite3_column_type(statement, index);
+		if (type == SQLITE_TEXT)
+			url = sqlite3_column_text(statement, index);
+		index = 1;
+		type = sqlite3_column_type(statement, index);
+		if (type == SQLITE_TEXT)
+			info = sqlite3_column_blob(statement, index);
+		index = 2;
+		type = sqlite3_column_type(statement, index);
+		if (type == SQLITE_TEXT)
+			mime = sqlite3_column_text(statement, index);
+		cb(data, url, (const char *)info, mime);
+
+		ret = sqlite3_step(statement);
+	}
+	sqlite3_finalize(statement);
+	sqlite3_free(sql);
+
+	return count;
+}
+
+static int media_play(media_ctx_t *ctx, media_parse_t cb, void *data)
 {
 	int ret = -1;
 
@@ -230,7 +272,7 @@ static int media_play(media_ctx_t *ctx, play_fcn_t play, void *data)
 	sqlite3_stmt *statement;
 	int size = 256;
 	char *sql = sqlite3_malloc(size);
-	snprintf(sql, size, "select \"url\" \"mime\" from \"media\" where id = @ID");
+	snprintf(sql, size, "select \"url\", \"mime\" from \"media\" where id = @ID");
 	sqlite3_prepare_v2(ctx->db, sql, size, &statement, NULL);
 
 	int index = sqlite3_bind_parameter_index(statement, "@ID");
@@ -247,7 +289,7 @@ static int media_play(media_ctx_t *ctx, play_fcn_t play, void *data)
 	}
 	if (url != NULL)
 	{
-		ret = play(data, url, info, mime);
+		ret = cb(data, url, info, mime);
 	}
 	sqlite3_finalize(statement);
 	sqlite3_free(sql);
@@ -375,6 +417,7 @@ media_ops_t *media_sqlite = &(media_ops_t)
 	.destroy = media_destroy,
 	.next = media_next,
 	.play = media_play,
+	.list = media_list,
 	.current = media_current,
 	.find = media_find,
 	.insert = media_insert,

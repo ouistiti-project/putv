@@ -60,6 +60,20 @@ static int method_append(cmds_ctx_t *ctx, char *arg)
 	return ctx->media->ops->insert(ctx->media->ctx, arg, NULL, NULL);
 }
 
+static int _print_entry(void *arg, const char *url,
+		const char *info, const char *mime)
+{
+	int *index = (int*)arg;
+	printf("playlist[%d]: %s\n", *index, url);
+	(*index)++;
+}
+
+static int method_list(cmds_ctx_t *ctx, char *arg)
+{
+	int value = 0;
+	return ctx->media->ops->list(ctx->media->ctx, _print_entry, (void *)&value);
+}
+
 static int method_play(cmds_ctx_t *ctx, char *arg)
 {
 	return (player_state(ctx->player, STATE_PLAY) == STATE_PLAY);
@@ -158,6 +172,11 @@ static int cmds_line_cmd(cmds_ctx_t *ctx)
 				{
 					method = method_append;
 					i += 6;
+				}
+				if (!strncmp(buffer + i, "list",4))
+				{
+					method = method_list;
+					i += 4;
 				}
 				if (!strncmp(buffer + i, "play",4))
 				{

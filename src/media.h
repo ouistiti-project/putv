@@ -3,7 +3,7 @@
 
 typedef struct media_ctx_s media_ctx_t;
 
-typedef int (*play_fcn_t)(void *arg, const char *url, const char *info, const char *mime);
+typedef int (*media_parse_t)(void *arg, const char *url, const char *info, const char *mime);
 
 typedef struct media_ops_s media_ops_t;
 struct media_ops_s
@@ -15,7 +15,8 @@ struct media_ops_s
 	int (*insert)(media_ctx_t *ctx, const char *path, const char *info, const char *mime);
 	int (*find)(media_ctx_t *ctx, int id, char *url, int *urllen, char *info, int *infolen);
 	int (*current)(media_ctx_t *ctx, char *url, int *urllen, char *info, int *infolen);
-	int (*play)(media_ctx_t *ctx, play_fcn_t play, void *data);
+	int (*list)(media_ctx_t *ctx, media_parse_t print, void *data);
+	int (*play)(media_ctx_t *ctx, media_parse_t play, void *data);
 	int (*next)(media_ctx_t *ctx);
 	int (*end)(media_ctx_t *ctx);
 	void (*autostart)(media_ctx_t *ctx, int enable);

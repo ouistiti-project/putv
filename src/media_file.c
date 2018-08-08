@@ -80,6 +80,11 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 	return 0;
 }
 
+static int media_remove(media_ctx_t *ctx, int id, const char *path)
+{
+	return -1;
+}
+
 static int media_find(media_ctx_t *ctx, int id, char *url, int *urllen, char *info, int *infolen)
 {
 	int len = strlen(ctx->url);
@@ -177,6 +182,7 @@ media_ops_t *media_file = &(media_ops_t)
 	.list = media_list,
 	.current = media_current,
 	.find = media_find,
+	.remove = media_remove,
 	.insert = media_insert,
 	.count = media_count,
 	.end = media_end,

@@ -60,6 +60,20 @@ static int method_append(cmds_ctx_t *ctx, char *arg)
 	return ctx->media->ops->insert(ctx->media->ctx, arg, NULL, NULL);
 }
 
+static int method_remove(cmds_ctx_t *ctx, char *arg)
+{
+	if (arg != NULL)
+	{
+		int id = atoi(arg);
+		if (id > 0)
+			return ctx->media->ops->remove(ctx->media->ctx, id, NULL);
+		else
+			return ctx->media->ops->remove(ctx->media->ctx, 0, arg);
+	}
+	else
+		return -1;
+}
+
 static int _print_entry(void *arg, const char *url,
 		const char *info, const char *mime)
 {
@@ -171,6 +185,11 @@ static int cmds_line_cmd(cmds_ctx_t *ctx)
 				if (!strncmp(buffer + i, "append", 6))
 				{
 					method = method_append;
+					i += 6;
+				}
+				if (!strncmp(buffer + i, "remove", 6))
+				{
+					method = method_remove;
 					i += 6;
 				}
 				if (!strncmp(buffer + i, "list",4))

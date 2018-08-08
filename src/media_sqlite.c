@@ -77,6 +77,7 @@ static int _execute(sqlite3_stmt *statement)
 {
 	int id = -1;
 	int ret;
+
 	ret = sqlite3_step(statement);
 	while (ret == SQLITE_ROW)
 	{
@@ -124,7 +125,7 @@ static int findmedia(sqlite3 *db, const char *path)
 	sqlite3_stmt *statement;
 	int size = 256;
 	char *sql = sqlite3_malloc(size);
-	snprintf(sql, size, "select \"id\" from \"media\" where \"url\"=\"@PATH\"");
+	snprintf(sql, size, "select \"id\" from \"media\" where \"url\"=@PATH");
 	sqlite3_prepare_v2(db, sql, size, &statement, NULL);
 	/** set the default value of @FIELDS **/
 	sqlite3_bind_text(statement, sqlite3_bind_parameter_index(statement, "@PATH"), path, -1, SQLITE_STATIC);
@@ -134,6 +135,41 @@ static int findmedia(sqlite3 *db, const char *path)
 	sqlite3_finalize(statement);
 	sqlite3_free(sql);
 	return id;
+}
+
+static int media_remove(media_ctx_t *ctx, int id, const char *path)
+{
+	int ret;
+	sqlite3 *db = ctx->db;
+	sqlite3_stmt *statement;
+	int size = 256;
+	char *sql = sqlite3_malloc(size);
+	if (path != NULL)
+	{
+		snprintf(sql, size, "delete from \"media\" where \"url\"=@PATH");
+		ret = sqlite3_prepare_v2(db, sql, size, &statement, NULL);
+		/** set the default value of @FIELDS **/
+		int index = sqlite3_bind_parameter_index(statement, "@PATH");
+		ret = sqlite3_bind_text(statement, index, path, -1, SQLITE_STATIC);
+	}
+	else if (id > 0)
+	{
+		snprintf(sql, size, "delete from \"media\" where \"id\"=@ID");
+		ret = sqlite3_prepare_v2(db, sql, size, &statement, NULL);
+		/** set the default value of @FIELDS **/
+		int index = sqlite3_bind_parameter_index(statement, "@ID");
+		ret = sqlite3_bind_int(statement, index, id);
+	}
+	ret = sqlite3_step(statement);
+	if (ret != SQLITE_DONE)
+		ret = -1;
+	else
+	{
+		dbg("putv: remove media %s", path);
+	}
+	sqlite3_finalize(statement);
+	sqlite3_free(sql);
+	return ret;
 }
 
 static int media_insert(media_ctx_t *ctx, const char *path, const char *info, const char *mime)
@@ -229,7 +265,7 @@ static int media_list(media_ctx_t *ctx, media_parse_t cb, void *data)
 	sqlite3_stmt *statement;
 	int size = 256;
 	char *sql = sqlite3_malloc(size);
-	snprintf(sql, size, "select \"url\", \"info\", \"mime\" from \"media\" ");
+	snprintf(sql, size, "select \"url\", \"info\", \"mime\", \"id\" from \"media\" ");
 	ret = sqlite3_prepare_v2(db, sql, size, &statement, NULL);
 
 	ret = sqlite3_step(statement);
@@ -252,6 +288,8 @@ static int media_list(media_ctx_t *ctx, media_parse_t cb, void *data)
 		type = sqlite3_column_type(statement, index);
 		if (type == SQLITE_TEXT)
 			mime = sqlite3_column_text(statement, index);
+		int id = sqlite3_column_int(statement, 3);
+		dbg("media: %d %s", id, url);
 		cb(data, url, (const char *)info, mime);
 
 		ret = sqlite3_step(statement);
@@ -421,6 +459,7 @@ media_ops_t *media_sqlite = &(media_ops_t)
 	.current = media_current,
 	.find = media_find,
 	.insert = media_insert,
+	.remove = media_remove,
 	.count = media_count,
 	.end = media_end,
 	.autostart = media_autostart,

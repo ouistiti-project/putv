@@ -105,6 +105,53 @@ static int method_list(json_t *json_params, json_t **result, void *userdata)
 	return 0;
 }
 
+static int method_remove(json_t *json_params, json_t **result, void *userdata)
+{
+	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
+	int ret;
+	if (json_is_array(json_params))
+	{
+		size_t index;
+		json_t *value;
+		json_array_foreach(json_params, index, value)
+		{
+			if (json_is_string(value))
+			{
+				const char *str = json_string_value(value);
+				ret = ctx->media->ops->remove(ctx->media->ctx, 0, str);
+			}
+			else if (json_is_integer(value))
+			{
+				int id = json_integer_value(value);
+				ret = ctx->media->ops->remove(ctx->media->ctx, id, NULL);
+			}
+		}
+	}
+	else if (json_is_object(json_params))
+	{
+		json_t *value;
+		value = json_object_get(value, "id");
+		if (json_is_integer(value))
+		{
+			int id = json_integer_value(value);
+			ret = ctx->media->ops->remove(ctx->media->ctx, id, NULL);
+		}
+		value = json_object_get(value, "url");
+		if (json_is_string(value))
+		{
+			const char *str = json_string_value(value);
+			ret = ctx->media->ops->remove(ctx->media->ctx, 0, str);
+		}
+	}
+	if (ret == -1)
+		*result = jsonrpc_error_object(-12345,
+			"append error",
+			json_string("media could not be insert into the playlist"));
+	else
+		*result = json_pack("{s:s,s:s}", "status", "DONE", "message", "media append");
+	return 0;
+}
+
 static int method_append(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
@@ -222,6 +269,7 @@ static struct jsonrpc_method_entry_t method_table[] = {
 	{ 'r', "next", method_next, "" },
 	{ 'r', "list", method_list, "" },
 	{ 'r', "append", method_append, "[]" },
+	{ 'r', "remove", method_remove, "[]" },
 	{ 'n', "change", method_change, "o" },
 	{ 0, NULL },
 };

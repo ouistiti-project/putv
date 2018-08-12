@@ -63,7 +63,7 @@ struct jitter_private_s
 	pthread_mutex_t mutex;
 	pthread_cond_t condpush;
 	pthread_cond_t condpeer;
-	unsigned int level; 
+	int level; 
 	enum
 	{
 		JITTER_STOP,
@@ -176,6 +176,11 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 		jitter_dbg("jitter variatic move %d",len);
 	}
 	pthread_mutex_unlock(&private->mutex);
+	if (len == 0)
+	{
+		private->in = NULL;
+	}
+
 	if (jitter->consume != NULL)
 	{
 		len = jitter->consume(jitter->consumer,
@@ -243,13 +248,22 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter)
 		memcpy(private->bufferstart - len, private->out, len);
 		private->out = private->bufferstart - len;
 	}
-	while (private->level < jitter->size)
+	while (private->level < jitter->size && private->in != NULL)
 	{
 		jitter_dbg("jitter %s peer block on %p (%d/%d)", jitter->name, private->out, private->level, jitter->size);
 		pthread_cond_wait(&private->condpeer, &private->mutex);
 	}
+
+	/**
+	 * this cas may be true if private->in is NULL
+	 */
+	if (private->level <= 0)
+	{
+		private->out = NULL;
+	}
+
 	pthread_mutex_unlock(&private->mutex);
-	jitter_dbg("jitter %s peer %p", jitter->name, private->out);
+	jitter_dbg("jitter %s peer %p %d", jitter->name, private->out, private->level);
 	return private->out;
 }
 
@@ -282,13 +296,34 @@ static void jitter_reset(jitter_ctx_t *jitter)
 {
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
 
+	pthread_cond_broadcast(&private->condpush);
+	while (private->level > 0)
+	{
+		int previous = private->level;
+		pthread_cond_broadcast(&private->condpeer);
+		pthread_yield();
+		if (private->level <= 0)
+			break;
+		pthread_mutex_lock(&private->mutex);
+		int count = 0;
+		while (private->level == previous)
+		{
+			pthread_cond_wait(&private->condpush, &private->mutex);
+			if (count == 5)
+			{
+				private->level = 0;
+				break;
+			}
+		}
+		pthread_mutex_unlock(&private->mutex);
+	}
+
 	pthread_mutex_lock(&private->mutex);
 	private->in = private->bufferstart;
 	private->out = private->bufferstart;
+	private->level = 0;
+	private->state = JITTER_STOP;
 	pthread_mutex_unlock(&private->mutex);
-
-	pthread_cond_broadcast(&private->condpeer);
-	pthread_cond_broadcast(&private->condpush);
 }
 
 static int jitter_empty(jitter_ctx_t *jitter)

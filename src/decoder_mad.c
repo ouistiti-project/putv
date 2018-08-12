@@ -65,6 +65,8 @@ struct decoder_ctx_s
 #define dbg(...)
 #endif
 
+#define decoder_dbg(...)
+
 #define ENDIAN le
 #define RENDIAN be
 
@@ -76,28 +78,6 @@ struct decoder_ctx_s
 #define WRITE_RENDIAN16 write_be16
 #define WRITE_RENDIAN24 write_be24
 #define WRITE_RENDIAN32 write_be32
-
-#define BUFFERSIZE (1*MAD_BUFFER_MDLEN)
-static
-enum mad_flow input(void *data,
-		    struct mad_stream *stream)
-{
-	decoder_ctx_t *decoder = (decoder_ctx_t *)data;
-	size_t len = decoder->in->ctx->size;
-
-	if (stream->next_frame)
-		len = stream->next_frame - decoder->inbuffer;
-	decoder->in->ops->pop(decoder->in->ctx, len);
-
-	decoder->inbuffer = decoder->in->ops->peer(decoder->in->ctx);
-	if (decoder->inbuffer == NULL)
-	{
-		return MAD_FLOW_STOP;
-	}
-	mad_stream_buffer(stream, decoder->inbuffer, decoder->in->ctx->size);
-
-	return MAD_FLOW_CONTINUE;
-}
 
 static
 signed int scale_16bits(mad_fixed_t sample)
@@ -190,6 +170,33 @@ static int WRITE_ENDIAN16(signed int sample, unsigned char *out)
 }
 
 static
+enum mad_flow input(void *data,
+		    struct mad_stream *stream)
+{
+	decoder_ctx_t *ctx = (decoder_ctx_t *)data;
+	size_t len = ctx->in->ctx->size;
+
+	if (stream->next_frame)
+		len = stream->next_frame - ctx->inbuffer;
+	ctx->in->ops->pop(ctx->in->ctx, len);
+
+	ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx);
+
+	//input is called for each frame when there is
+	// not enought data to decode the "next frame"
+	if (stream->next_frame)
+		stream->next_frame = ctx->inbuffer;
+
+	if (ctx->inbuffer == NULL)
+	{
+		return MAD_FLOW_STOP;
+	}
+	mad_stream_buffer(stream, ctx->inbuffer, ctx->in->ctx->size);
+
+	return MAD_FLOW_CONTINUE;
+}
+
+static
 enum mad_flow output(void *data,
 		     struct mad_header const *header,
 		     struct mad_pcm *pcm)
@@ -198,13 +205,16 @@ enum mad_flow output(void *data,
 	unsigned int nchannels, nsamples;
 	mad_fixed_t const *left_ch, *right_ch;
 	write_sample_t write_sample = decoder->write_sample;
+	unsigned int samplerate;
 
 	/* pcm->samplerate contains the sampling frequency */
 
+	samplerate = pcm->samplerate;
 	nchannels = pcm->channels;
 	nsamples  = pcm->length;
 	left_ch   = pcm->samples[0];
 	right_ch  = pcm->samples[1];
+	decoder_dbg("decoder: audio frame %d Hz, %d channels, %d samples", samplerate, nchannels, nsamples);
 
 	while (nsamples--)
 	{
@@ -278,6 +288,12 @@ enum mad_flow error(void *data,
 	}
 }
 
+#define LATENCE 200 /*ms*/
+#define BUFFERSIZE (40*LATENCE)
+//#define BUFFERSIZE (1*MAD_BUFFER_MDLEN)
+
+#define NBUFFER 3
+
 static const char *jitter_name = "mad decoder";
 static decoder_ctx_t *mad_init(player_ctx_t *ctx)
 {
@@ -291,7 +307,7 @@ static decoder_ctx_t *mad_init(player_ctx_t *ctx)
 			input, 0 /* header */, 0 /* filter */, output,
 			error, 0 /* message */);
 
-	jitter_t *jitter = jitter_ringbuffer_init(jitter_name, 3, BUFFERSIZE);
+	jitter_t *jitter = jitter_ringbuffer_init(jitter_name, NBUFFER, BUFFERSIZE);
 	decoder->in = jitter;
 	jitter->format = MPEG2_3_MP3;
 

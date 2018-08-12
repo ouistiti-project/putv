@@ -68,14 +68,25 @@ static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 	return ret;
 }
 
-static src_ctx_t *src_init(player_ctx_t *ctx, const char *path)
+static src_ctx_t *src_init(player_ctx_t *ctx, const char *url)
 {
 	int fd;
-	if (!strcmp(path, "-"))
+	if (!strcmp(url, "-"))
 		fd = 0;
 	else
-		fd = open(path, O_RDWR);
-	
+	{
+		const char *path = NULL;
+		if (strstr(url, "://") != NULL)
+		{
+			path = strstr(url, "file://") + 7;
+		}
+		else
+		{
+			path = url;
+		}
+		if (path != NULL)
+			fd = open(path, O_RDWR);
+	}
 	if (fd >= 0)
 	{
 		src_ctx_t *src = calloc(1, sizeof(*src));

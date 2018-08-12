@@ -12,6 +12,11 @@ putv_LIBRARY+=pthread sqlite3
 putv_SOURCES-$(SRC_FILE)+=src_file.c
 putv_CFLAGS-$(SRC_FILE)+=-DSRC_FILE
 putv_CFLAGS-$(SRC_FILE)+=-DSRC=src_file
+putv_SOURCES-$(SRC_CURL)+=src_curl.c
+putv_CFLAGS-$(SRC_CURL)+=-DSRC_CURL
+#putv_CFLAGS-$(SRC_CURL)+=-DCURL_DUMP
+putv_CFLAGS-$(SRC_CURL)+=-DSRC=src_curl
+putv_LIBRARY-$(SRC_CURL)+=curl
 putv_SOURCES-$(DECODER_MAD)+=decoder_mad.c
 putv_CFLAGS-$(DECODER_MAD)+=-DDECODER_MAD
 putv_CFLAGS-$(DECODER_MAD)+=-DDECODER=decoder_mad

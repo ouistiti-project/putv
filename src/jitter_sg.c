@@ -131,6 +131,7 @@ jitter_t *jitter_scattergather_init(const char *name, unsigned int count, size_t
 	jitter_t *jitter = calloc(1, sizeof(*jitter));
 	jitter->ctx = ctx;
 	jitter->ops = jitter_scattergather;
+	dbg("jitter %s create scattergather (%d*%d)", name, count, size);
 	return jitter;
 }
 
@@ -171,17 +172,20 @@ static unsigned char *jitter_pull(jitter_ctx_t *jitter)
 		_jitter_init(jitter);
 	while (private->in->state != SCATTER_FREE)
 	{
-		jitter_dbg("jitter %s pull block on %p", jitter->name, private->in);
+		jitter_dbg("jitter %s pull block on %p %d", jitter->name, private->in, private->in->state);
 		pthread_cond_wait(&private->condpush, &private->mutex);
 	}
 	private->in->state = SCATTER_PULL;
 	pthread_mutex_unlock(&private->mutex);
+	jitter_dbg("jitter %s pull %p", jitter->name, private->in);
 	return private->in->data;
 }
 
 static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 {
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
+
+	jitter_dbg("jitter %s push %p", jitter->name, private->in);
 	if (private->in->state != SCATTER_PULL)
 	{
 		pthread_cond_broadcast(&private->condpeer);
@@ -189,6 +193,10 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 	}
 	if (len == 0)
 	{
+		/**
+		 * TODO check the ring buffer push 0 kills the jitter
+		 */
+		dbg("jitter %s push 0", jitter->name);
 		pthread_mutex_lock(&private->mutex);
 		private->in->state = SCATTER_FREE;
 		pthread_mutex_unlock(&private->mutex);
@@ -291,6 +299,7 @@ static void jitter_pop(jitter_ctx_t *jitter, size_t len)
 	if ((private->state == JITTER_STOP) ||
 		(private->out->state != SCATTER_POP))
 	{
+		private->out->state = SCATTER_FREE;
 		pthread_cond_broadcast(&private->condpush);
 		return;
 	}
@@ -316,6 +325,7 @@ static void jitter_pop(jitter_ctx_t *jitter, size_t len)
 static void jitter_reset(jitter_ctx_t *jitter)
 {
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
+	jitter_dbg("jitter %s reset", jitter->name);
 
 	if (private->out->state == SCATTER_PULL)
 	{

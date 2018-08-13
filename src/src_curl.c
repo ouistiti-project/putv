@@ -71,7 +71,14 @@ static uint write_cb(char *in, uint size, uint nmemb, src_ctx_t *ctx)
 	nmemb *= size;
 	while (nmemb > 0)
 	{
+		if (player_waiton(ctx->player, STATE_PAUSE) < 0)
+		{
+			return 0;
+		}
+
 		ctx->outbuffer = ctx->out->ops->pull(ctx->out->ctx);
+		if (ctx->outbuffer == NULL)
+			return 0;
 		if (len > nmemb)
 			len = nmemb;
 		memcpy(ctx->outbuffer, in + writelen, len);
@@ -122,9 +129,12 @@ static void *src_thread(void *arg)
 {
 	src_ctx_t *ctx = (src_ctx_t *)arg;
 	curl_easy_perform(ctx->curl);
-	ctx->outbuffer = ctx->out->ops->pull(ctx->out->ctx);
-	ctx->out->ops->push(ctx->out->ctx, 0, NULL);
 	ctx->out->ops->reset(ctx->out->ctx);
+	ctx->outbuffer = ctx->out->ops->pull(ctx->out->ctx);
+	if (ctx->outbuffer != NULL)
+	{
+		ctx->out->ops->push(ctx->out->ctx, 0, NULL);
+	}
 	return 0;
 }
 

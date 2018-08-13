@@ -54,11 +54,16 @@ struct src_ctx_s
 #else
 #define dbg(...)
 #endif
+
 #define src_dbg(...)
 
 static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 {
 	int ret;
+	if (player_waiton(ctx->ctx, STATE_PAUSE) < 0)
+	{
+		return 0;
+	}
 	ret = read(ctx->fd, buff, len);
 	src_dbg("src: read %d", ret);
 	if (ret < 0)

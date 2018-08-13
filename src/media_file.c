@@ -155,6 +155,26 @@ static void media_random(media_ctx_t *ctx, int enable)
 {
 }
 
+static int media_options(media_ctx_t *ctx, media_options_t option, int enable)
+{
+	int ret = 0;
+	if (option == MEDIA_AUTOSTART)
+	{
+		media_autostart(ctx, enable);
+		ret = (ctx->options & OPTION_AUTOSTART) == OPTION_AUTOSTART;
+	}
+	else if (option == MEDIA_LOOP)
+	{
+		media_loop(ctx, enable);
+		ret = (ctx->options & OPTION_LOOP) == OPTION_LOOP;
+	}
+	else if (option == MEDIA_RANDOM)
+	{
+		ret = 0;
+	}
+	return ret;
+}
+
 static media_ctx_t *media_init(const char *url)
 {
 	media_ctx_t *ctx = NULL;
@@ -186,7 +206,5 @@ media_ops_t *media_file = &(media_ops_t)
 	.insert = media_insert,
 	.count = media_count,
 	.end = media_end,
-	.autostart = media_autostart,
-	.loop = media_loop,
-	.random = media_random,
+	.options = media_options,
 };

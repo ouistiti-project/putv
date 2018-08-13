@@ -5,6 +5,13 @@ typedef struct media_ctx_s media_ctx_t;
 
 typedef int (*media_parse_t)(void *arg, const char *url, const char *info, const char *mime);
 
+typedef enum
+{
+	MEDIA_LOOP,
+	MEDIA_AUTOSTART,
+	MEDIA_RANDOM,
+} media_options_t;
+
 typedef struct media_ops_s media_ops_t;
 struct media_ops_s
 {
@@ -20,9 +27,7 @@ struct media_ops_s
 	int (*play)(media_ctx_t *ctx, media_parse_t play, void *data);
 	int (*next)(media_ctx_t *ctx);
 	int (*end)(media_ctx_t *ctx);
-	void (*autostart)(media_ctx_t *ctx, int enable);
-	void (*loop)(media_ctx_t *ctx, int enable);
-	void (*random)(media_ctx_t *ctx, int enable);
+	int (*options)(media_ctx_t *ctx, media_options_t option, int enable);
 };
 
 typedef struct media_s media_t;

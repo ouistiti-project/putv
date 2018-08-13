@@ -399,13 +399,36 @@ static void media_random(media_ctx_t *ctx, int enable)
 		ctx->options &= ~OPTION_RANDOM;
 }
 
+static int media_options(media_ctx_t *ctx, media_options_t option, int enable)
+{
+	int ret = 0;
+	if (option == MEDIA_AUTOSTART)
+	{
+		media_autostart(ctx, enable);
+		ret = (ctx->options & OPTION_AUTOSTART) == OPTION_AUTOSTART;
+	}
+	else if (option == MEDIA_LOOP)
+	{
+		media_loop(ctx, enable);
+		ret = (ctx->options & OPTION_LOOP) == OPTION_LOOP;
+	}
+	else if (option == MEDIA_RANDOM)
+	{
+		media_random(ctx, enable);
+		ret = (ctx->options & OPTION_RANDOM) == OPTION_RANDOM;
+	}
+	return ret;
+}
+
 static media_ctx_t *media_init(const char *dbpath)
 {
 	media_ctx_t *ctx = NULL;
+	sqlite3 *db = NULL;
+	int ret = SQLITE_ERROR;
+
 	if (dbpath)
 	{
-		int ret;
-		sqlite3 *db;
+#ifndef MEDIA_EXT
 		if (!access(dbpath, R_OK|W_OK))
 		{
 			ret = sqlite3_open_v2(dbpath, &db, SQLITE_OPEN_READWRITE, NULL);
@@ -466,7 +489,5 @@ media_ops_t *media_sqlite = &(media_ops_t)
 	.remove = media_remove,
 	.count = media_count,
 	.end = media_end,
-	.autostart = media_autostart,
-	.loop = media_loop,
-	.random = media_random,
+	.options = media_options,
 };

@@ -122,7 +122,7 @@ static int media_play(media_ctx_t *ctx, media_parse_t cb, void *data)
 
 static int media_next(media_ctx_t *ctx)
 {
-	if (ctx->mediaid == 1)
+	if ((ctx->mediaid == 1) && !(ctx->options & OPTION_LOOP))
 		media_end(ctx);
 	else
 		ctx->mediaid = 1;

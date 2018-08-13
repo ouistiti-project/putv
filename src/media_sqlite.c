@@ -360,6 +360,10 @@ static int media_next(media_ctx_t *ctx)
 	}
 	else
 		ctx->mediaid = -1;
+	if ((ctx->options & OPTION_LOOP) && (ctx->mediaid == -1))
+	{
+		media_next(ctx);
+	}
 	sqlite3_finalize(statement);
 	sqlite3_free(sql);
 	return ctx->mediaid;

@@ -440,9 +440,21 @@ static media_ctx_t *media_init(const char *dbpath)
 		else
 		{
 			ret = sqlite3_open_v2(dbpath, &db, SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE, NULL);
-
+			ret = SQLITE_CORRUPT;
+		}
+#else
+#endif
+	}
+	if (db)
+	{
+		if (ret == SQLITE_CORRUPT)
+		{
 			const char *query[] = {
-				"create table media (\"id\" INTEGER PRIMARY KEY, \"url\" TEXT UNIQUE NOT NULL, \"mime\" TEXT, \"info\" BLOB);",
+#ifndef MEDIA_EXT
+				"create table media (\"id\" INTEGER PRIMARY KEY, \"url\" TEXT UNIQUE NOT NULL, \"mime\" TEXT, \"info\" BLOB, \"opusid\" INTEGER);",
+#else
+				"create table media (\"id\" INTEGER PRIMARY KEY, \"url\" TEXT UNIQUE NOT NULL, \"mime\" TEXT, \"info\" BLOB, \"opusid\" INTEGER, FOREIGN KEY (opusid) REFERENCES opus(id) ON UPDATE SET NULL);",
+#endif
 				NULL,
 			};
 			char *error = NULL;

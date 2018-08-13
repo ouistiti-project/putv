@@ -114,6 +114,15 @@ static int method_next(cmds_ctx_t *ctx, char *arg)
 	return (player_state(ctx->player, STATE_CHANGE) == STATE_CHANGE);
 }
 
+static int method_loop(cmds_ctx_t *ctx, char *arg)
+{
+	int enable = 1;
+	if (arg != NULL)
+		atoi(arg);
+	enable = ctx->media->ops->options(ctx->media->ctx, MEDIA_LOOP, enable);
+	return enable;
+}
+
 void cmds_line_onchange(void *arg, player_ctx_t *player)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t*)arg;
@@ -215,6 +224,11 @@ static int cmds_line_cmd(cmds_ctx_t *ctx)
 				if (!strncmp(buffer + i, "next",4))
 				{
 					method = method_next;
+					i += 4;
+				}
+				if (!strncmp(buffer + i, "loop",4))
+				{
+					method = method_loop;
 					i += 4;
 				}
 				if (!strncmp(buffer + i, "quit",4))

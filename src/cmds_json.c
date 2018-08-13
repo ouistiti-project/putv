@@ -262,6 +262,44 @@ static int method_change(json_t *json_params, json_t **result, void *userdata)
 	return 0;
 }
 
+static int method_options(json_t *json_params, json_t **result, void *userdata)
+{
+	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
+	int ret;
+
+	*result = json_object();
+	json_t *value;
+	if (json_is_object(json_params))
+	{
+		value = json_object_get(value, "autostart");
+		if (json_is_boolean(value))
+		{
+			int state = json_boolean_value(value);
+			ret = ctx->media->ops->options(ctx->media->ctx, MEDIA_AUTOSTART, state);
+			value = json_boolean(ret);
+			json_object_set(*result, "autostart", value);
+		}
+		value = json_object_get(value, "loop");
+		if (json_is_boolean(value))
+		{
+			int state = json_boolean_value(value);
+			ret = ctx->media->ops->options(ctx->media->ctx, MEDIA_LOOP, state);
+			value = json_boolean(ret);
+			json_object_set(*result, "loop", value);
+		}
+		value = json_object_get(value, "random");
+		if (json_is_boolean(value))
+		{
+			int state = json_boolean_value(value);
+			ret = ctx->media->ops->options(ctx->media->ctx, MEDIA_RANDOM, state);
+			value = json_boolean(ret);
+			json_object_set(*result, "random", value);
+		}
+	}
+	return 0;
+}
+
+
 static struct jsonrpc_method_entry_t method_table[] = {
 	{ 'r', "play", method_play, "" },
 	{ 'r', "pause", method_pause, "" },
@@ -271,6 +309,7 @@ static struct jsonrpc_method_entry_t method_table[] = {
 	{ 'r', "append", method_append, "[]" },
 	{ 'r', "remove", method_remove, "[]" },
 	{ 'n', "change", method_change, "o" },
+	{ 'n', "options", method_options, "o" },
 	{ 0, NULL },
 };
 

@@ -233,11 +233,9 @@ enum mad_flow output(void *data,
 		}
 		if (decoder->bufferlen >= decoder->out->ctx->size)
 		{
+			decoder->out->ops->push(decoder->out->ctx, decoder->out->ctx->size, NULL);
 			decoder->buffer = NULL;
 			decoder->bufferlen = 0;
-			decoder->out->ops->push(decoder->out->ctx, decoder->out->ctx->size, NULL);
-			if (player_waiton(decoder->ctx, STATE_PAUSE) < 0)
-				return MAD_FLOW_BREAK;
 		}
 	}
 
@@ -322,14 +320,18 @@ static jitter_t *mad_jitter(decoder_ctx_t *decoder)
 static void *mad_thread(void *arg)
 {
 	int result = 0;
-	decoder_ctx_t *decoder = (decoder_ctx_t *)arg;
+	decoder_ctx_t *ctx = (decoder_ctx_t *)arg;
 	/* start decoding */
-	result = mad_decoder_run(&decoder->decoder, MAD_DECODER_MODE_SYNC);
-	if (decoder->bufferlen > 0)
+	result = mad_decoder_run(&ctx->decoder, MAD_DECODER_MODE_SYNC);
+	/**
+	 * push the last buffer to the encoder, otherwise the next
+	 * decoder will begins with a pull buffer
+	 */
+	if (ctx->bufferlen > 0)
 	{
-		decoder->buffer = NULL;
-		decoder->out->ops->push(decoder->out->ctx, decoder->bufferlen, NULL);
+		ctx->out->ops->push(ctx->out->ctx, ctx->bufferlen, NULL);
 	}
+
 	return (void *)result;
 }
 

@@ -186,7 +186,6 @@ static media_ctx_t *media_init(const char *url)
 		ctx = calloc(1, sizeof(*ctx));
 		ctx->mediaid = 0;
 		ctx->url = url;
-		ctx->options = OPTION_AUTOSTART;
 	}
 	return ctx;
 }

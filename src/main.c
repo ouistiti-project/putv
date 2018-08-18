@@ -65,6 +65,7 @@ static int run_player(player_ctx_t *player, jitter_t *sink_jitter)
 
 #define DAEMONIZE 0x01
 #define SRC_STDIN 0x02
+#define AUTOSTART 0x04
 int main(int argc, char **argv)
 {
 	const char *mediapath = SYSCONFDIR"/putv.db";
@@ -78,7 +79,7 @@ int main(int argc, char **argv)
 	int opt;
 	do
 	{
-		opt = getopt(argc, argv, "R:m:o:hDVx");
+		opt = getopt(argc, argv, "R:m:o:hDVxa");
 		switch (opt)
 		{
 			case 'R':
@@ -94,10 +95,13 @@ int main(int argc, char **argv)
 				return -1;
 			break;
 			case 'x':
-				mode = SRC_STDIN;
+				mode |= SRC_STDIN;
 			break;
 			case 'D':
-				mode = DAEMONIZE;
+				mode |= DAEMONIZE;
+			break;
+			case 'a':
+				mode |= AUTOSTART;
 			break;
 		}
 	} while(opt != -1);
@@ -114,6 +118,8 @@ int main(int argc, char **argv)
 		.ctx = media_ctx,
 	};
 
+	if (mode & AUTOSTART)
+		media->ops->options(media->ctx, MEDIA_AUTOSTART, 1);
 	if (mode & SRC_STDIN)
 	{
 		dbg("insert stdin");

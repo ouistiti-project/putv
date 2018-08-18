@@ -454,7 +454,6 @@ static media_ctx_t *media_init(const char *dbpath)
 			ctx = calloc(1, sizeof(*ctx));
 			ctx->db = db;
 			ctx->mediaid = 0;
-			ctx->options = OPTION_AUTOSTART;
 		}
 	}
 	return ctx;

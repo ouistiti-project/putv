@@ -55,8 +55,8 @@ struct media_ctx_s
 
 static int media_count(media_ctx_t *ctx);
 static int media_insert(media_ctx_t *ctx, const char *path, const char *info, const char *mime);
-static int media_find(media_ctx_t *ctx, int id, char *url, int *urllen, char *info, int *infolen);
-static int media_current(media_ctx_t *ctx, char *url, int *urllen, char *info, int *infolen);
+static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data);
+static int media_current(media_ctx_t *ctx, media_parse_t cb, void *data);
 static int media_play(media_ctx_t *ctx, media_parse_t play, void *data);
 static int media_next(media_ctx_t *ctx);
 static int media_end(media_ctx_t *ctx);
@@ -85,25 +85,22 @@ static int media_remove(media_ctx_t *ctx, int id, const char *path)
 	return -1;
 }
 
-static int media_find(media_ctx_t *ctx, int id, char *url, int *urllen, char *info, int *infolen)
-{
-	int len = strlen(ctx->url);
-	*urllen = (*urllen > len)? len: *urllen;
-	strncpy(url, ctx->url, *urllen);
-	return 0;
-}
-
-static int media_current(media_ctx_t *ctx, char *url, int *urllen, char *info, int *infolen)
-{
-	return media_find(ctx, ctx->mediaid, url, urllen, info, infolen);
-}
-
-static int media_list(media_ctx_t *ctx, media_parse_t cb, void *data)
+static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data)
 {
 	int ret = -1;
 	
 	ret = cb(data, ctx->url, NULL, utils_getmime(ctx->url));
 	return ret;
+}
+
+static int media_current(media_ctx_t *ctx, media_parse_t cb, void *data)
+{
+	return media_find(ctx, ctx->mediaid, cb, data);
+}
+
+static int media_list(media_ctx_t *ctx, media_parse_t cb, void *data)
+{
+	return media_find(ctx, -1, cb, data);
 }
 
 static int media_play(media_ctx_t *ctx, media_parse_t cb, void *data)
@@ -135,6 +132,9 @@ static int media_end(media_ctx_t *ctx)
 	return 0;
 }
 
+/**
+ * this option is useless while the value is not stored
+ */
 static void media_autostart(media_ctx_t *ctx, int enable)
 {
 	if (enable)
@@ -143,6 +143,9 @@ static void media_autostart(media_ctx_t *ctx, int enable)
 		ctx->options &= ~OPTION_AUTOSTART;
 }
 
+/**
+ * the loop requires to restart the player.
+ */
 static void media_loop(media_ctx_t *ctx, int enable)
 {
 	if (enable)

@@ -66,7 +66,7 @@ static const char const *str_pause = "pause";
 static int _print_entry(void *arg, const char *url,
 		const char *info, const char *mime)
 {
-	json_t *list = (json_t*)arg;
+	json_t *object = (json_t*)arg;
 	json_t *json_url;
 	if (url != NULL)
 		json_url = json_string(url);
@@ -88,11 +88,20 @@ static int _print_entry(void *arg, const char *url,
 	else
 		json_mime = json_null();
 
-	json_t *object = json_object();
 	json_object_set(object, "url", json_url);
 	json_object_set(object, "info", json_info);
 	json_object_set(object, "mime", json_mime);
+	return 0;
+}
+
+static int _append_entry(void *arg, const char *url,
+		const char *info, const char *mime)
+{
+	json_t *list = (json_t*)arg;
+	json_t *object = json_object();
+	_print_entry(object, url, info, mime);
 	json_array_append_new(list, object);
+	return 0;
 }
 
 static int method_list(json_t *json_params, json_t **result, void *userdata)
@@ -100,7 +109,7 @@ static int method_list(json_t *json_params, json_t **result, void *userdata)
 	int ret;
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 	json_t *list = json_array();
-	ret = ctx->media->ops->list(ctx->media->ctx, _print_entry, (void *)list);
+	ret = ctx->media->ops->list(ctx->media->ctx, _append_entry, (void *)list);
 	*result = json_pack("{s:o}", "playlist", list);
 	return 0;
 }
@@ -226,39 +235,63 @@ static int method_next(json_t *json_params, json_t **result, void *userdata)
 	return 0;
 }
 
+typedef struct _display_ctx_s _display_ctx_t;
+struct _display_ctx_s
+{
+	cmds_ctx_t *ctx;
+	json_t *result;
+};
+
+static _display(void *arg, const char *url, const char *info, const char *mime)
+{
+	_display_ctx_t *display =(_display_ctx_t *)arg;
+	cmds_ctx_t *ctx = display->ctx;
+	json_t *result = display->result;
+	json_t *object;
+
+	if (json_is_object(result))
+		object = result;
+	else if (json_is_array(result))
+		object = json_object();
+
+	json_t *json_state;
+	state_t state = player_state(ctx->player, STATE_UNKNOWN);
+
+	switch (state)
+	{
+	case STATE_PLAY:
+		json_state = json_string(str_play);
+	break;
+	case STATE_PAUSE:
+		json_state = json_string(str_pause);
+	break;
+	default:
+		json_state = json_string(str_stop);
+	}
+
+	json_object_set(object, "state", json_state);
+	_print_entry(object, url, info, mime);
+
+	if (json_is_array(result))
+		json_array_append_new(result, object);
+}
+
 static int method_change(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
-	char url[256];
-	int urllen = 256;
-	char info[1024];
-	int infolen = 1024;
+	_display_ctx_t display = {
+		.ctx = ctx,
+		.result = json_object(),
+	};
 
-	if (ctx->media->ops->current(ctx->media->ctx, url, &urllen, info, &infolen) == 0)
+	if (ctx->media->ops->current(ctx->media->ctx, _display, &display) == 1)
 	{
-		const char *state_str = str_stop;
-		state_t state = player_state(ctx->player, STATE_UNKNOWN);
-
-		switch (state)
-		{
-		case STATE_PLAY:
-			state_str = str_play;
-		break;
-		case STATE_PAUSE:
-			state_str = str_pause;
-		break;
-		}
-		json_error_t error;
-		*result = json_pack_ex(&error, 0, "{s:s,s:s%,s:s%}", 
-				"state", state_str,
-				"url", url, urllen,
-				"info", info, infolen);
-		if (*result == NULL)
-			printf("error on result %s\n", error.text);
+		*result = display.result;
 	}
 	else
+	{
 		*result = json_pack("{s:s}", "state", "stop");
-
+	}
 	return 0;
 }
 
@@ -309,7 +342,7 @@ static struct jsonrpc_method_entry_t method_table[] = {
 	{ 'r', "append", method_append, "[]" },
 	{ 'r', "remove", method_remove, "[]" },
 	{ 'n', "change", method_change, "o" },
-	{ 'n', "options", method_options, "o" },
+	{ 'r', "options", method_options, "o" },
 	{ 0, NULL },
 };
 

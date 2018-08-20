@@ -112,6 +112,11 @@ int main(int argc, char **argv)
 	}
 
 	media_ctx = MEDIA->init(mediapath);
+	if (media_ctx == NULL)
+	{
+		err("media not found %s", mediapath);
+		return -1;
+	}
 	media_t *media = &(media_t)
 	{
 		.ops = MEDIA,

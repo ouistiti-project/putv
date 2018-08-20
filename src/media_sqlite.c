@@ -438,10 +438,12 @@ static media_ctx_t *media_init(const char *dbpath)
 			};
 			char *error = NULL;
 			int i = 0;
+			ret = SQLITE_OK;
 			while (query[i] != NULL)
 			{
 				if (ret != SQLITE_OK)
 				{
+					err("media prepare error %d", ret);
 					break;
 				}
 				ret = sqlite3_exec(db, query[i], NULL, NULL, &error);
@@ -454,6 +456,11 @@ static media_ctx_t *media_init(const char *dbpath)
 			ctx = calloc(1, sizeof(*ctx));
 			ctx->db = db;
 			ctx->mediaid = 0;
+		}
+		else
+		{
+			err("media db open error %d", ret);
+			sqlite3_close_v2(db);
 		}
 	}
 	return ctx;

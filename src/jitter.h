@@ -15,6 +15,7 @@ struct jitter_ctx_s
 	void *consumer;
 	produce_t produce;
 	void *producter;
+	unsigned int frequence;
 	heartbeat_t heartbeat;
 	void *heart;
 	void *private;

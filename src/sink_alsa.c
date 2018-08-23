@@ -38,12 +38,14 @@ typedef struct sink_s sink_t;
 typedef struct sink_ctx_s sink_ctx_t;
 struct sink_ctx_s
 {
-	player_ctx_t *ctx;
+	player_ctx_t *player;
 	const sink_t *ops;
+	const char *soundcard;
 	snd_pcm_t *playback_handle;
 	pthread_t thread;
 	jitter_t *in;
 	state_t state;
+	unsigned int samplerate;
 };
 #define SINK_CTX
 #include "sink.h"
@@ -58,81 +60,90 @@ struct sink_ctx_s
 
 #define sink_dbg(...)
 
-static const char *jitter_name = "alsa";
-static sink_ctx_t *alsa_init(player_ctx_t *mctx, const char *soundcard)
+static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate, unsigned int *size)
 {
+	unsigned int nchannels = 2;
+	int samplesize;
 	int ret;
-	jitter_format_t format = SINK_ALSA_FORMAT;
-	int nchannels = 2;
-	int count = 2;
-	sink_ctx_t *ctx = calloc(1, sizeof(*ctx));
-	ctx->ops = sink_alsa;
-	ret = snd_pcm_open(&ctx->playback_handle, soundcard, SND_PCM_STREAM_PLAYBACK, 0);
 
-	snd_pcm_hw_params_t *hw_params;
-	ret = snd_pcm_hw_params_malloc(&hw_params);
-	if (ret < 0) {
-		err("sink: malloc");
-		goto error;
-	}
+	ret = snd_pcm_open(&ctx->playback_handle, ctx->soundcard, SND_PCM_STREAM_PLAYBACK, 0);
 
-	ret = snd_pcm_hw_params_any(ctx->playback_handle, hw_params);
-	if (ret < 0) {
-		err("sink: get params");
-		goto error;
-	}
-	ret = snd_pcm_hw_params_set_access(ctx->playback_handle, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED);
-	if (ret < 0) {
-		err("sink: access");
-		goto error;
-	}
 	snd_pcm_format_t pcm_format;
 	switch (format)
 	{
 		case PCM_32bits_LE_stereo:
 			pcm_format = SND_PCM_FORMAT_S32_LE;
-			count = 4;
+			samplesize = 4;
 		break;
 		case PCM_24bits_LE_stereo:
 			pcm_format = SND_PCM_FORMAT_S24_LE;
-			count = 3;
+			samplesize = 3;
 		break;
 		case PCM_16bits_LE_stereo:
 			pcm_format = SND_PCM_FORMAT_S16_LE;
-			count = 2;
+			samplesize = 2;
 		break;
 		case PCM_16bits_LE_mono:
 			pcm_format = SND_PCM_FORMAT_S16_LE;
 			nchannels = 1;
-			count = 2;
+			samplesize = 2;
 		break;
 	}
+
+	snd_pcm_hw_params_t *hw_params;
+	ret = snd_pcm_hw_params_malloc(&hw_params);
+	if (ret < 0)
+	{
+		err("sink: malloc");
+		goto error;
+	}
+
+	ret = snd_pcm_hw_params_any(ctx->playback_handle, hw_params);
+	if (ret < 0)
+	{
+		err("sink: get params");
+		goto error;
+	}
+	//int resample = 1;
+	//ret = snd_pcm_hw_params_set_rate_resample(handle, params, resample);
+	ret = snd_pcm_hw_params_set_access(ctx->playback_handle, hw_params, SND_PCM_ACCESS_RW_INTERLEAVED);
+	if (ret < 0)
+	{
+		err("sink: access");
+		goto error;
+	}
+
 	ret = snd_pcm_hw_params_set_format(ctx->playback_handle, hw_params, pcm_format);
-	if (ret < 0) {
+	if (ret < 0)
+	{
 		err("sink: format");
 		goto error;
 	}
-	unsigned int rate = 44100;
 	ret = snd_pcm_hw_params_set_rate_near(ctx->playback_handle, hw_params, &rate, NULL);
-	if (ret < 0) {
+	if (ret < 0)
+	{
 		err("sink: rate");
 		goto error;
 	}
 	ret = snd_pcm_hw_params_set_channels(ctx->playback_handle, hw_params, nchannels);
-	if (ret < 0) {
+	if (ret < 0)
+	{
 		err("sink: channels");
 		goto error;
 	}
 
 	ret = snd_pcm_hw_params(ctx->playback_handle, hw_params);
-	if (ret < 0) {
+	if (ret < 0)
+	{
 		err("sink: set params");
 		goto error;
 	}
 
-	snd_pcm_uframes_t size;
-	snd_pcm_hw_params_get_period_size(hw_params, &size, 0);
-	snd_pcm_hw_params_free(hw_params);
+//	snd_pcm_uframes_t buffer_size;
+//	snd_pcm_hw_params_get_buffer_size(hw_params, &buffer_size);
+	snd_pcm_uframes_t periodsize;
+	snd_pcm_hw_params_get_period_size(hw_params, &periodsize, 0);
+	*size = periodsize * samplesize * nchannels;
 
 	ret = snd_pcm_prepare(ctx->playback_handle);
 	if (ret < 0) {
@@ -140,18 +151,50 @@ static sink_ctx_t *alsa_init(player_ctx_t *mctx, const char *soundcard)
 		goto error;
 	}
 
-	jitter_t *jitter = jitter_scattergather_init(jitter_name, 5, size * count);
-	ctx->in = jitter;
-	jitter->format = format;
-	jitter->ctx->thredhold = 2;
+	ctx->samplerate = rate;
 
-	ctx->ctx = mctx;
+error:
+	snd_pcm_hw_params_free(hw_params);
+	return ret;
+}
+
+static int _pcm_close(sink_ctx_t *ctx)
+{
+	snd_pcm_drain(ctx->playback_handle);
+	snd_pcm_close(ctx->playback_handle);
+	return 0;
+}
+
+static const char *jitter_name = "alsa";
+static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
+{
+	int count = 2;
+	jitter_format_t format = SINK_ALSA_FORMAT;
+	sink_ctx_t *ctx = calloc(1, sizeof(*ctx));
+
+	ctx->ops = sink_alsa;
+	ctx->soundcard = soundcard;
+
+	unsigned int size;
+	if (_pcm_open(ctx, format, DEFAULT_SAMPLERATE, &size) < 0)
+	{
+		err("sink: init error %s", strerror(errno));
+		free(ctx);
+		return NULL;
+	}
+
+	if (ctx->samplerate == 4000 && DEFAULT_SAMPLERATE == 0)
+		size *= 12;
+	jitter_t *jitter = jitter_scattergather_init(jitter_name, 5, size);
+	ctx->in = jitter;
+	ctx->in->ctx->frequence = DEFAULT_SAMPLERATE;
+	jitter->ctx->thredhold = 2;
+	jitter->format = format;
+
+	ctx->player = player;
+	warn("alsa samplerate %u %u", ctx->samplerate, ctx->in->ctx->frequence);
 
 	return ctx;
-error:
-	err("sink: init error %s", strerror(errno));
-	free(ctx);
-	return NULL;
 }
 
 static jitter_t *alsa_jitter(sink_ctx_t *ctx)
@@ -159,6 +202,18 @@ static jitter_t *alsa_jitter(sink_ctx_t *ctx)
 	return ctx->in;
 }
 
+static int _alsa_checksamplerate(sink_ctx_t *ctx)
+{
+	int ret = 0;
+	if(ctx->in->ctx->frequence && (ctx->in->ctx->frequence != ctx->samplerate))
+	{
+		_pcm_close(ctx);
+		unsigned int size;
+		_pcm_open(ctx, ctx->in->format, ctx->in->ctx->frequence, &size);
+	}
+	ctx->in->ctx->frequence = DEFAULT_SAMPLERATE;
+	return ret;
+}
 static void *alsa_thread(void *arg)
 {
 	int ret;
@@ -179,25 +234,29 @@ static void *alsa_thread(void *arg)
 	/* start decoding */
 	while (ctx->state != STATE_ERROR)
 	{
-		if (player_waiton(ctx->ctx, STATE_PAUSE) < 0)
+		if (player_waiton(ctx->player, STATE_PAUSE) < 0)
 		{
-			snd_pcm_prepare(ctx->playback_handle);
-			if (player_state(ctx->ctx, STATE_UNKNOWN) == STATE_ERROR)
+			if (player_state(ctx->player, STATE_UNKNOWN) == STATE_ERROR)
+			{
+				snd_pcm_drain(ctx->playback_handle);
 				ctx->state = STATE_ERROR;
+			}
 		}
 
 		unsigned char *buff = ctx->in->ops->peer(ctx->in->ctx);
+		_alsa_checksamplerate(ctx);
+		//snd_pcm_mmap_begin
 		ret = snd_pcm_writei(ctx->playback_handle, buff, ctx->in->ctx->size / divider);
-		ctx->in->ops->pop(ctx->in->ctx, ret * divider);
 		if (ret == -EPIPE)
 		{
 			warn("pcm recover");
 			ret = snd_pcm_recover(ctx->playback_handle, ret, 0);
 		}
+		ctx->in->ops->pop(ctx->in->ctx, ret * divider);
 		if (ret < 0)
 		{
 			ctx->state = STATE_ERROR;
-			err("sink: error write pcm");
+			err("sink: error write pcm %d", ret);
 		}
 		else
 		{
@@ -217,7 +276,7 @@ static int alsa_run(sink_ctx_t *ctx)
 static void alsa_destroy(sink_ctx_t *ctx)
 {
 	pthread_join(ctx->thread, NULL);
-	snd_pcm_close(ctx->playback_handle);
+	_pcm_close(ctx);
 	jitter_scattergather_destroy(ctx->in);
 	free(ctx);
 }

@@ -2,6 +2,8 @@
 bin-y+=putv
 putv_SOURCES+=main.c
 putv_SOURCES+=player.c
+putv_CFLAGS+=-DDEFAULT_SAMPLERATE=0
+#putv_CFLAGS+=-DDEFAULT_SAMPLERATE=44100
 putv_SOURCES-$(MEDIA_SQLITE)+=media_sqlite.c
 putv_CFLAGS-$(MEDIA_SQLITE)+=-DMEDIA=media_sqlite
 putv_SOURCES-$(MEDIA_FILE)+=media_file.c

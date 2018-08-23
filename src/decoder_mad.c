@@ -210,6 +210,13 @@ enum mad_flow output(void *data,
 	/* pcm->samplerate contains the sampling frequency */
 
 	samplerate = pcm->samplerate;
+	if (decoder->out->ctx->frequence == 0)
+	{
+		decoder_dbg("decoder change samplerate to %u", pcm->samplerate);
+		decoder->out->ctx->frequence = pcm->samplerate;
+	}
+	else if (decoder->out->ctx->frequence != pcm->samplerate)
+		err("decoder: samplerate %d not supported", decoder->out->ctx->frequence);
 	nchannels = pcm->channels;
 	nsamples  = pcm->length;
 	left_ch   = pcm->samples[0];

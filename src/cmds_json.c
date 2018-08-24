@@ -346,7 +346,7 @@ static struct jsonrpc_method_entry_t method_table[] = {
 	{ 0, NULL },
 };
 
-static void jsonrpc_onchange(void * userctx, player_ctx_t *ctx)
+static void jsonrpc_onchange(void * userctx, player_ctx_t *ctx, state_t state)
 {
 	thread_info_t *info = (thread_info_t *)userctx;
 

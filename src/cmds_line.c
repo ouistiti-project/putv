@@ -123,10 +123,10 @@ static int method_loop(cmds_ctx_t *ctx, char *arg)
 	return enable;
 }
 
-void cmds_line_onchange(void *arg, player_ctx_t *player)
+void cmds_line_onchange(void *arg, player_ctx_t *player, state_t state)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t*)arg;
-	state_t state = player_state(player, STATE_UNKNOWN);
+
 	switch (state)
 	{
 	case STATE_PLAY:

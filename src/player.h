@@ -27,7 +27,7 @@ typedef struct sink_s sink_t;
 typedef struct media_s media_t;
 
 typedef struct player_ctx_s player_ctx_t;
-typedef void (*player_event_cb_t)(void *ctx, player_ctx_t *);
+typedef void (*player_event_cb_t)(void *ctx, player_ctx_t *, state_t);
 
 player_ctx_t *player_init(media_t *media);
 int player_run(player_ctx_t *userdata, jitter_t *encoder_jitter);

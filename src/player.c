@@ -105,7 +105,7 @@ state_t player_state(player_ctx_t *ctx, state_t state)
 		player_event_t *it = ctx->events;
 		while (it != NULL)
 		{
-			it->cb(it->ctx, ctx);
+			it->cb(it->ctx, ctx, state);
 			it = it->next;
 		}
 	}

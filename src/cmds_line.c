@@ -100,7 +100,6 @@ static int method_pause(cmds_ctx_t *ctx, char *arg)
 
 static int method_stop(cmds_ctx_t *ctx, char *arg)
 {
-	ctx->media->ops->end(ctx->media->ctx);
 	return (player_state(ctx->player, STATE_STOP) == STATE_STOP);
 }
 
@@ -121,6 +120,12 @@ static int method_loop(cmds_ctx_t *ctx, char *arg)
 		atoi(arg);
 	enable = ctx->media->ops->options(ctx->media->ctx, MEDIA_LOOP, enable);
 	return enable;
+}
+
+static _display(void *arg, const char *url, const char *info, const char *mime)
+{
+	cmds_ctx_t *ctx = (cmds_ctx_t*)arg;
+	printf("player: media %s\n", url);
 }
 
 void cmds_line_onchange(void *arg, player_ctx_t *player, state_t state)
@@ -144,7 +149,11 @@ void cmds_line_onchange(void *arg, player_ctx_t *player, state_t state)
 	case STATE_CHANGE:
 		printf("player: change\n");
 	break;
+	default:
+		dbg("cmd line onchange");
 	}
+	int id = player_mediaid(player);
+	ctx->media->ops->find(ctx->media->ctx, id, _display, ctx);
 }
 
 static cmds_ctx_t *cmds_line_init(player_ctx_t *player, media_t *media, void *arg)

@@ -45,7 +45,6 @@ struct media_ctx_s
 
 #define OPTION_LOOP 0x0001
 #define OPTION_RANDOM 0x0002
-#define OPTION_AUTOSTART 0x0004
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -232,6 +231,7 @@ static int _media_execute(sqlite3_stmt *statement, media_parse_t cb, void *data)
 		const char *url = NULL;
 		const void *info = NULL;
 		const char *mime = NULL;
+		int id;
 		int index = 0;
 		int type;
 		type = sqlite3_column_type(statement, index);
@@ -245,7 +245,10 @@ static int _media_execute(sqlite3_stmt *statement, media_parse_t cb, void *data)
 		type = sqlite3_column_type(statement, index);
 		if (type == SQLITE_TEXT)
 			mime = sqlite3_column_text(statement, index);
-		int id = sqlite3_column_int(statement, 3);
+		index = 3;
+		type = sqlite3_column_type(statement, index);
+		if (type == SQLITE_INTEGER)
+			id = sqlite3_column_int(statement, index);
 		dbg("media: %d %s", id, url);
 		if (cb != NULL)
 			cb(data, url, (const char *)info, mime);
@@ -261,7 +264,7 @@ static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data)
 	sqlite3_stmt *statement;
 	int size = 256;
 	char *sql = sqlite3_malloc(size);
-	snprintf(sql, size, "select \"url\", \"info\" from \"media\" where id = @ID");
+	snprintf(sql, size, "select \"url\", \"info\", \"mime\", \"id\" from \"media\" where id = @ID");
 	sqlite3_prepare_v2(ctx->db, sql, size, &statement, NULL);
 
 	int index = sqlite3_bind_parameter_index(statement, "@ID");
@@ -275,7 +278,8 @@ static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data)
 
 static int media_current(media_ctx_t *ctx, media_parse_t cb, void *data)
 {
-	return media_find(ctx, ctx->mediaid, cb, data);
+	int ret = media_find(ctx, ctx->mediaid, cb, data);
+	return ret;
 }
 
 static int media_list(media_ctx_t *ctx, media_parse_t cb, void *data)
@@ -298,12 +302,8 @@ static int media_list(media_ctx_t *ctx, media_parse_t cb, void *data)
 
 static int media_play(media_ctx_t *ctx, media_parse_t cb, void *data)
 {
-	int ret = -1;
-
-	if (ctx->mediaid == 0 && (ctx->options & OPTION_AUTOSTART)) //start ID
-		media_next(ctx);
-	ret = media_current(ctx, cb, data);
-	return ret;
+	media_current(ctx, cb, data);
+	return ctx->mediaid;
 }
 
 static int media_next(media_ctx_t *ctx)
@@ -332,6 +332,7 @@ static int media_next(media_ctx_t *ctx)
 	}
 	else
 		ctx->mediaid = -1;
+
 	if ((ctx->options & OPTION_LOOP) && (ctx->mediaid == -1))
 	{
 		media_next(ctx);
@@ -345,17 +346,6 @@ static int media_end(media_ctx_t *ctx)
 {
 	ctx->mediaid = -1;
 	return 0;
-}
-
-/**
- * this option is useless while the value is not stored
- */
-static void media_autostart(media_ctx_t *ctx, int enable)
-{
-	if (enable)
-		ctx->options |= OPTION_AUTOSTART;
-	else
-		ctx->options &= ~OPTION_AUTOSTART;
 }
 
 /**
@@ -381,12 +371,7 @@ static void media_random(media_ctx_t *ctx, int enable)
 static int media_options(media_ctx_t *ctx, media_options_t option, int enable)
 {
 	int ret = 0;
-	if (option == MEDIA_AUTOSTART)
-	{
-		media_autostart(ctx, enable);
-		ret = (ctx->options & OPTION_AUTOSTART) == OPTION_AUTOSTART;
-	}
-	else if (option == MEDIA_LOOP)
+	if (option == MEDIA_LOOP)
 	{
 		media_loop(ctx, enable);
 		ret = (ctx->options & OPTION_LOOP) == OPTION_LOOP;

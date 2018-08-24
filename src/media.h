@@ -8,7 +8,6 @@ typedef int (*media_parse_t)(void *arg, const char *url, const char *info, const
 typedef enum
 {
 	MEDIA_LOOP,
-	MEDIA_AUTOSTART,
 	MEDIA_RANDOM,
 } media_options_t;
 

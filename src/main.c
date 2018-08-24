@@ -123,8 +123,6 @@ int main(int argc, char **argv)
 		.ctx = media_ctx,
 	};
 
-	if (mode & AUTOSTART)
-		media->ops->options(media->ctx, MEDIA_AUTOSTART, 1);
 	if (mode & SRC_STDIN)
 	{
 		dbg("insert stdin");
@@ -132,6 +130,11 @@ int main(int argc, char **argv)
 	}
 
 	player_ctx_t *player = player_init(media);
+
+	if (mode & AUTOSTART)
+	{
+		player_state(player, STATE_PLAY);
+	}
 
 	cmds_t cmds[3];
 	int nbcmds = 0;

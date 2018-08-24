@@ -304,14 +304,6 @@ static int method_options(json_t *json_params, json_t **result, void *userdata)
 	json_t *value;
 	if (json_is_object(json_params))
 	{
-		value = json_object_get(value, "autostart");
-		if (json_is_boolean(value))
-		{
-			int state = json_boolean_value(value);
-			ret = ctx->media->ops->options(ctx->media->ctx, MEDIA_AUTOSTART, state);
-			value = json_boolean(ret);
-			json_object_set(*result, "autostart", value);
-		}
 		value = json_object_get(value, "loop");
 		if (json_is_boolean(value))
 		{

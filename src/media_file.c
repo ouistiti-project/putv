@@ -87,10 +87,9 @@ static int media_remove(media_ctx_t *ctx, int id, const char *path)
 
 static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data)
 {
-	int ret = -1;
-	
-	ret = cb(data, ctx->url, NULL, utils_getmime(ctx->url));
-	return ret;
+	if (cb != NULL && cb(data, ctx->url, NULL, utils_getmime(ctx->url)) < 0)
+		return -1;
+	return 1;
 }
 
 static int media_current(media_ctx_t *ctx, media_parse_t cb, void *data)

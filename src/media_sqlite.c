@@ -41,7 +41,6 @@ struct media_ctx_s
 	sqlite3 *db;
 	int mediaid;
 	unsigned int options;
-	player_ctx_t *ctx;
 };
 
 #define OPTION_LOOP 0x0001
@@ -248,7 +247,8 @@ static int _media_execute(sqlite3_stmt *statement, media_parse_t cb, void *data)
 			mime = sqlite3_column_text(statement, index);
 		int id = sqlite3_column_int(statement, 3);
 		dbg("media: %d %s", id, url);
-		cb(data, url, (const char *)info, mime);
+		if (cb != NULL)
+			cb(data, url, (const char *)info, mime);
 
 		ret = sqlite3_step(statement);
 	}

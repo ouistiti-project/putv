@@ -387,7 +387,8 @@ menuconfig gconfig xconfig: $(builddir)$(CONFIG)
 
 %_defconfig:
 	@echo "  "DEFCONFIG $*
-	@$(GREP) -v "^#" $(wildcard $(srcdir)/configs/$< $(srcdir)/$<) > $(obj)$(CONFIG)
+	$(eval DEFCONFIG:=$(wildcard $(srcdir)/configs/$@ $(srcdir)/$@))
+	@$(if $(DEFCONFIG),$(GREP) -v "^#" $(DEFCONFIG) > $(obj)$(CONFIG))
 
 oldconfig: $(builddir)$(CONFIG).old
 	@$(eval CONFIGS=$(shell $(GREP) -v "^#" $(DEFCONFIG) | $(AWK) -F= 't$$1 != t {print $$1}'))

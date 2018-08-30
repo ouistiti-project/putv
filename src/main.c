@@ -66,6 +66,7 @@ static int run_player(player_ctx_t *player, jitter_t *sink_jitter)
 #define DAEMONIZE 0x01
 #define SRC_STDIN 0x02
 #define AUTOSTART 0x04
+#define LOOP 0x08
 int main(int argc, char **argv)
 {
 	const char *mediapath = SYSCONFDIR"/putv.db";
@@ -79,7 +80,7 @@ int main(int argc, char **argv)
 	int opt;
 	do
 	{
-		opt = getopt(argc, argv, "R:m:o:hDVxa");
+		opt = getopt(argc, argv, "R:m:o:hDVxal");
 		switch (opt)
 		{
 			case 'R':
@@ -102,6 +103,9 @@ int main(int argc, char **argv)
 			break;
 			case 'a':
 				mode |= AUTOSTART;
+			break;
+			case 'l':
+				mode |= LOOP;
 			break;
 		}
 	} while(opt != -1);
@@ -127,6 +131,11 @@ int main(int argc, char **argv)
 	{
 		dbg("insert stdin");
 		media->ops->insert(media_ctx, "-", NULL, "audio/mp3");
+	}
+
+	if (mode & LOOP)
+	{
+		media->ops->options(media_ctx, MEDIA_LOOP, 1);
 	}
 
 	player_ctx_t *player = player_init(media);

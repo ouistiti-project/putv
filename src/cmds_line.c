@@ -32,6 +32,8 @@
 #include <sys/types.h>
 #include <sys/ioctl.h>
 
+#include <pthread.h>
+
 #include "player.h"
 typedef struct cmds_ctx_s cmds_ctx_t;
 struct cmds_ctx_s
@@ -122,7 +124,7 @@ static int method_loop(cmds_ctx_t *ctx, char *arg)
 	return enable;
 }
 
-static _display(void *arg, const char *url, const char *info, const char *mime)
+static int _display(void *arg, const char *url, const char *info, const char *mime)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t*)arg;
 	printf("player: media %s\n", url);

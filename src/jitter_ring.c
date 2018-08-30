@@ -296,6 +296,15 @@ static void jitter_pop(jitter_ctx_t *jitter, size_t len)
 	}
 }
 
+static size_t jitter_length(jitter_ctx_t *jitter)
+{
+	jitter_private_t *private = (jitter_private_t *)jitter->private;
+	if (private->level < jitter->size)
+		return private->level;
+	return jitter->size;
+}
+
+
 static void jitter_reset(jitter_ctx_t *jitter)
 {
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
@@ -349,5 +358,6 @@ static const jitter_ops_t *jitter_ringbuffer = &(jitter_ops_t)
 	.push = jitter_push,
 	.peer = jitter_peer,
 	.pop = jitter_pop,
+	.length = jitter_length,
 	.empty = jitter_empty,
 };

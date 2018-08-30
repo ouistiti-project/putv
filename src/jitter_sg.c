@@ -1,5 +1,5 @@
 /*****************************************************************************
- * jitter.c
+ * jitter_sg.c
  * this file is part of https://github.com/ouistiti-project/putv
  *****************************************************************************
  * Copyright (C) 2016-2017
@@ -233,6 +233,7 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 				return;
 		}
 	}
+
 	if (private->state == JITTER_RUNNING)
 	{
 		pthread_cond_broadcast(&private->condpeer);
@@ -296,6 +297,7 @@ static void jitter_pop(jitter_ctx_t *jitter, size_t len)
 {
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
 
+	jitter_dbg("jitter %s pop", jitter->name);
 	if ((private->state == JITTER_STOP) ||
 		(private->out->state != SCATTER_POP))
 	{
@@ -308,6 +310,7 @@ static void jitter_pop(jitter_ctx_t *jitter, size_t len)
 	{
 		dbg("buffer not empty %ld %ld", private->out->len, len);
 	}
+
 	pthread_mutex_lock(&private->mutex);
 	private->out->state = SCATTER_FREE;
 	private->level--;
@@ -320,6 +323,14 @@ static void jitter_pop(jitter_ctx_t *jitter, size_t len)
 			jitter->thredhold > 0)
 			private->state = JITTER_FILLING;
 	}
+}
+
+static size_t jitter_length(jitter_ctx_t *jitter)
+{
+	jitter_private_t *private = (jitter_private_t *)jitter->private;
+	if (private->out->state == SCATTER_POP)
+		return private->out->len;
+	return -1;
 }
 
 static void jitter_reset(jitter_ctx_t *jitter)
@@ -370,5 +381,6 @@ static const jitter_ops_t *jitter_scattergather = &(jitter_ops_t)
 	.push = jitter_push,
 	.peer = jitter_peer,
 	.pop = jitter_pop,
+	.length = jitter_length,
 	.empty = jitter_empty,
 };

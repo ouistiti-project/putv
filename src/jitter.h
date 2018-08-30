@@ -1,6 +1,9 @@
 #ifndef __JITTER_H__
 #define __JITTER_H__
 
+typedef struct filter_audio_s filter_audio_t;
+typedef struct filter_s filter_t;
+
 typedef int (*consume_t)(void *consumer, unsigned char *buffer, size_t size);
 typedef int (*produce_t)(void *producter, unsigned char *buffer, size_t size);
 typedef int (*heartbeat_t)(void *heart, void *beat);
@@ -18,6 +21,7 @@ struct jitter_ctx_s
 	unsigned int frequence;
 	heartbeat_t heartbeat;
 	void *heart;
+	filter_t *filter;
 	void *private;
 };
 

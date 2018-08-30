@@ -34,6 +34,7 @@
 
 #include "player.h"
 #include "jitter.h"
+#include "filter.h"
 typedef struct sink_s sink_t;
 typedef struct sink_ctx_s sink_ctx_t;
 struct sink_ctx_s
@@ -46,6 +47,9 @@ struct sink_ctx_s
 	jitter_t *in;
 	state_t state;
 	unsigned int samplerate;
+	int samplesize;
+	int nchannels;
+	filter_t filter;
 };
 #define SINK_CTX
 #include "sink.h"
@@ -62,8 +66,6 @@ struct sink_ctx_s
 
 static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate, unsigned int *size)
 {
-	unsigned int nchannels = 2;
-	int samplesize;
 	int ret;
 
 	ret = snd_pcm_open(&ctx->playback_handle, ctx->soundcard, SND_PCM_STREAM_PLAYBACK, 0);
@@ -73,20 +75,23 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 	{
 		case PCM_32bits_LE_stereo:
 			pcm_format = SND_PCM_FORMAT_S32_LE;
-			samplesize = 4;
+			ctx->samplesize = 4;
+			ctx->nchannels = 2;
 		break;
 		case PCM_24bits_LE_stereo:
 			pcm_format = SND_PCM_FORMAT_S24_LE;
-			samplesize = 3;
+			ctx->samplesize = 3;
+			ctx->nchannels = 2;
 		break;
 		case PCM_16bits_LE_stereo:
 			pcm_format = SND_PCM_FORMAT_S16_LE;
-			samplesize = 2;
+			ctx->samplesize = 2;
+			ctx->nchannels = 2;
 		break;
 		case PCM_16bits_LE_mono:
 			pcm_format = SND_PCM_FORMAT_S16_LE;
-			nchannels = 1;
-			samplesize = 2;
+			ctx->samplesize = 2;
+			ctx->nchannels = 1;
 		break;
 	}
 
@@ -125,7 +130,7 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 		err("sink: rate");
 		goto error;
 	}
-	ret = snd_pcm_hw_params_set_channels(ctx->playback_handle, hw_params, nchannels);
+	ret = snd_pcm_hw_params_set_channels(ctx->playback_handle, hw_params, ctx->nchannels);
 	if (ret < 0)
 	{
 		err("sink: channels");
@@ -139,11 +144,15 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 		goto error;
 	}
 
-//	snd_pcm_uframes_t buffer_size;
-//	snd_pcm_hw_params_get_buffer_size(hw_params, &buffer_size);
+	snd_pcm_uframes_t buffer_size;
+	snd_pcm_hw_params_get_buffer_size(hw_params, &buffer_size);
+	dbg("buffer size %lu", buffer_size);
 	snd_pcm_uframes_t periodsize;
 	snd_pcm_hw_params_get_period_size(hw_params, &periodsize, 0);
-	*size = periodsize * samplesize * nchannels;
+	dbg("period size %lu", periodsize);
+	dbg("sample size %d", ctx->samplesize);
+	dbg("nchannels %u", ctx->nchannels);
+	*size = periodsize * ctx->samplesize * ctx->nchannels;
 
 	ret = snd_pcm_prepare(ctx->playback_handle);
 	if (ret < 0) {
@@ -183,13 +192,18 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 		return NULL;
 	}
 
-	if (ctx->samplerate == 4000 && DEFAULT_SAMPLERATE == 0)
-		size *= 12;
-	jitter_t *jitter = jitter_scattergather_init(jitter_name, 5, size);
-	ctx->in = jitter;
-	ctx->in->ctx->frequence = DEFAULT_SAMPLERATE;
+	if (ctx->samplerate < 441000 && DEFAULT_SAMPLERATE == 0)
+		size = 1152 * sizeof(signed int) * 2;
+	jitter_t *jitter = jitter_scattergather_init(jitter_name, 6, size);
+	jitter->ctx->frequence = DEFAULT_SAMPLERATE;
 	jitter->ctx->thredhold = 2;
 	jitter->format = format;
+
+	ctx->filter.ops = filter_pcm;
+	ctx->filter.ctx = ctx->filter.ops->init(ctx->samplerate, ctx->samplesize, ctx->nchannels);
+	jitter->ctx->filter = &ctx->filter;
+
+	ctx->in = jitter;
 
 	ctx->player = player;
 	warn("alsa samplerate %u %u", ctx->samplerate, ctx->in->ctx->frequence);
@@ -240,13 +254,15 @@ static void *alsa_thread(void *arg)
 			{
 				snd_pcm_drain(ctx->playback_handle);
 				ctx->state = STATE_ERROR;
+				continue;
 			}
 		}
 
 		unsigned char *buff = ctx->in->ops->peer(ctx->in->ctx);
+		int length = ctx->in->ops->length(ctx->in->ctx);
 		_alsa_checksamplerate(ctx);
 		//snd_pcm_mmap_begin
-		ret = snd_pcm_writei(ctx->playback_handle, buff, ctx->in->ctx->size / divider);
+		ret = snd_pcm_writei(ctx->playback_handle, buff, length / divider);
 		if (ret == -EPIPE)
 		{
 			warn("pcm recover");
@@ -277,6 +293,7 @@ static void alsa_destroy(sink_ctx_t *ctx)
 {
 	pthread_join(ctx->thread, NULL);
 	_pcm_close(ctx);
+	ctx->filter.ops->destroy(ctx->filter.ctx);
 	jitter_scattergather_destroy(ctx->in);
 	free(ctx);
 }

@@ -47,7 +47,7 @@ struct encoder_ctx_s
 	int nsamples;
 	int dumpfd;
 	pthread_t thread;
-	player_ctx_t *ctx;
+	player_ctx_t *player;
 	jitter_t *in;
 	unsigned char *inbuffer;
 	jitter_t *out;
@@ -72,85 +72,85 @@ void error_report(const char *format, va_list ap)
 	fprintf(stderr, format, ap);
 }
 
-static encoder_ctx_t *encoder_init(player_ctx_t *ctx)
+static encoder_ctx_t *encoder_init(player_ctx_t *player)
 {
-	encoder_ctx_t *encoder = calloc(1, sizeof(*encoder));
-	encoder->ops = encoder_lame;
-	encoder->ctx = ctx;
-	encoder->encoder = lame_init();
+	encoder_ctx_t *ctx = calloc(1, sizeof(*ctx));
+	ctx->ops = encoder_lame;
+	ctx->player = player;
+	ctx->encoder = lame_init();
 
-	lame_set_out_samplerate(encoder->encoder, 44100);
-	lame_set_in_samplerate(encoder->encoder, 44100);
-	lame_set_num_channels(encoder->encoder, 2);
-	lame_set_quality(encoder->encoder, 5);
+	lame_set_out_samplerate(ctx->encoder, 44100);
+	lame_set_in_samplerate(ctx->encoder, 44100);
+	lame_set_num_channels(ctx->encoder, 2);
+	lame_set_quality(ctx->encoder, 5);
 	//lame_set_mode(encoder->encoder, STEREO);
 	//lame_set_mode(encoder->encoder, JOINT_STEREO);
 	//lame_set_errorf(encoder->encoder, error_report);
-	lame_set_VBR(encoder->encoder, vbr_off);
+	lame_set_VBR(ctx->encoder, vbr_off);
 	//lame_set_VBR(encoder->encoder, vbr_default);
-	lame_set_disable_reservoir(encoder->encoder, 1);
-	lame_init_params(encoder->encoder);
+	lame_set_disable_reservoir(ctx->encoder, 1);
+	lame_init_params(ctx->encoder);
 
 #ifdef LAME_DUMP
-	encoder->dumpfd = open("lame_dump.mp3", O_RDWR | O_CREAT);
+	ctx->dumpfd = open("lame_dump.mp3", O_RDWR | O_CREAT, 0644);
 #endif
 	int nchannels = 2;
-	encoder->nsamples = lame_get_framesize(encoder->encoder);
+	ctx->nsamples = lame_get_framesize(ctx->encoder);
 	jitter_t *jitter = jitter_scattergather_init(jitter_name, 3,
-				encoder->nsamples * sizeof(signed short) * nchannels);
-	encoder->in = jitter;
+				ctx->nsamples * sizeof(signed short) * nchannels);
+	ctx->in = jitter;
 	jitter->format = PCM_16bits_LE_stereo;
 
-	return encoder;
+	return ctx;
 }
 
-static jitter_t *encoder_jitter(encoder_ctx_t *encoder)
+static jitter_t *encoder_jitter(encoder_ctx_t *ctx)
 {
-	return encoder->in;
+	return ctx->in;
 }
 
 static void *lame_thread(void *arg)
 {
 	int result = 0;
 	int run = 1;
-	encoder_ctx_t *encoder = (encoder_ctx_t *)arg;
+	encoder_ctx_t *ctx = (encoder_ctx_t *)arg;
 	/* start decoding */
 	while (run)
 	{
 		int ret = 0;
 
-		encoder->inbuffer = encoder->in->ops->peer(encoder->in->ctx);
-		if (encoder->outbuffer == NULL)
+		ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx);
+		if (ctx->outbuffer == NULL)
 		{
-			encoder->outbuffer = encoder->out->ops->pull(encoder->out->ctx);
+			ctx->outbuffer = ctx->out->ops->pull(ctx->out->ctx);
 		}
-		if (encoder->inbuffer)
+		if (ctx->inbuffer)
 		{
-			ret = lame_encode_buffer_interleaved(encoder->encoder, (short int *)encoder->inbuffer, encoder->nsamples,
-					encoder->outbuffer, encoder->out->ctx->size);
+			ret = lame_encode_buffer_interleaved(ctx->encoder, (short int *)ctx->inbuffer, ctx->nsamples,
+					ctx->outbuffer, ctx->out->ctx->size);
 #ifdef LAME_DUMP
-			if (encoder->dumpfd > 0 && ret > 0)
+			if (ctx->dumpfd > 0 && ret > 0)
 			{
 				dbg("encoder lame dump %d", ret);
-				write(encoder->dumpfd, encoder->outbuffer, ret);
+				write(ctx->dumpfd, ctx->outbuffer, ret);
 			}
 #endif
-			encoder->in->ops->pop(encoder->in->ctx, encoder->in->ctx->size);
+			ctx->in->ops->pop(ctx->in->ctx, ctx->in->ctx->size);
 		}
 		else
 		{
-			ret = lame_encode_flush(encoder->encoder, encoder->outbuffer, encoder->out->ctx->size);
+			ret = lame_encode_flush(ctx->encoder, ctx->outbuffer, ctx->out->ctx->size);
 		}
 		if (ret > 0)
 		{
 			encoder_dbg("encoder lame %d", ret);
-			encoder->out->ops->push(encoder->out->ctx, ret, NULL);
-			encoder->outbuffer = NULL;
+			ctx->out->ops->push(ctx->out->ctx, ret, NULL);
+			ctx->outbuffer = NULL;
 		}
 		if (ret < 0)
 		{
 			if (ret == -1)
-				err("lame error %d, not enought memory %d", ret, encoder->out->ctx->size);
+				err("lame error %d, not enought memory %d", ret, ctx->out->ctx->size);
 			else
 				err("lame error %d", ret);
 			run = 0;
@@ -159,23 +159,23 @@ static void *lame_thread(void *arg)
 	return (void *)result;
 }
 
-static int encoder_run(encoder_ctx_t *encoder, jitter_t *jitter)
+static int encoder_run(encoder_ctx_t *ctx, jitter_t *jitter)
 {
-	encoder->out = jitter;
-	pthread_create(&encoder->thread, NULL, lame_thread, encoder);
+	ctx->out = jitter;
+	pthread_create(&ctx->thread, NULL, lame_thread, ctx);
 	return 0;
 }
 
-static void encoder_destroy(encoder_ctx_t *encoder)
+static void encoder_destroy(encoder_ctx_t *ctx)
 {
 #ifdef LAME_DUMP
-	if (encoder->dumpfd > 0)
-		close(encoder->dumpfd);
+	if (ctx->dumpfd > 0)
+		close(ctx->dumpfd);
 #endif
-	pthread_join(encoder->thread, NULL);
+	pthread_join(ctx->thread, NULL);
 	/* release the decoder */
-	jitter_scattergather_destroy(encoder->in);
-	free(encoder);
+	jitter_scattergather_destroy(ctx->in);
+	free(ctx);
 }
 
 const encoder_t *encoder_lame = &(encoder_t)

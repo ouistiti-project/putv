@@ -139,9 +139,12 @@ int main(int argc, char **argv)
 	cmds_t cmds[3];
 	int nbcmds = 0;
 #ifdef CMDLINE
-	cmds[nbcmds].ops = cmds_line;
-	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, media, NULL);
-	nbcmds++;
+	if (!(mode & DAEMONIZE))
+	{
+		cmds[nbcmds].ops = cmds_line;
+		cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, media, NULL);
+		nbcmds++;
+	}
 #endif
 #ifdef JSONRPC
 	char socketpath[256];

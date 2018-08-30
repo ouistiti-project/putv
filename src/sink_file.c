@@ -79,7 +79,7 @@ static sink_ctx_t *sink_init(player_ctx_t *ctx, const char *path)
 	if (!strcmp(path, "-"))
 		fd = 1;
 	else
-		fd = open(path, O_RDWR | O_CREAT);
+		fd = open(path, O_RDWR | O_CREAT, 0644);
 	
 	if (fd >= 0)
 	{

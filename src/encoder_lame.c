@@ -46,6 +46,8 @@ struct encoder_ctx_s
 	const encoder_t *ops;
 	lame_global_flags *encoder;
 	int nsamples;
+	unsigned int samplerate;
+	unsigned int nchannels;
 	int dumpfd;
 	pthread_t thread;
 	player_ctx_t *player;
@@ -66,6 +68,7 @@ struct encoder_ctx_s
 #else
 #define dbg(...)
 #endif
+
 #define encoder_dbg(...)
 
 static const char *jitter_name = "lame encoder";
@@ -74,16 +77,15 @@ void error_report(const char *format, va_list ap)
 	fprintf(stderr, format, ap);
 }
 
-static encoder_ctx_t *encoder_init(player_ctx_t *player)
+static int encoder_lame_init(encoder_ctx_t *ctx)
 {
-	encoder_ctx_t *ctx = calloc(1, sizeof(*ctx));
-	ctx->ops = encoder_lame;
-	ctx->player = player;
+	if (ctx->encoder)
+		lame_close(ctx->encoder);
 	ctx->encoder = lame_init();
 
-	lame_set_out_samplerate(ctx->encoder, 44100);
-	lame_set_in_samplerate(ctx->encoder, 44100);
-	lame_set_num_channels(ctx->encoder, 2);
+	lame_set_out_samplerate(ctx->encoder, DEFAULT_SAMPLERATE);
+	lame_set_in_samplerate(ctx->encoder, ctx->samplerate);
+	lame_set_num_channels(ctx->encoder, ctx->nchannels);
 	lame_set_quality(ctx->encoder, 5);
 	//lame_set_mode(encoder->encoder, STEREO);
 	//lame_set_mode(encoder->encoder, JOINT_STEREO);
@@ -92,19 +94,32 @@ static encoder_ctx_t *encoder_init(player_ctx_t *player)
 	//lame_set_VBR(encoder->encoder, vbr_default);
 	lame_set_disable_reservoir(ctx->encoder, 1);
 	lame_init_params(ctx->encoder);
+	return 0;
+}
 
+static encoder_ctx_t *encoder_init(player_ctx_t *player)
+{
+	encoder_ctx_t *ctx = calloc(1, sizeof(*ctx));
+	ctx->ops = encoder_lame;
+	ctx->player = player;
+
+	ctx->nchannels = 2;
+	ctx->samplerate = DEFAULT_SAMPLERATE;
+
+	encoder_lame_init(ctx);
 #ifdef LAME_DUMP
 	ctx->dumpfd = open("lame_dump.mp3", O_RDWR | O_CREAT, 0644);
 #endif
-	int nchannels = 2;
-	ctx->nsamples = lame_get_framesize(ctx->encoder);
+	//ctx->nsamples = lame_get_framesize(ctx->encoder);
+	ctx->nsamples = 576;
 	jitter_t *jitter = jitter_scattergather_init(jitter_name, 3,
-				ctx->nsamples * sizeof(signed short) * nchannels);
+				ctx->nsamples * sizeof(signed short) * ctx->nchannels);
 	ctx->in = jitter;
 	jitter->format = PCM_16bits_LE_stereo;
+	jitter->ctx->frequence = 0;
 
 	ctx->filter.ops = filter_pcm;
-	ctx->filter.ctx = ctx->filter.ops->init(44100, 2, 2);
+	ctx->filter.ctx = ctx->filter.ops->init(DEFAULT_SAMPLERATE, 2, 2);
 	jitter->ctx->filter = &ctx->filter;
 
 	return ctx;
@@ -126,6 +141,11 @@ static void *lame_thread(void *arg)
 		int ret = 0;
 
 		ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx);
+		if (ctx->in->ctx->frequence != ctx->samplerate)
+		{
+			ctx->samplerate = ctx->in->ctx->frequence;
+			encoder_lame_init(ctx);
+		}
 		if (ctx->outbuffer == NULL)
 		{
 			ctx->outbuffer = ctx->out->ops->pull(ctx->out->ctx);
@@ -179,6 +199,7 @@ static void encoder_destroy(encoder_ctx_t *ctx)
 		close(ctx->dumpfd);
 #endif
 	pthread_join(ctx->thread, NULL);
+	lame_close(ctx->encoder);
 	/* release the decoder */
 	ctx->filter.ops->destroy(ctx->filter.ctx);
 	jitter_scattergather_destroy(ctx->in);

@@ -111,6 +111,7 @@ enum mad_flow input(void *data,
 
 	ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx);
 
+	len = ctx->in->ops->length(ctx->in->ctx);
 	if (ctx->inbuffer == NULL)
 	{
 		dbg("end of decode");
@@ -121,7 +122,7 @@ enum mad_flow input(void *data,
 	if (stream->next_frame)
 		stream->next_frame = ctx->inbuffer;
 
-	mad_stream_buffer(stream, ctx->inbuffer, ctx->in->ctx->size);
+	mad_stream_buffer(stream, ctx->inbuffer, len);
 
 	return MAD_FLOW_CONTINUE;
 }

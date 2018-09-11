@@ -242,7 +242,7 @@ struct _display_ctx_s
 	json_t *result;
 };
 
-static _display(void *arg, const char *url, const char *info, const char *mime)
+static int _display(void *arg, const char *url, const char *info, const char *mime)
 {
 	_display_ctx_t *display =(_display_ctx_t *)arg;
 	cmds_ctx_t *ctx = display->ctx;
@@ -274,6 +274,7 @@ static _display(void *arg, const char *url, const char *info, const char *mime)
 
 	if (json_is_array(result))
 		json_array_append_new(result, object);
+	return 0;
 }
 
 static int method_change(json_t *json_params, json_t **result, void *userdata)

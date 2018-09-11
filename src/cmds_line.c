@@ -94,6 +94,28 @@ static int method_list(cmds_ctx_t *ctx, char *arg)
 	return ctx->media->ops->list(ctx->media->ctx, _print_entry, (void *)&value);
 }
 
+static int _import_entry(void *arg, const char *url,
+		const char *info, const char *mime)
+{
+	cmds_ctx_t *ctx = (cmds_ctx_t *)arg;
+	ctx->media->ops->insert(ctx->media->ctx, url, info, mime);
+	return 0;
+}
+
+static int method_import(cmds_ctx_t *ctx, char *arg)
+{
+	struct stat _stat;
+
+	stat(arg, &_stat);
+	if (S_ISDIR(_stat.st_mode))
+	{
+		media_ctx_t *media_ctx = media_dir->init(arg);
+		media_dir->list(media_ctx, _import_entry, (void *)ctx);
+		media_dir->destroy(media_ctx);
+	}
+	return 0;
+}
+
 static int method_play(cmds_ctx_t *ctx, char *arg)
 {
 	return (player_state(ctx->player, STATE_PLAY) == STATE_PLAY);
@@ -220,6 +242,11 @@ static int cmds_line_cmd(cmds_ctx_t *ctx)
 				{
 					method = method_list;
 					i += 4;
+				}
+				if (!strncmp(buffer + i, "import",6))
+				{
+					method = method_import;
+					i += 6;
 				}
 				if (!strncmp(buffer + i, "play",4))
 				{

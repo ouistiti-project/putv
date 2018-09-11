@@ -210,7 +210,10 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 
 	ret = sqlite3_step(statement);
 	if (ret != SQLITE_DONE)
+	{
+		err("media sqlite: error on insert %s", ret);
 		ret = -1;
+	}
 	else
 	{
 		dbg("putv: new media %s", path);

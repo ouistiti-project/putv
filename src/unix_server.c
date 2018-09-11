@@ -76,7 +76,7 @@ void unixserver_remove(thread_info_t *info)
 int unixserver_run(client_routine_t routine, void *userctx, const char *socketpath)
 {
 	int sock;
-	int ret;
+	int ret = -1;
 
 	sock = socket(AF_UNIX, SOCK_STREAM, 0);
 	if (sock > 0)
@@ -94,6 +94,7 @@ int unixserver_run(client_routine_t routine, void *userctx, const char *socketpa
 		ret = bind(sock, (struct sockaddr *) &addr, sizeof(addr));
 		if (ret == 0) {
 			ret = listen(sock, 10);
+			fprintf(stderr, "Unix server on : %s\n", socketpath);
 		}
 		if (ret == 0) {
 			int newsock = 0;
@@ -111,7 +112,7 @@ int unixserver_run(client_routine_t routine, void *userctx, const char *socketpa
 		}
 	}
 	if (ret) {
-		fprintf(stderr, "error : %s\n", strerror(errno));
+		fprintf(stderr, "Unix server error : %s\n", strerror(errno));
 	}
-	return 0;
+	return ret;
 }

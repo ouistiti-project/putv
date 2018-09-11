@@ -111,15 +111,16 @@ enum mad_flow input(void *data,
 
 	ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx);
 
+	if (ctx->inbuffer == NULL)
+	{
+		dbg("end of decode");
+		return MAD_FLOW_STOP;
+	}
 	//input is called for each frame when there is
 	// not enought data to decode the "next frame"
 	if (stream->next_frame)
 		stream->next_frame = ctx->inbuffer;
 
-	if (ctx->inbuffer == NULL)
-	{
-		return MAD_FLOW_STOP;
-	}
 	mad_stream_buffer(stream, ctx->inbuffer, ctx->in->ctx->size);
 
 	return MAD_FLOW_CONTINUE;

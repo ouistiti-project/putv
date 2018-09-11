@@ -27,6 +27,7 @@
  *****************************************************************************/
 #include <stdio.h>
 #include <unistd.h>
+#include <libgen.h>
 
 #include <pthread.h>
 
@@ -75,7 +76,7 @@ int main(int argc, char **argv)
 	pthread_t thread;
 	const char *root = "/tmp";
 	int mode = 0;
-	const char *name = "putv";
+	const char *name = basename(argv[0]);
 	
 	int opt;
 	do

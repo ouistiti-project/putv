@@ -21,7 +21,6 @@ struct jitter_ctx_s
 	unsigned int frequence;
 	heartbeat_t heartbeat;
 	void *heart;
-	filter_t *filter;
 	void *private;
 };
 

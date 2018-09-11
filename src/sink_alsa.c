@@ -34,7 +34,6 @@
 
 #include "player.h"
 #include "jitter.h"
-#include "filter.h"
 typedef struct sink_s sink_t;
 typedef struct sink_ctx_s sink_ctx_t;
 struct sink_ctx_s
@@ -49,7 +48,6 @@ struct sink_ctx_s
 	unsigned int samplerate;
 	int samplesize;
 	int nchannels;
-	filter_t filter;
 };
 #define SINK_CTX
 #include "sink.h"
@@ -146,12 +144,17 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 
 	snd_pcm_uframes_t buffer_size;
 	snd_pcm_hw_params_get_buffer_size(hw_params, &buffer_size);
-	dbg("buffer size %lu", buffer_size);
 	snd_pcm_uframes_t periodsize;
 	snd_pcm_hw_params_get_period_size(hw_params, &periodsize, 0);
-	dbg("period size %lu", periodsize);
-	dbg("sample size %d", ctx->samplesize);
-	dbg("nchannels %u", ctx->nchannels);
+	dbg("sink alsa config :\n" \
+		"\tbuffer size %lu\n" \
+		"\tperiod size %lu\n" \
+		"\tsample size %d\n" \
+		"\tnchannels %u",
+		buffer_size,
+		periodsize,
+		ctx->samplesize,
+		ctx->nchannels);
 	*size = periodsize * ctx->samplesize * ctx->nchannels;
 
 	ret = snd_pcm_prepare(ctx->playback_handle);
@@ -198,10 +201,6 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 	jitter->ctx->frequence = DEFAULT_SAMPLERATE;
 	jitter->ctx->thredhold = 2;
 	jitter->format = format;
-
-	ctx->filter.ops = filter_pcm;
-	ctx->filter.ctx = ctx->filter.ops->init(ctx->samplerate, ctx->samplesize, ctx->nchannels);
-	jitter->ctx->filter = &ctx->filter;
 
 	ctx->in = jitter;
 
@@ -293,7 +292,6 @@ static void alsa_destroy(sink_ctx_t *ctx)
 {
 	pthread_join(ctx->thread, NULL);
 	_pcm_close(ctx);
-	ctx->filter.ops->destroy(ctx->filter.ctx);
 	jitter_scattergather_destroy(ctx->in);
 	free(ctx);
 }

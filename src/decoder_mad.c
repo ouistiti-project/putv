@@ -36,6 +36,7 @@
 #include <id3tag.h>
 
 #include "player.h"
+#include "filter.h"
 typedef struct decoder_s decoder_t;
 typedef struct decoder_ctx_s decoder_ctx_t;
 struct decoder_ctx_s
@@ -49,11 +50,11 @@ struct decoder_ctx_s
 	jitter_t *out;
 	unsigned char *buffer;
 	size_t bufferlen;
+	filter_t filter;
 };
 #define DECODER_CTX
 #include "decoder.h"
 #include "jitter.h"
-#include "filter.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -129,20 +130,20 @@ enum mad_flow output(void *data,
 		     struct mad_header const *header,
 		     struct mad_pcm *pcm)
 {
-	decoder_ctx_t *decoder = (decoder_ctx_t *)data;
+	decoder_ctx_t *ctx = (decoder_ctx_t *)data;
 	filter_audio_t audio;
 
 	/* pcm->samplerate contains the sampling frequency */
 
 	audio.samplerate = pcm->samplerate;
-	if (decoder->out->ctx->frequence == 0)
+	if (ctx->out->ctx->frequence == 0)
 	{
 		decoder_dbg("decoder change samplerate to %u", pcm->samplerate);
-		decoder->out->ctx->frequence = pcm->samplerate;
+		ctx->out->ctx->frequence = pcm->samplerate;
 	}
-	else if (decoder->out->ctx->frequence != pcm->samplerate)
+	else if (ctx->out->ctx->frequence != pcm->samplerate)
 	{
-		err("decoder: samplerate %d not supported", decoder->out->ctx->frequence);
+		err("decoder: samplerate %d not supported", ctx->out->ctx->frequence);
 	}
 
 	audio.nchannels = pcm->channels;
@@ -157,20 +158,20 @@ enum mad_flow output(void *data,
 		audio.samples[1] = audio.samples[0];
 	while (audio.nsamples > 0)
 	{
-		if (decoder->buffer == NULL)
+		if (ctx->buffer == NULL)
 		{
-			decoder->buffer = decoder->out->ops->pull(decoder->out->ctx);
+			ctx->buffer = ctx->out->ops->pull(ctx->out->ctx);
 		}
 
-		decoder->bufferlen +=
-			decoder->out->ctx->filter->ops->run(decoder->out->ctx->filter->ctx, &audio,
-				decoder->buffer + decoder->bufferlen,
-				decoder->out->ctx->size - decoder->bufferlen);
-		if (decoder->bufferlen >= decoder->out->ctx->size)
+		ctx->bufferlen +=
+			ctx->filter.ops->run(ctx->filter.ctx, &audio,
+				ctx->buffer + ctx->bufferlen,
+				ctx->out->ctx->size - ctx->bufferlen);
+		if (ctx->bufferlen >= ctx->out->ctx->size)
 		{
-			decoder->out->ops->push(decoder->out->ctx, decoder->out->ctx->size, NULL);
-			decoder->buffer = NULL;
-			decoder->bufferlen = 0;
+			ctx->out->ops->push(ctx->out->ctx, ctx->out->ctx->size, NULL);
+			ctx->buffer = NULL;
+			ctx->bufferlen = 0;
 		}
 	}
 
@@ -228,21 +229,21 @@ enum mad_flow error(void *data,
 #define NBUFFER 3
 
 static const char *jitter_name = "mad decoder";
-static decoder_ctx_t *mad_init(player_ctx_t *ctx)
+static decoder_ctx_t *mad_init(player_ctx_t *player)
 {
-	decoder_ctx_t *decoder = calloc(1, sizeof(*decoder));
-	decoder->ops = decoder_mad;
-	decoder->nchannels = 2;
+	decoder_ctx_t *ctx = calloc(1, sizeof(*ctx));
+	ctx->ops = decoder_mad;
+	ctx->nchannels = 2;
 
-	mad_decoder_init(&decoder->decoder, decoder,
+	mad_decoder_init(&ctx->decoder, ctx,
 			input, 0 /* header */, 0 /* filter */, output,
 			error, 0 /* message */);
 
 	jitter_t *jitter = jitter_ringbuffer_init(jitter_name, NBUFFER, BUFFERSIZE);
-	decoder->in = jitter;
+	ctx->in = jitter;
 	jitter->format = MPEG2_3_MP3;
 
-	return decoder;
+	return ctx;
 }
 
 static jitter_t *mad_jitter(decoder_ctx_t *decoder)
@@ -268,25 +269,49 @@ static void *mad_thread(void *arg)
 	return (void *)result;
 }
 
-static int mad_run(decoder_ctx_t *decoder, jitter_t *jitter)
+static int mad_run(decoder_ctx_t *ctx, jitter_t *jitter)
 {
-	decoder->out = jitter;
-	if (decoder->out->format > PCM_32bits_BE_stereo)
+	int samplesize = 4;
+	int nchannels = 2;
+	ctx->out = jitter;
+	switch (ctx->out->format)
 	{
-		err("decoder out format not supported %d", decoder->out->format);
+	case PCM_16bits_LE_mono:
+		samplesize = 2;
+		nchannels = 1;
+	break;
+	case PCM_16bits_LE_stereo:
+		samplesize = 2;
+		nchannels = 2;
+	break;
+	case PCM_24bits_LE_stereo:
+		samplesize = 3;
+		nchannels = 2;
+	break;
+	case PCM_32bits_BE_stereo:
+	case PCM_32bits_LE_stereo:
+		samplesize = 4;
+		nchannels = 2;
+	break;
+	default:
+		err("decoder out format not supported %d", ctx->out->format);
 		return -1;
 	}
-	pthread_create(&decoder->thread, NULL, mad_thread, decoder);
+	ctx->filter.ops = filter_pcm;
+	ctx->filter.ctx = ctx->filter.ops->init(jitter->ctx->frequence, samplesize, nchannels);
+
+	pthread_create(&ctx->thread, NULL, mad_thread, ctx);
 	return 0;
 }
 
-static void mad_destroy(decoder_ctx_t *decoder)
+static void mad_destroy(decoder_ctx_t *ctx)
 {
-	pthread_join(decoder->thread, NULL);
+	pthread_join(ctx->thread, NULL);
 	/* release the decoder */
-	mad_decoder_finish(&decoder->decoder);
-	jitter_ringbuffer_destroy(decoder->in);
-	free(decoder);
+	mad_decoder_finish(&ctx->decoder);
+	ctx->filter.ops->destroy(ctx->filter.ctx);
+	jitter_ringbuffer_destroy(ctx->in);
+	free(ctx);
 }
 
 const decoder_t *decoder_mad = &(decoder_t)

@@ -38,7 +38,6 @@
 #include <lame/lame.h>
 
 #include "player.h"
-#include "filter.h"
 typedef struct encoder_s encoder_t;
 typedef struct encoder_ctx_s encoder_ctx_t;
 struct encoder_ctx_s
@@ -55,7 +54,6 @@ struct encoder_ctx_s
 	unsigned char *inbuffer;
 	jitter_t *out;
 	unsigned char *outbuffer;
-	filter_t filter;
 };
 #define ENCODER_CTX
 #include "encoder.h"
@@ -117,10 +115,6 @@ static encoder_ctx_t *encoder_init(player_ctx_t *player)
 	ctx->in = jitter;
 	jitter->format = PCM_16bits_LE_stereo;
 	jitter->ctx->frequence = 0;
-
-	ctx->filter.ops = filter_pcm;
-	ctx->filter.ctx = ctx->filter.ops->init(DEFAULT_SAMPLERATE, 2, 2);
-	jitter->ctx->filter = &ctx->filter;
 
 	return ctx;
 }
@@ -201,7 +195,6 @@ static void encoder_destroy(encoder_ctx_t *ctx)
 	pthread_join(ctx->thread, NULL);
 	lame_close(ctx->encoder);
 	/* release the decoder */
-	ctx->filter.ops->destroy(ctx->filter.ctx);
 	jitter_scattergather_destroy(ctx->in);
 	free(ctx);
 }

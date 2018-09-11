@@ -31,6 +31,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 
 #include <pthread.h>
 
@@ -81,7 +82,10 @@ static int _print_entry(void *arg, const char *url,
 {
 	int *index = (int*)arg;
 	printf("playlist[%d]: %s\n", *index, url);
+	if (info != NULL)
+		printf("\t%s\n", info);
 	(*index)++;
+	return 0;
 }
 
 static int method_list(cmds_ctx_t *ctx, char *arg)

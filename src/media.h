@@ -38,4 +38,5 @@ struct media_s
 
 extern media_ops_t *media_sqlite;
 extern media_ops_t *media_file;
+extern media_ops_t *media_dir;
 #endif

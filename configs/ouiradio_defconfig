@@ -1,6 +1,7 @@
 PUTV=putv
 MEDIA_SQLITE=y
 MEDIA_FILE=n
+MEDIA=media_sqlite
 SRC_FILE=n
 SRC_CURL=y
 DECODER_MAD=y

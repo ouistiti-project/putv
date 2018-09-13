@@ -67,6 +67,9 @@ struct media_dirlist_s
 #define OPTION_LOOP 0x0001
 #define OPTION_RANDOM 0x0002
 
+#define PROTOCOLNAME "file://"
+#define PROTOCOLNAME_LENGTH 7
+
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #ifdef DEBUG
@@ -90,6 +93,24 @@ static const char *utils_getmime(const char *path)
 		return mime_mp3;
 	dbg("Unknonw mime for %s", path);
 	return NULL;
+}
+
+static char *utils_getpath(const char *url)
+{
+	char *path = strstr(url, "file://");
+	if (path == NULL)
+	{
+		if (strstr(url, "://"))
+		{
+			return NULL;
+		}
+		path = (char *)url;
+	}
+	else
+		path += sizeof("file://") - 1;
+	if (path[0] == '/')
+		path++;
+	return path;
 }
 
 /**
@@ -127,7 +148,7 @@ static int _run_cb(_find_mediaid_t *mdata, const char *path, const char *mime)
 		{ ID3_FRAME_YEAR,   N_("Year")      },
 		{ ID3_FRAME_GENRE,  N_("Genre")     },
 		};
-		struct id3_file *fd = id3_file_open(path, ID3_FILE_MODE_READONLY);
+		struct id3_file *fd = id3_file_open(path + PROTOCOLNAME_LENGTH, ID3_FILE_MODE_READONLY);
 		struct id3_tag *tag = id3_file_tag(fd);
 
 		object = json_object();
@@ -170,7 +191,6 @@ static int _find_mediaid(void *arg, media_ctx_t *ctx, int mediaid, const char *p
 	else if (mdata->id == -1 && mdata->cb != NULL)
 		_run_cb(mdata, path, mime);
 
-	
 	return ret;
 }
 
@@ -187,20 +207,12 @@ static int _find(media_ctx_t *ctx, media_dirlist_t **pit, int *pmediaid, _findcb
 	if (it == NULL)
 	{
 		it = calloc(1, sizeof(*it));
-		char *path = strstr(ctx->url, "file://");
+		char *path = utils_getpath(ctx->url);
 		if (path == NULL)
 		{
-			if (strstr(ctx->url, "://"))
-			{
-				free(it);
-				return -1;
-			}
-			path = (char *)ctx->url;
+			free(it);
+			return -1;
 		}
-		else
-			path += sizeof("file://") - 1;
-		if (path[0] == '/')
-			path++;
 		it->path = malloc(1 + strlen(path) + 1);
 		sprintf(it->path,"/%s", path);
 		it->nitems = scandir(it->path, &it->items, NULL, alphasort);
@@ -247,10 +259,10 @@ static int _find(media_ctx_t *ctx, media_dirlist_t **pit, int *pmediaid, _findcb
 			break;
 			case DT_REG:
 			{
-				char *path = malloc(strlen(it->path) + 1 + strlen(it->items[it->index]->d_name) + 1);
+				char *path = malloc(PROTOCOLNAME_LENGTH + strlen(it->path) + 1 + strlen(it->items[it->index]->d_name) + 1);
 				if (path)
 				{
-					sprintf(path,"%s/%s", it->path, it->items[it->index]->d_name);
+					sprintf(path,PROTOCOLNAME"%s/%s", it->path, it->items[it->index]->d_name);
 					const char *mime = utils_getmime(path);
 					if (mime != NULL)
 						ret = cb(arg, ctx, *pmediaid, path, mime);
@@ -334,10 +346,10 @@ static int media_play(media_ctx_t *ctx, media_parse_t cb, void *data)
 	media_dirlist_t *it = ctx->current;
 	if (it != NULL && it->items[it->index]->d_type != DT_DIR)
 	{
-		char *path = malloc(strlen(it->path) + 1 + strlen(it->items[it->index]->d_name) + 1);
+		char *path = malloc(PROTOCOLNAME_LENGTH+strlen(it->path) + 1 + strlen(it->items[it->index]->d_name) + 1);
 		if (path)
 		{
-			sprintf(path,"%s/%s", it->path, it->items[it->index]->d_name);
+			sprintf(path,PROTOCOLNAME"%s/%s", it->path, it->items[it->index]->d_name);
 			ret = cb(data, path, NULL, utils_getmime(path));
 			free(path);
 		}

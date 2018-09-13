@@ -46,6 +46,9 @@ struct media_ctx_s
 #define OPTION_LOOP 0x0001
 #define OPTION_RANDOM 0x0002
 
+#define PROTOCOLNAME "file://"
+#define PROTOCOLNAME_LENGTH 7
+
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #ifdef DEBUG
@@ -193,8 +196,22 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 		return -1;
 
 	int index;
+	char *tpath = NULL;
+	if (strstr(path, "://"))
+	{
+		tpath = malloc(strlen(path)+1);
+		strcpy(tpath, path);
+	}
+	else
+	{
+		int len = PROTOCOLNAME_LENGTH + strlen(path) + 1;
+		tpath = malloc(len);
+		snprintf(tpath, len, PROTOCOLNAME"%s", path);
+	}
 	index = sqlite3_bind_parameter_index(statement, "@PATH");
-	ret = sqlite3_bind_text(statement, index, path, -1, SQLITE_STATIC);
+	ret = sqlite3_bind_text(statement, index, tpath, -1, SQLITE_STATIC);
+	free(tpath);
+
 	index = sqlite3_bind_parameter_index(statement, "@INFO");
 	if (info != NULL)
 		ret = sqlite3_bind_text(statement, index, info, -1, SQLITE_STATIC);

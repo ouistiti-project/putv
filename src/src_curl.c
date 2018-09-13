@@ -128,8 +128,13 @@ static src_ctx_t *src_init(player_ctx_t *player, const char * arg)
 static void *src_thread(void *arg)
 {
 	src_ctx_t *ctx = (src_ctx_t *)arg;
-	curl_easy_perform(ctx->curl);
-	ctx->out->ops->reset(ctx->out->ctx);
+	int ret = curl_easy_perform(ctx->curl);
+	if ( ret != CURLE_OK)
+	{
+		dbg("curl error %s on %s", ret, arg);
+	}
+	//ctx->out->ops->reset(ctx->out->ctx);
+
 	ctx->outbuffer = ctx->out->ops->pull(ctx->out->ctx);
 	if (ctx->outbuffer != NULL)
 	{

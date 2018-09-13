@@ -43,11 +43,14 @@
 
 #define N_(string) string
 
+#define MINCOUNT 50
+
 typedef struct media_dirlist_s media_dirlist_t;
 struct media_ctx_s
 {
 	const char *url;
 	int mediaid;
+	int count;
 	unsigned int options;
 	media_dirlist_t *first;
 	media_dirlist_t *current;
@@ -291,6 +294,8 @@ static int _find(media_ctx_t *ctx, media_dirlist_t **pit, int *pmediaid, _findcb
 		free(it);
 		it = prev;
 	}
+	if (*pmediaid > ctx->count)
+		ctx->count = *pmediaid;
 	*pit = it;
 	return ret;
 }
@@ -300,7 +305,7 @@ static int _find(media_ctx_t *ctx, media_dirlist_t **pit, int *pmediaid, _findcb
  **/
 static int media_count(media_ctx_t *ctx)
 {
-	return 1;
+	return ctx->count;
 }
 
 static int media_insert(media_ctx_t *ctx, const char *path, const char *info, const char *mime)
@@ -362,6 +367,12 @@ static int media_next(media_ctx_t *ctx)
 	int ret;
 	_find_mediaid_t data = {ctx->mediaid + 1, NULL, NULL};
 	ret = _find(ctx, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
+	if (ret != 0)
+	{
+		ctx->mediaid = -1;
+		if (ctx->options & OPTION_LOOP)
+			media_next(ctx);
+	}
 	return ctx->mediaid;
 }
 
@@ -392,6 +403,26 @@ static void media_loop(media_ctx_t *ctx, int enable)
 
 static void media_random(media_ctx_t *ctx, int enable)
 {
+	if (enable)
+	{
+		ctx->options |= OPTION_RANDOM;
+		if (ctx->options & OPTION_RANDOM)
+		{
+			int ret;
+			if (ctx->count > 0)
+				ctx->mediaid = (random() % ctx->count);
+			_find_mediaid_t data = {ctx->mediaid, NULL, NULL};
+			ret = _find(ctx, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
+			if (ret != 0)
+			{
+				ctx->count = ctx->mediaid;
+				if (ctx->count > 0)
+					ctx->mediaid = (random() % ctx->count);
+			}
+		}
+	}
+	else
+		ctx->options &= ~OPTION_RANDOM;
 }
 
 static int media_options(media_ctx_t *ctx, media_options_t option, int enable)

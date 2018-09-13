@@ -68,6 +68,7 @@ static int run_player(player_ctx_t *player, jitter_t *sink_jitter)
 #define SRC_STDIN 0x02
 #define AUTOSTART 0x04
 #define LOOP 0x08
+#define RANDOM 0x10
 int main(int argc, char **argv)
 {
 	const char *mediapath = SYSCONFDIR"/putv.db";
@@ -81,7 +82,7 @@ int main(int argc, char **argv)
 	int opt;
 	do
 	{
-		opt = getopt(argc, argv, "R:m:o:hDVxal");
+		opt = getopt(argc, argv, "R:m:o:hDVxalr");
 		switch (opt)
 		{
 			case 'R':
@@ -107,6 +108,9 @@ int main(int argc, char **argv)
 			break;
 			case 'l':
 				mode |= LOOP;
+			break;
+			case 'r':
+				mode |= RANDOM;
 			break;
 		}
 	} while(opt != -1);
@@ -137,6 +141,11 @@ int main(int argc, char **argv)
 	if (mode & LOOP)
 	{
 		media->ops->options(media_ctx, MEDIA_LOOP, 1);
+	}
+
+	if (mode & RANDOM)
+	{
+		media->ops->options(media_ctx, MEDIA_RANDOM, 1);
 	}
 
 	player_ctx_t *player = player_init(media);

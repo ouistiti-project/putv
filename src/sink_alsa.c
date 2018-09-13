@@ -149,10 +149,12 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 	dbg("sink alsa config :\n" \
 		"\tbuffer size %lu\n" \
 		"\tperiod size %lu\n" \
+		"\tsample rate %d\n" \
 		"\tsample size %d\n" \
 		"\tnchannels %u",
 		buffer_size,
 		periodsize,
+		rate,
 		ctx->samplesize,
 		ctx->nchannels);
 	*size = periodsize * ctx->samplesize * ctx->nchannels;
@@ -205,7 +207,6 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 	ctx->in = jitter;
 
 	ctx->player = player;
-	warn("alsa samplerate %u %u", ctx->samplerate, ctx->in->ctx->frequence);
 
 	return ctx;
 }

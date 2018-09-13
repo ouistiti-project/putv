@@ -27,7 +27,11 @@
  *****************************************************************************/
 #include <stdio.h>
 #include <unistd.h>
+
 #include <libgen.h>
+
+#include <time.h>
+#include <signal.h>
 
 #include <pthread.h>
 
@@ -44,6 +48,24 @@
 #define dbg(format, ...) fprintf(stderr, "\x1B[32m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #else
 #define dbg(...)
+#endif
+
+#ifdef USE_TIMER
+timer_t timerid;
+
+static void _autostart(union sigval arg)
+{
+	player_ctx_t *player = (player_ctx_t *)arg.sival_ptr;
+	if (player_state(player, STATE_UNKNOWN) != STATE_PLAY)
+		player_state(player, STATE_PLAY);
+	if (player_mediaid(player) < 0)
+	{
+		struct itimerspec timer = {{5, 0}, {5, 0}};
+		timer_settime(timerid, 0, &timer,NULL);
+	}
+	else
+		timer_delete(timerid);
+}
 #endif
 
 static int run_player(player_ctx_t *player, jitter_t *sink_jitter)
@@ -153,6 +175,22 @@ int main(int argc, char **argv)
 	if (mode & AUTOSTART)
 	{
 		player_state(player, STATE_PLAY);
+#ifdef USE_TIMER
+		if (media->ops->current(media_ctx, NULL, NULL) != 0)
+		{
+			int ret;
+			struct sigevent event;
+			event.sigev_notify = SIGEV_THREAD;
+			event.sigev_value.sival_ptr = player;
+			event.sigev_notify_function = _autostart;
+			event.sigev_notify_attributes = NULL;
+			ret = timer_create(CLOCK_REALTIME, &event, &timerid);
+
+			struct itimerspec timer = {{5, 0}, {5, 0}};
+			ret = timer_settime(timerid, 0, &timer,NULL);
+
+		}
+#endif
 	}
 
 	cmds_t cmds[3];

@@ -12,6 +12,9 @@ $(PUTV)_CFLAGS+=-DMEDIA=$(MEDIA)
 $(PUTV)_SOURCES+=jitter_sg.c
 $(PUTV)_SOURCES+=jitter_ring.c
 $(PUTV)_LIBRARY+=pthread sqlite3
+$(PUTV)_SOURCES-$(HEARTBEAT)+=heartbeat_samples.c
+$(PUTV)_CFLAGS-$(HEARTBEAT)+=-DHEARTBEAT
+$(PUTV)_LIBRARY-$(HEARTBEAT)+=rt
 $(PUTV)_SOURCES-$(SRC_FILE)+=src_file.c
 $(PUTV)_CFLAGS-$(SRC_FILE)+=-DSRC_FILE
 $(PUTV)_CFLAGS-$(SRC_FILE)+=-DSRC=src_file

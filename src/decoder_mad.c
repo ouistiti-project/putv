@@ -114,7 +114,6 @@ enum mad_flow input(void *data,
 	len = ctx->in->ops->length(ctx->in->ctx);
 	if (ctx->inbuffer == NULL)
 	{
-		dbg("end of decode");
 		return MAD_FLOW_STOP;
 	}
 	//input is called for each frame when there is

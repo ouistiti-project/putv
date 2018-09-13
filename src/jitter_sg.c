@@ -214,6 +214,10 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 		{
 			private->out->state = SCATTER_POP;
 			int tlen = 0;
+			if (private->out->beat && jitter->heart != NULL)
+			{
+				jitter->heart(jitter->heart_ctx, private->out->beat);
+			}
 			do
 			{
 				int ret;
@@ -288,8 +292,10 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter)
 	}
 	private->out->state = SCATTER_POP;
 	pthread_mutex_unlock(&private->mutex);
-	if (private->out->beat)
-		jitter->heartbeat(jitter->heart, private->out->beat);
+	if (private->out->beat && jitter->heart != NULL)
+	{
+		jitter->heart(jitter->heart_ctx, private->out->beat);
+	}
 	return private->out->data;
 }
 

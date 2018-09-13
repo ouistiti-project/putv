@@ -38,15 +38,17 @@
 #include <lame/lame.h>
 
 #include "player.h"
+#include "heartbeat.h"
+
 typedef struct encoder_s encoder_t;
 typedef struct encoder_ctx_s encoder_ctx_t;
 struct encoder_ctx_s
 {
 	const encoder_t *ops;
 	lame_global_flags *encoder;
-	int nsamples;
 	unsigned int samplerate;
 	unsigned int nchannels;
+	int samplesframe;
 	int dumpfd;
 	pthread_t thread;
 	player_ctx_t *player;
@@ -54,6 +56,9 @@ struct encoder_ctx_s
 	unsigned char *inbuffer;
 	jitter_t *out;
 	unsigned char *outbuffer;
+	heartbeat_t heartbeat;
+	heartbeat_samples_t beat;
+	unsigned long nsamples;
 };
 #define ENCODER_CTX
 #include "encoder.h"
@@ -108,13 +113,14 @@ static encoder_ctx_t *encoder_init(player_ctx_t *player)
 #ifdef LAME_DUMP
 	ctx->dumpfd = open("lame_dump.mp3", O_RDWR | O_CREAT, 0644);
 #endif
-	//ctx->nsamples = lame_get_framesize(ctx->encoder);
-	ctx->nsamples = 576;
+	//ctx->samplesframe = lame_get_framesize(ctx->encoder);
+	ctx->samplesframe = 576;
 	jitter_t *jitter = jitter_scattergather_init(jitter_name, 3,
-				ctx->nsamples * sizeof(signed short) * ctx->nchannels);
+				ctx->samplesframe * sizeof(signed short) * ctx->nchannels);
 	ctx->in = jitter;
 	jitter->format = PCM_16bits_LE_stereo;
 	jitter->ctx->frequence = 0;
+	jitter->ctx->thredhold = 1;
 
 	return ctx;
 }
@@ -135,6 +141,11 @@ static void *lame_thread(void *arg)
 		int ret = 0;
 
 		ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx);
+		unsigned int inlength = ctx->in->ops->length(ctx->in->ctx);
+		inlength /= sizeof(short int) * ctx->nchannels;
+		ctx->nsamples += inlength;
+		if (inlength < ctx->samplesframe)
+			warn("encoder lame: frame too small %d %d %d", inlength, ctx->nsamples, ctx->in->ctx->size);
 		if (ctx->in->ctx->frequence != ctx->samplerate)
 		{
 			ctx->samplerate = ctx->in->ctx->frequence;
@@ -146,7 +157,8 @@ static void *lame_thread(void *arg)
 		}
 		if (ctx->inbuffer)
 		{
-			ret = lame_encode_buffer_interleaved(ctx->encoder, (short int *)ctx->inbuffer, ctx->nsamples,
+			ret = lame_encode_buffer_interleaved(ctx->encoder,
+					(short int *)ctx->inbuffer, inlength,
 					ctx->outbuffer, ctx->out->ctx->size);
 #ifdef LAME_DUMP
 			if (ctx->dumpfd > 0 && ret > 0)
@@ -159,12 +171,26 @@ static void *lame_thread(void *arg)
 		}
 		else
 		{
-			ret = lame_encode_flush(ctx->encoder, ctx->outbuffer, ctx->out->ctx->size);
+			ret = lame_encode_flush_nogap(ctx->encoder, ctx->outbuffer, ctx->out->ctx->size);
 		}
 		if (ret > 0)
 		{
+			heartbeat_samples_t *beat = NULL;
+#ifdef HEARTBEAT
 			encoder_dbg("encoder lame %d", ret);
-			ctx->out->ops->push(ctx->out->ctx, ret, NULL);
+			int nsamples = lame_get_mf_samples_to_encode(ctx->encoder);
+
+			if (ctx->nsamples > nsamples)
+			{
+				ctx->beat.nsamples = ctx->nsamples - nsamples;
+				if (ctx->beat.nsamples > (ctx->samplerate / 50))
+				{
+					beat = &ctx->beat;
+					ctx->nsamples = 0;
+				}
+			}
+#endif
+			ctx->out->ops->push(ctx->out->ctx, ret, beat);
 			ctx->outbuffer = NULL;
 		}
 		if (ret < 0)
@@ -182,6 +208,16 @@ static void *lame_thread(void *arg)
 static int encoder_run(encoder_ctx_t *ctx, jitter_t *jitter)
 {
 	ctx->out = jitter;
+#ifdef HEARTBEAT
+	if (heartbeat_samples)
+	{
+		ctx->heartbeat.ops = heartbeat_samples;
+		ctx->heartbeat.ctx = heartbeat_samples->init(ctx->samplerate, 2, ctx->nchannels);
+		dbg("set heart %s", jitter->ctx->name);
+		jitter->ctx->heart = heartbeat_samples->wait;
+		jitter->ctx->heart_ctx = ctx->heartbeat.ctx;
+	}
+#endif
 	pthread_create(&ctx->thread, NULL, lame_thread, ctx);
 	return 0;
 }

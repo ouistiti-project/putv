@@ -234,7 +234,10 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter)
 		else
 			return NULL;
 		if (private->state == JITTER_FILLING)
+		{
+			dbg("jitter %s not enought data %s/%d", jitter->name, private->level, jitter->size);
 			return NULL;
+		}
 	}
 	pthread_mutex_lock(&private->mutex);
 	if ((private->out + jitter->size) > private->bufferend)

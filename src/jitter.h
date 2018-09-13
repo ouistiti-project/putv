@@ -6,7 +6,7 @@ typedef struct filter_s filter_t;
 
 typedef int (*consume_t)(void *consumer, unsigned char *buffer, size_t size);
 typedef int (*produce_t)(void *producter, unsigned char *buffer, size_t size);
-typedef int (*heartbeat_t)(void *heart, void *beat);
+typedef int (*heart_t)(void *heart, void *beat);
 typedef struct jitter_ctx_s jitter_ctx_t;
 struct jitter_ctx_s
 {
@@ -19,8 +19,8 @@ struct jitter_ctx_s
 	produce_t produce;
 	void *producter;
 	unsigned int frequence;
-	heartbeat_t heartbeat;
-	void *heart;
+	heart_t heart;
+	void *heart_ctx;
 	void *private;
 };
 

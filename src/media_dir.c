@@ -27,11 +27,16 @@
  *****************************************************************************/
 #include <string.h>
 #include <stdlib.h>
-#include <pthread.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <dirent.h>
+
+#include <pthread.h>
+
+#ifdef USE_INOTIFY
+#include <sys/inotify.h>
+#endif
 
 #ifdef USE_ID3TAG
 #include <id3tag.h>
@@ -52,6 +57,9 @@ struct media_ctx_s
 	int mediaid;
 	int count;
 	unsigned int options;
+	int inotifyfd;
+	int dirfd;
+	pthread_t thread;
 	media_dirlist_t *first;
 	media_dirlist_t *current;
 };
@@ -59,8 +67,14 @@ struct media_ctx_s
 struct media_dirlist_s
 {
 	char *path;
+	/**
+	 * items into the directory
+	 */
 	struct dirent **items;
 	int nitems;
+	/**
+	 * current item into the directory
+	 */
 	int index;
 	int mediaid;
 	media_dirlist_t *next;
@@ -69,6 +83,7 @@ struct media_dirlist_s
 
 #define OPTION_LOOP 0x0001
 #define OPTION_RANDOM 0x0002
+#define OPTION_INOTIFY 0x1000
 
 #define PROTOCOLNAME "file://"
 #define PROTOCOLNAME_LENGTH 7
@@ -221,7 +236,7 @@ static int _find(media_ctx_t *ctx, media_dirlist_t **pit, int *pmediaid, _findcb
 		it->nitems = scandir(it->path, &it->items, NULL, alphasort);
 		*pmediaid = 0;
 	}
-	while (it->index != it->nitems)
+	while (it->nitems > 0 && it->index != it->nitems)
 	{
 		if (it->items[it->index]->d_name[0] == '.')
 		{
@@ -349,7 +364,7 @@ static int media_play(media_ctx_t *ctx, media_parse_t cb, void *data)
 {
 	int ret = -1;
 	media_dirlist_t *it = ctx->current;
-	if (it != NULL && it->items[it->index]->d_type != DT_DIR)
+	if (it != NULL && it->nitems > 0 && it->items[it->index]->d_type != DT_DIR)
 	{
 		char *path = malloc(PROTOCOLNAME_LENGTH+strlen(it->path) + 1 + strlen(it->items[it->index]->d_name) + 1);
 		if (path)
@@ -366,11 +381,13 @@ static int media_next(media_ctx_t *ctx)
 {
 	int ret;
 	_find_mediaid_t data = {ctx->mediaid + 1, NULL, NULL};
+
 	ret = _find(ctx, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
 	if (ret != 0)
 	{
+		ctx->count = ctx->mediaid;
 		ctx->mediaid = -1;
-		if (ctx->options & OPTION_LOOP)
+		if (ctx->count > 0 && ctx->options & OPTION_LOOP)
 			media_next(ctx);
 	}
 	return ctx->mediaid;
@@ -435,10 +452,63 @@ static int media_options(media_ctx_t *ctx, media_options_t option, int enable)
 	}
 	else if (option == MEDIA_RANDOM)
 	{
-		ret = 0;
+		media_random(ctx, enable);
+		ret = (ctx->options & OPTION_RANDOM) == OPTION_RANDOM;
 	}
 	return ret;
 }
+
+#ifdef USE_INOTIFY
+#define EVENT_SIZE  (sizeof(struct inotify_event))
+#define BUF_LEN     (1024 * (EVENT_SIZE + 16))
+
+static void *_check_dir(void *arg)
+{
+	media_ctx_t *ctx = (media_ctx_t *)arg;
+	while (ctx->options & OPTION_INOTIFY)
+	{
+		char buffer[BUF_LEN];
+		int i = 0;
+		int length = read(ctx->inotifyfd, buffer, BUF_LEN);
+
+		if (length < 0)
+		{
+			perror("read");
+		}
+
+		while (i < length)
+		{
+			struct inotify_event *event =
+				(struct inotify_event *) &buffer[i];
+			if (event->len)
+			{
+				if (event->mask & IN_CREATE)
+				{
+					if (ctx->mediaid != -1)
+					{
+						_find_mediaid_t data = {ctx->mediaid, NULL, NULL};
+						_find(ctx, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
+					}
+					if (ctx->options & OPTION_LOOP)
+						media_next(ctx);
+				}
+				else if (event->mask & IN_DELETE)
+				{
+					_find_mediaid_t data = {ctx->mediaid, NULL, NULL};
+					_find(ctx, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
+				}
+#if 0
+				else if (event->mask & IN_MODIFY)
+				{
+					printf("The file %s was modified.\n", event->name);
+				}
+#endif
+			}
+			i += EVENT_SIZE + event->len;
+		}
+	}
+}
+#endif
 
 static media_ctx_t *media_init(const char *url)
 {
@@ -449,12 +519,30 @@ static media_ctx_t *media_init(const char *url)
 		ctx->mediaid = 0;
 		ctx->url = url;
 		ctx->mediaid = -1;
+		ctx->count = MINCOUNT;
+		_find_mediaid_t data = {ctx->mediaid, NULL, NULL};
+		_find(ctx, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
+#ifdef USE_INOTIFY
+		ctx->inotifyfd = inotify_init();
+		ctx->dirfd = inotify_add_watch(ctx->inotifyfd, utils_getpath(ctx->url),
+						IN_MODIFY | IN_CREATE | IN_DELETE);
+		pthread_create(&ctx->thread, NULL, _check_dir, (void *)ctx);
+		ctx->options |= OPTION_INOTIFY;
+#endif
 	}
+	srandom(time(NULL));
 	return ctx;
 }
 
 static void media_destroy(media_ctx_t *ctx)
 {
+#ifdef USE_INOTIFY
+	ctx->options &= ~OPTION_INOTIFY;
+	pthread_cancel(ctx->thread);
+	pthread_join(ctx->thread, NULL);
+	inotify_rm_watch(ctx->inotifyfd, ctx->dirfd);
+	close(ctx->inotifyfd);
+#endif
 	free(ctx);
 }
 

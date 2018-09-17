@@ -66,6 +66,10 @@ struct decoder_ctx_s
 
 #define decoder_dbg(...)
 
+//#define JITTER_init jitter_scattergather_init
+//#define JITTER_destroy jitter_scattergather_destroy
+#define JITTER_init jitter_ringbuffer_init
+#define JITTER_destroy jitter_ringbuffer_destroy
 static
 signed int scale_16bits(mad_fixed_t sample)
 {
@@ -240,7 +244,8 @@ static decoder_ctx_t *mad_init(player_ctx_t *player)
 			input, 0 /* header */, 0 /* filter */, output,
 			error, 0 /* message */);
 
-	jitter_t *jitter = jitter_ringbuffer_init(jitter_name, NBUFFER, BUFFERSIZE);
+	jitter_t *jitter = JITTER_init(jitter_name, NBUFFER, BUFFERSIZE);
+	//jitter_t *jitter = jitter_ringbuffer_init(jitter_name, NBUFFER, BUFFERSIZE);
 	ctx->in = jitter;
 	jitter->format = MPEG2_3_MP3;
 
@@ -311,7 +316,7 @@ static void mad_destroy(decoder_ctx_t *ctx)
 	/* release the decoder */
 	mad_decoder_finish(&ctx->decoder);
 	ctx->filter.ops->destroy(ctx->filter.ctx);
-	jitter_ringbuffer_destroy(ctx->in);
+	JITTER_destroy(ctx->in);
 	free(ctx);
 }
 

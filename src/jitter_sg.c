@@ -75,6 +75,7 @@ struct jitter_private_s
 		JITTER_FILLING,
 		JITTER_RUNNING,
 		JITTER_OVERFLOW,
+		JITTER_FLUSH,
 	} state;
 };
 
@@ -325,10 +326,18 @@ static void jitter_pop(jitter_ctx_t *jitter, size_t len)
 	if (private->state == JITTER_RUNNING)
 	{
 		pthread_cond_broadcast(&private->condpush);
-		if (private->level == 0 &&
-			jitter->thredhold > 0)
-			private->state = JITTER_FILLING;
 	}
+	if (private->level == 0 &&
+		jitter->thredhold > 0)
+		private->state = JITTER_FILLING;
+}
+
+static void jitter_flush(jitter_ctx_t *jitter)
+{
+	jitter_private_t *private = (jitter_private_t *)jitter->private;
+	if (private->in->state != SCATTER_FREE)
+		private->in->state = SCATTER_FREE;
+	private->state = JITTER_FLUSH;
 }
 
 static size_t jitter_length(jitter_ctx_t *jitter)
@@ -387,6 +396,7 @@ static const jitter_ops_t *jitter_scattergather = &(jitter_ops_t)
 	.push = jitter_push,
 	.peer = jitter_peer,
 	.pop = jitter_pop,
+	.flush = jitter_flush,
 	.length = jitter_length,
 	.empty = jitter_empty,
 };

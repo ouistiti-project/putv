@@ -131,14 +131,17 @@ static void *src_thread(void *arg)
 	int ret = curl_easy_perform(ctx->curl);
 	if ( ret != CURLE_OK)
 	{
-		dbg("curl error %s on %s", ret, arg);
+		dbg("src curl error %d on %s", ret, ctx->curl);
 	}
 	//ctx->out->ops->reset(ctx->out->ctx);
-
-	ctx->outbuffer = ctx->out->ops->pull(ctx->out->ctx);
-	if (ctx->outbuffer != NULL)
+	else
 	{
-		ctx->out->ops->push(ctx->out->ctx, 0, NULL);
+		ctx->outbuffer = ctx->out->ops->pull(ctx->out->ctx);
+		if (ctx->outbuffer != NULL)
+		{
+			ctx->out->ops->push(ctx->out->ctx, 0, NULL);
+		}
+		ctx->out->ops->flush(ctx->out->ctx);
 	}
 	return 0;
 }

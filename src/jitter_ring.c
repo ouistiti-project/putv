@@ -70,6 +70,7 @@ struct jitter_private_s
 		JITTER_FILLING,
 		JITTER_RUNNING,
 		JITTER_OVERFLOW,
+		JITTER_FLUSH,
 	} state;
 };
 
@@ -186,6 +187,7 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 
 	if (jitter->consume != NULL)
 	{
+		pthread_mutex_lock(&private->mutex);
 		len = jitter->consume(jitter->consumer,
 			private->out, len);
 		if (len > 0)
@@ -197,6 +199,7 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 		{
 			private->state = JITTER_STOP;
 		}
+		pthread_mutex_unlock(&private->mutex);
 	}
 	if (private->state == JITTER_RUNNING)
 	{
@@ -227,8 +230,10 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter)
 		(jitter->produce != NULL))
 	{
 		int len;
+		pthread_mutex_lock(&private->mutex);
 		len = jitter->produce(jitter->producter, 
 			private->in, jitter->size);
+		pthread_mutex_unlock(&private->mutex);
 		if (len > 0)
 			jitter_push(jitter, len, NULL);
 		else
@@ -255,9 +260,9 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter)
 		private->out = private->bufferstart - len;
 	}
 
-	while (private->state != JITTER_RUNNING && private->in != NULL)
+	while (private->state == JITTER_FILLING && private->in != NULL)
 	{
-		jitter_dbg("jitter %s peer block on %p (%d/%d)", jitter->name, private->out, private->level, jitter->size);
+		dbg("jitter %s peer block on %p (%d/%d)", jitter->name, private->out, private->level, jitter->size);
 		pthread_cond_wait(&private->condpeer, &private->mutex);
 	}
 
@@ -290,13 +295,19 @@ static void jitter_pop(jitter_ctx_t *jitter, size_t len)
 	{
 		jitter_dbg("jitter %s pop A %d/%d", jitter->name, len, private->level);
 		pthread_cond_broadcast(&private->condpush);
-		if (private->level <= 0)
-			private->state = JITTER_FILLING;
 	}
 	else
 	{
 		jitter_dbg("jitter %s pop B %d/%d %p %p", jitter->name, len, private->level, private->in, private->out);
 	}
+	if (private->level <= 0)
+		private->state = JITTER_FILLING;
+}
+
+static void jitter_flush(jitter_ctx_t *jitter)
+{
+	jitter_private_t *private = (jitter_private_t *)jitter->private;
+	private->state = JITTER_FLUSH;
 }
 
 static size_t jitter_length(jitter_ctx_t *jitter)
@@ -361,6 +372,7 @@ static const jitter_ops_t *jitter_ringbuffer = &(jitter_ops_t)
 	.push = jitter_push,
 	.peer = jitter_peer,
 	.pop = jitter_pop,
+	.flush = jitter_flush,
 	.length = jitter_length,
 	.empty = jitter_empty,
 };

@@ -42,6 +42,7 @@ struct src_ctx_s
 	const src_t *ops;
 	int fd;
 	player_ctx_t *ctx;
+	jitter_t *out;
 };
 #define SRC_CTX
 #include "src.h"
@@ -69,7 +70,10 @@ static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 	if (ret < 0)
 		err("src file %d error: %s", ctx->fd, strerror(errno));
 	if (ret == 0)
+	{
+		ctx->out->ops->flush(ctx->out->ctx);
 		dbg("src: end of file");
+	}
 	return ret;
 }
 
@@ -104,11 +108,12 @@ static src_ctx_t *src_init(player_ctx_t *ctx, const char *url)
 	return NULL;
 }
 
-static int src_run(src_ctx_t *src, jitter_t *jitter)
+static int src_run(src_ctx_t *ctx, jitter_t *jitter)
 {
 	dbg("src: add producter to %s", jitter->ctx->name);
+	ctx->out = jitter;
 	jitter->ctx->produce = (produce_t)src_read;
-	jitter->ctx->producter = (void *)src;
+	jitter->ctx->producter = (void *)ctx;
 	return 0;
 }
 

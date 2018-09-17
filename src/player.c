@@ -219,7 +219,7 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 				current_dec = NULL;
 			}
 			ctx->mediaid = nextid;
-			if (player.dec != NULL)
+			if (ctx->state != STATE_STOP && player.dec != NULL)
 			{
 				current_dec = player.dec;
 				dbg("player: play");

@@ -136,6 +136,11 @@ static void *lame_thread(void *arg)
 	int run = 1;
 	encoder_ctx_t *ctx = (encoder_ctx_t *)arg;
 	/* start decoding */
+#ifdef HEARTBEAT
+	clockid_t clockid = CLOCK_REALTIME;
+	struct timespec start = {0, 0};
+	clock_gettime(clockid, &start);
+#endif
 	while (run)
 	{
 		int ret = 0;
@@ -202,6 +207,18 @@ static void *lame_thread(void *arg)
 			run = 0;
 		}
 	}
+#ifdef HEARTBEAT
+	struct timespec stop = {0, 0};
+	clock_gettime(clockid, &stop);
+	stop.tv_sec -= start.tv_sec;
+	stop.tv_nsec -= start.tv_nsec;
+	if (stop.tv_nsec < 0)
+	{
+		stop.tv_nsec += 1000000000;
+		stop.tv_sec -= 1;
+	}
+	dbg("encode during %u.%u", stop.tv_sec, stop.tv_nsec);
+#endif
 	return (void *)result;
 }
 

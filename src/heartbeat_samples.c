@@ -83,7 +83,15 @@ static int heartbeat_wait(heartbeat_ctx_t *ctx, void *arg)
 	if (now.tv_sec > ctx->clock.tv_sec ||
 		(now.tv_sec == ctx->clock.tv_sec && now.tv_nsec > ctx->clock.tv_nsec))
 	{
-		dbg("heartbeat to late %u.%u %u.%u", ctx->clock.tv_sec, ctx->clock.tv_nsec, now.tv_sec, now.tv_nsec);
+		now.tv_sec -= ctx->clock.tv_sec;
+		now.tv_nsec -= ctx->clock.tv_nsec;
+		if (now.tv_nsec < 0)
+		{
+			now.tv_nsec += 1000000000;
+			now.tv_sec -= 1;
+		}
+		if (now.tv_nsec > 10000000)
+			dbg("heartbeat to late %u.%u", now.tv_sec, now.tv_nsec);
 		//clock_gettime(clockid, &ctx->clock);
 		return -1;
 	}

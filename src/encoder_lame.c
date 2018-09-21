@@ -176,6 +176,7 @@ static void *lame_thread(void *arg)
 		}
 		else
 		{
+			dbg("encoder lame flush");
 			ret = lame_encode_flush_nogap(ctx->encoder, ctx->outbuffer, ctx->out->ctx->size);
 		}
 		if (ret > 0)

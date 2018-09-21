@@ -48,6 +48,7 @@ typedef enum
 	MPEG2_1,
 	MPEG2_2,
 	MPEG2_3_MP3,
+	OPUS,
 	DVB_frame,
 } jitter_format_t;
 

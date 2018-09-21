@@ -19,5 +19,6 @@ struct decoder_s
 const decoder_t *decoder_get(decoder_ctx_t *);
 
 extern const decoder_t *decoder_mad;
+extern const decoder_t *decoder_opus;
 extern const decoder_t *decoder_passthrough;
 #endif

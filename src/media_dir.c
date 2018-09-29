@@ -31,6 +31,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <dirent.h>
+#include <fcntl.h>
 
 #include <pthread.h>
 
@@ -282,6 +283,7 @@ static int _find(media_ctx_t *ctx, media_dirlist_t **pit, int *pmediaid, _findcb
 				{
 					sprintf(path,PROTOCOLNAME"%s/%s", it->path, it->items[it->index]->d_name);
 					const char *mime = utils_getmime(path);
+					ret = -1;
 					if (mime != NULL)
 						ret = cb(arg, ctx, *pmediaid, path, mime);
 					free(path);
@@ -427,14 +429,16 @@ static void media_random(media_ctx_t *ctx, int enable)
 		{
 			int ret;
 			if (ctx->count > 0)
-				ctx->mediaid = (random() % ctx->count);
+				ctx->mediaid = (random() % (ctx->count - 1));
 			_find_mediaid_t data = {ctx->mediaid, NULL, NULL};
 			ret = _find(ctx, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
 			if (ret != 0)
 			{
 				ctx->count = ctx->mediaid;
 				if (ctx->count > 0)
-					ctx->mediaid = (random() % ctx->count);
+					ctx->mediaid = (random() % (ctx->count - 1));
+				data.id = ctx->mediaid;
+				ret = _find(ctx, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
 			}
 		}
 	}
@@ -530,7 +534,19 @@ static media_ctx_t *media_init(const char *url)
 		ctx->options |= OPTION_INOTIFY;
 #endif
 	}
-	srandom(time(NULL));
+	unsigned int seed;
+	if (!access(RANDOM_DEVICE, R_OK))
+	{
+		int fd = open(RANDOM_DEVICE, O_RDONLY);
+		pthread_yield();
+		read(fd, &seed, sizeof(seed));
+		close(fd);
+	}
+	else
+	{
+		seed = time(NULL);
+	}
+	srandom(seed);
 	return ctx;
 }
 

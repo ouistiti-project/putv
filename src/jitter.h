@@ -49,6 +49,7 @@ typedef enum
 	MPEG2_2,
 	MPEG2_3_MP3,
 	DVB_frame,
+	SINK_BITSSTREAM,
 } jitter_format_t;
 
 typedef struct jitter_s jitter_t;

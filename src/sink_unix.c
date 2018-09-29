@@ -1,5 +1,5 @@
 /*****************************************************************************
- * sink_alsa.c
+ * sink_unix.c
  * this file is part of https://github.com/ouistiti-project/putv
  *****************************************************************************
  * Copyright (C) 2016-2017
@@ -45,6 +45,7 @@ struct sink_ctx_s
 	const sink_t *ops;
 	const char *filepath;
 	pthread_t thread;
+	pthread_t thread2;
 	jitter_t *in;
 	state_t state;
 	char *out;
@@ -55,6 +56,7 @@ struct sink_ctx_s
 	pthread_cond_t event;
 	pthread_mutex_t mutex;
 	int counter;
+	int nbclients;
 };
 #define SINK_CTX
 #include "sink.h"
@@ -89,6 +91,7 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *filepath)
 	jitter->ctx->thredhold = 2;
 	jitter->format = format;
 	ctx->in = jitter;
+	ctx->out = calloc(1, size);
 
 	ctx->player = player;
 
@@ -105,16 +108,30 @@ static int sink_unxiclient(thread_info_t *info)
 	sink_ctx_t *ctx = (sink_ctx_t *)info->userctx;
 	int ret = 1;
 	int counter = 0;
+	if ( ctx->nbclients == 0)
+	{
+//		player_state(ctx->player, STATE_PLAY);
+	}
+	ctx->nbclients++;
 	while (ret > 0)
 	{
 		pthread_mutex_lock(&ctx->mutex);
-		while (ctx->out == NULL && ctx->counter <= counter)
+		while (ctx->counter <= counter)
 		{
 			pthread_cond_wait(&ctx->event, &ctx->mutex);
 		}
 		counter = ctx->counter;
+dbg("send %d %d %d", ctx->length, ctx->counter, counter);
+		if (ctx->length > 0)
+			ret = send(info->sock, ctx->out, ctx->length, MSG_NOSIGNAL);
+		else
+			ret = 1;
 		pthread_mutex_unlock(&ctx->mutex);
-		ret = send(info->sock, ctx->out, ctx->length, MSG_NOSIGNAL);
+	}
+	ctx->nbclients--;
+	if ( ctx->nbclients == 0)
+	{
+//		player_state(ctx->player, STATE_STOP);
 	}
 	return ret;
 }
@@ -125,6 +142,7 @@ static void *sink_thread(void *arg)
 	int run = 1;
 
 	/* start decoding */
+	dbg("sink: thread run");
 	while (run)
 	{
 		unsigned char *buff = ctx->in->ops->peer(ctx->in->ctx);
@@ -145,17 +163,26 @@ static void *sink_thread(void *arg)
 	return NULL;
 }
 
+static void *server_thread(void *arg)
+{
+	sink_ctx_t *ctx = (sink_ctx_t *)arg;
+	unixserver_run(sink_unxiclient, ctx, ctx->filepath);
+	return NULL;
+}
+
 static int sink_run(sink_ctx_t *ctx)
 {
 	pthread_create(&ctx->thread, NULL, sink_thread, ctx);
-	unixserver_run(sink_unxiclient, ctx, ctx->filepath);
+	pthread_create(&ctx->thread2, NULL, server_thread, ctx);
 	return 0;
 }
 
 static void sink_destroy(sink_ctx_t *ctx)
 {
+	pthread_join(ctx->thread2, NULL);
 	pthread_join(ctx->thread, NULL);
 	jitter_scattergather_destroy(ctx->in);
+	free(ctx->out);
 	free(ctx);
 }
 

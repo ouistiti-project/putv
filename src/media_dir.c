@@ -104,6 +104,7 @@ static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data);
 static int media_current(media_ctx_t *ctx, media_parse_t cb, void *data);
 static int media_play(media_ctx_t *ctx, media_parse_t play, void *data);
 static int media_next(media_ctx_t *ctx);
+static media_dirlist_t *media_random(media_ctx_t *ctx, int enable);
 static int media_end(media_ctx_t *ctx);
 
 static const char *utils_getmime(const char *path)
@@ -406,6 +407,10 @@ static int media_next(media_ctx_t *ctx)
 			}
 			ctx->current = NULL;
 		}
+		else
+		{
+			ctx->current = media_random(ctx, ctx->options | OPTION_RANDOM);
+		}
 	}
 	if (ret != 0)
 	{
@@ -445,8 +450,9 @@ static void media_loop(media_ctx_t *ctx, int enable)
 		ctx->options &= ~OPTION_LOOP;
 }
 
-static void media_random(media_ctx_t *ctx, int enable)
+static media_dirlist_t *media_random(media_ctx_t *ctx, int enable)
 {
+	media_dirlist_t *dir = NULL;
 	if (enable)
 	{
 		ctx->options |= OPTION_RANDOM;
@@ -455,7 +461,6 @@ static void media_random(media_ctx_t *ctx, int enable)
 			int ret;
 			if (ctx->count > 0)
 				ctx->firstmediaid = (random() % (ctx->count - 1));
-			media_dirlist_t *dir = NULL;
 			_find_mediaid_t data = {ctx->firstmediaid, NULL, NULL};
 			ret = _find(ctx, &dir, &ctx->firstmediaid, _find_mediaid, &data);
 			if (ret != 0)
@@ -466,11 +471,13 @@ static void media_random(media_ctx_t *ctx, int enable)
 				data.id = ctx->firstmediaid;
 				ret = _find(ctx, &dir, &ctx->firstmediaid, _find_mediaid, &data);
 			}
+			dir->index--;
 			ctx->mediaid = ctx->firstmediaid - 1;
 		}
 	}
 	else
 		ctx->options &= ~OPTION_RANDOM;
+	return dir;
 }
 
 static int media_options(media_ctx_t *ctx, media_options_t option, int enable)

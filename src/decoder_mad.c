@@ -33,7 +33,9 @@
 #include <stdlib.h>
 
 #include <mad.h>
+#ifdef USE_ID3TAG
 #include <id3tag.h>
+#endif
 
 #include "player.h"
 #include "filter.h"

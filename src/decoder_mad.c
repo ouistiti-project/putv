@@ -153,6 +153,7 @@ enum mad_flow output(void *data,
 
 	audio.nchannels = pcm->channels;
 	audio.nsamples = pcm->length;
+	audio.bitspersample = 24;
 	int i;
 	for (i = 0; i < audio.nchannels && i < MAXCHANNELS; i++)
 		audio.samples[i] = pcm->samples[i];
@@ -161,6 +162,7 @@ enum mad_flow output(void *data,
 	unsigned int nsamples;
 	if (audio.nchannels == 1)
 		audio.samples[1] = audio.samples[0];
+#ifdef FILTER
 	while (audio.nsamples > 0)
 	{
 		if (ctx->buffer == NULL)
@@ -179,6 +181,36 @@ enum mad_flow output(void *data,
 			ctx->bufferlen = 0;
 		}
 	}
+#else
+	for (i = 0; i < audio.nsamples; i++)
+	{
+		if (ctx->outbuffer == NULL)
+		{
+			ctx->outbuffer = ctx->out->ops->pull(ctx->out->ctx);
+		}
+		signed int sample;
+		sample = audio.samples[0][i];
+		
+		*(ctx->outbuffer + ctx->outbufferlen + 0) = (sample >> (audio.bitspersample - 32) ) & 0x00FF;;
+		*(ctx->outbuffer + ctx->outbufferlen + 1) = (sample >> (audio.bitspersample - 24) ) & 0x00FF;;
+		*(ctx->outbuffer + ctx->outbufferlen + 2) = (sample >> (audio.bitspersample - 16) ) & 0x00FF;
+		*(ctx->outbuffer + ctx->outbufferlen + 3) = (sample >> (audio.bitspersample - 8) ) & 0x00FF;
+		ctx->outbufferlen += 4;
+		if (audio.nchannels > 1)
+			sample = audio.samples[1][i];
+		*(ctx->outbuffer + ctx->outbufferlen + 0) = (sample >> (audio.bitspersample - 32) ) & 0x00FF;;
+		*(ctx->outbuffer + ctx->outbufferlen + 1) = (sample >> (audio.bitspersample - 24) ) & 0x00FF;;
+		*(ctx->outbuffer + ctx->outbufferlen + 2) = (sample >> (audio.bitspersample - 16) ) & 0x00FF;
+		*(ctx->outbuffer + ctx->outbufferlen + 3) = (sample >> (audio.bitspersample - 8) ) & 0x00FF;
+		ctx->outbufferlen += 4;
+		if (ctx->outbufferlen >= ctx->out->ctx->size)
+		{
+			ctx->out->ops->push(ctx->out->ctx, ctx->out->ctx->size, NULL);
+			ctx->outbuffer = NULL;
+			ctx->outbufferlen = 0;
+		}
+	}
+#endif
 
 	return MAD_FLOW_CONTINUE;
 }
@@ -303,9 +335,10 @@ static int mad_run(decoder_ctx_t *ctx, jitter_t *jitter)
 		err("decoder out format not supported %d", ctx->out->format);
 		return -1;
 	}
+#ifdef FILTER
 	ctx->filter.ops = filter_pcm;
 	ctx->filter.ctx = ctx->filter.ops->init(jitter->ctx->frequence, samplesize, nchannels);
-
+#endif
 	pthread_create(&ctx->thread, NULL, mad_thread, ctx);
 	return 0;
 }
@@ -315,7 +348,9 @@ static void mad_destroy(decoder_ctx_t *ctx)
 	pthread_join(ctx->thread, NULL);
 	/* release the decoder */
 	mad_decoder_finish(&ctx->decoder);
+#ifdef FILTER
 	ctx->filter.ops->destroy(ctx->filter.ctx);
+#endif
 	JITTER_destroy(ctx->in);
 	free(ctx);
 }

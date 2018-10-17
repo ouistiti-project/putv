@@ -106,6 +106,7 @@ input(const FLAC__StreamDecoder *decoder,
 	ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx);
 	if (ctx->inbuffer == NULL)
 	{
+		*bytes = 0;
 		return FLAC__STREAM_DECODER_READ_STATUS_END_OF_STREAM;
 	}
 	len = ctx->in->ops->length(ctx->in->ctx);
@@ -126,33 +127,32 @@ output(const FLAC__StreamDecoder *decoder,
 {
 	decoder_ctx_t *ctx = (decoder_ctx_t *)data;
 	filter_audio_t audio;
-dbg("%s 1", __FUNCTION__);
 
 	/* pcm->samplerate contains the sampling frequency */
 
 	audio.samplerate = FLAC__stream_decoder_get_sample_rate(decoder);
 	if (ctx->out->ctx->frequence == 0)
 	{
-		decoder_dbg("decoder change samplerate to %u", pcm->samplerate);
+		decoder_dbg("decoder change samplerate to %u", audio.samplerate);
 		ctx->out->ctx->frequence = audio.samplerate;
 	}
 	else if (ctx->out->ctx->frequence != audio.samplerate)
 	{
 		err("decoder: samplerate %d not supported", ctx->out->ctx->frequence);
 	}
-dbg("%s sample rate %d", __FUNCTION__, audio.samplerate);
 
 	audio.nchannels = FLAC__stream_decoder_get_channels(decoder);
 	audio.nsamples = frame->header.blocksize;
+	audio.bitspersample = FLAC__stream_decoder_get_bits_per_sample(decoder);
 	int i;
 	for (i = 0; i < audio.nchannels && i < MAXCHANNELS; i++)
 		audio.samples[i] = (signed int *)buffer[i];
 	decoder_dbg("decoder: audio frame %d Hz, %d channels, %d samples", audio.samplerate, audio.nchannels, audio.nsamples);
-dbg("%s nsamples %d", __FUNCTION__, audio.nsamples);
 
 	unsigned int nsamples;
 	if (audio.nchannels == 1)
 		audio.samples[1] = audio.samples[0];
+#ifdef FILTER
 	while (audio.nsamples > 0)
 	{
 		if (ctx->outbuffer == NULL)
@@ -165,7 +165,6 @@ dbg("%s nsamples %d", __FUNCTION__, audio.nsamples);
 				ctx->outbuffer + ctx->outbufferlen,
 				ctx->out->ctx->size - ctx->outbufferlen);
 		ctx->outbufferlen += len;
-dbg("%s filter %d %d %d", __FUNCTION__, len, ctx->outbufferlen, ctx->out->ctx->size);
 		if (ctx->outbufferlen >= ctx->out->ctx->size)
 		{
 			ctx->out->ops->push(ctx->out->ctx, ctx->out->ctx->size, NULL);
@@ -173,7 +172,36 @@ dbg("%s filter %d %d %d", __FUNCTION__, len, ctx->outbufferlen, ctx->out->ctx->s
 			ctx->outbufferlen = 0;
 		}
 	}
-
+#else
+	for (i = 0; i < audio.nsamples; i++)
+	{
+		if (ctx->outbuffer == NULL)
+		{
+			ctx->outbuffer = ctx->out->ops->pull(ctx->out->ctx);
+		}
+		signed int sample;
+		sample = audio.samples[0][i];
+		
+		*(ctx->outbuffer + ctx->outbufferlen + 0) = (sample >> (audio.bitspersample - 32) ) & 0x00FF;;
+		*(ctx->outbuffer + ctx->outbufferlen + 1) = (sample >> (audio.bitspersample - 24) ) & 0x00FF;;
+		*(ctx->outbuffer + ctx->outbufferlen + 2) = (sample >> (audio.bitspersample - 16) ) & 0x00FF;
+		*(ctx->outbuffer + ctx->outbufferlen + 3) = (sample >> (audio.bitspersample - 8) ) & 0x00FF;
+		ctx->outbufferlen += 4;
+		if (audio.nchannels > 1)
+			sample = audio.samples[1][i];
+		*(ctx->outbuffer + ctx->outbufferlen + 0) = (sample >> (audio.bitspersample - 32) ) & 0x00FF;;
+		*(ctx->outbuffer + ctx->outbufferlen + 1) = (sample >> (audio.bitspersample - 24) ) & 0x00FF;;
+		*(ctx->outbuffer + ctx->outbufferlen + 2) = (sample >> (audio.bitspersample - 16) ) & 0x00FF;
+		*(ctx->outbuffer + ctx->outbufferlen + 3) = (sample >> (audio.bitspersample - 8) ) & 0x00FF;
+		ctx->outbufferlen += 4;
+		if (ctx->outbufferlen >= ctx->out->ctx->size)
+		{
+			ctx->out->ops->push(ctx->out->ctx, ctx->out->ctx->size, NULL);
+			ctx->outbuffer = NULL;
+			ctx->outbufferlen = 0;
+		}
+	}
+#endif
 	return FLAC__STREAM_DECODER_WRITE_STATUS_CONTINUE;
 }
 
@@ -248,8 +276,10 @@ static int decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 		err("decoder out format not supported %d", ctx->out->format);
 		return -1;
 	}
+#ifdef FILTER
 	ctx->filter.ops = filter_pcm;
 	ctx->filter.ctx = ctx->filter.ops->init(jitter->ctx->frequence, samplesize, nchannels);
+#endif
 	pthread_create(&ctx->thread, NULL, decoder_thread, ctx);
 	return 0;
 }
@@ -259,7 +289,9 @@ static void decoder_destroy(decoder_ctx_t *ctx)
 	pthread_join(ctx->thread, NULL);
 	/* release the decoder */
 	FLAC__stream_decoder_delete(ctx->decoder);
+#ifdef FILTER
 	ctx->filter.ops->destroy(ctx->filter.ctx);
+#endif
 	jitter_ringbuffer_destroy(ctx->in);
 	free(ctx);
 }

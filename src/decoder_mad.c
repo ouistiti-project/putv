@@ -345,6 +345,14 @@ static int mad_run(decoder_ctx_t *ctx, jitter_t *jitter)
 	return 0;
 }
 
+static int decoder_check(char *path)
+{
+	char *ext = strrchr(path, '.');
+	if (ext)
+		return strcmp(ext, ".mp3");
+	return -1;
+}
+
 static void mad_destroy(decoder_ctx_t *ctx)
 {
 	pthread_join(ctx->thread, NULL);
@@ -359,14 +367,15 @@ static void mad_destroy(decoder_ctx_t *ctx)
 
 const decoder_t *decoder_mad = &(decoder_t)
 {
+	.check = decoder_check,
 	.init = mad_init,
 	.jitter = mad_jitter,
 	.run = mad_run,
 	.destroy = mad_destroy,
+	.mime = "audio/mp3",
 };
 
-#ifndef DECODER_GET
-#define DECODER_GET
+#ifndef DECODER_MAD
 const decoder_t *decoder_get(decoder_ctx_t *ctx)
 {
 	return ctx->ops;

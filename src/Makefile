@@ -1,3 +1,14 @@
+ifeq ($(DECODER),)
+	ifeq ($(DECODER_PASSTHROUGH),y)
+		DECODER=decoder_passthrough
+	endif
+	ifeq ($(DECODER_FLAC),y)
+		DECODER=decoder_flac
+	endif
+	ifeq ($(DECODER_MAD),y)
+		DECODER=decoder_mad
+	endif
+endif
 
 bin-y+=$(PUTV)
 $(PUTV)_SOURCES+=main.c
@@ -23,16 +34,14 @@ $(PUTV)_CFLAGS-$(SRC_CURL)+=-DSRC_CURL
 #$(PUTV)_CFLAGS-$(SRC_CURL)+=-DCURL_DUMP
 $(PUTV)_CFLAGS-$(SRC_CURL)+=-DSRC=src_curl
 $(PUTV)_LIBRARY-$(SRC_CURL)+=curl
+$(PUTV)_CFLAGS+=-DDECODER=$(DECODER)
 $(PUTV)_SOURCES-$(DECODER_PASSTHROUGH)+=decoder_passthrough.c
 $(PUTV)_CFLAGS-$(DECODER_PASSTHROUGH)+=-DPASSTHROUGH
-$(PUTV)_CFLAGS-$(DECODER_PASSTHROUGH)+=-DDECODER=decoder_passthrough
 $(PUTV)_SOURCES-$(DECODER_MAD)+=decoder_mad.c
 $(PUTV)_CFLAGS-$(DECODER_MAD)+=-DDECODER_MAD
-$(PUTV)_CFLAGS-$(DECODER_MAD)+=-DDECODER=decoder_mad
 $(PUTV)_LIBRARY-$(DECODER_MAD)+=mad
 $(PUTV)_SOURCES-$(DECODER_FLAC)+=decoder_flac.c
 $(PUTV)_CFLAGS-$(DECODER_FLAC)+=-DDECODER_FLAC
-$(PUTV)_CFLAGS-$(DECODER_FLAC)+=-DDECODER=decoder_flac
 $(PUTV)_LIBRARY-$(DECODER_FLAC)+=FLAC
 $(PUTV)_SOURCES-$(FILTER)+=filter_pcm.c
 $(PUTV)_CFLAGS-$(FILTER)+=-DFILTER

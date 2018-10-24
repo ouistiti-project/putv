@@ -10,10 +10,12 @@ typedef void decoder_ctx_t;
 typedef struct decoder_s decoder_t;
 struct decoder_s
 {
+	int (*check)(char *path);
 	decoder_ctx_t *(*init)(player_ctx_t *);
 	jitter_t *(*jitter)(decoder_ctx_t *decoder);
 	int (*run)(decoder_ctx_t *, jitter_t *);
 	void (*destroy)(decoder_ctx_t *);
+	const char *mime;
 };
 
 const decoder_t *decoder_get(decoder_ctx_t *);

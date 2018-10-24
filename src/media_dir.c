@@ -46,6 +46,7 @@
 
 #include "player.h"
 #include "media.h"
+#include "decoder.h"
 
 #define N_(string) string
 
@@ -109,11 +110,15 @@ static int media_end(media_ctx_t *ctx);
 
 static const char *utils_getmime(const char *path)
 {
-	char *ext = strrchr(path, '.');
-	if (ext && !strcmp(ext, ".mp3"))
-		return mime_mp3;
-	dbg("Unknonw mime for %s", path);
-	return NULL;
+#ifdef DECODER_MAD
+	if (!decoder_mad->check(path))
+		return decoder_mad->mime;
+#endif
+#ifdef DECODER_FLAC
+	if (!decoder_flac->check(path))
+		return decoder_flac->mime;
+#endif
+	return mime_octetstream;
 }
 
 static char *utils_getpath(const char *url)

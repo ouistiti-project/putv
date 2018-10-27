@@ -61,14 +61,14 @@ void filter_destroy(filter_ctx_t *ctx)
 	free(ctx);
 }
 
-static int sampled(filter_ctx_t *ctx, signed int sample, int bitspersample, unsigned char *out, int samplesize)
+static int sampled(filter_ctx_t *ctx, signed int sample, int bitspersample, unsigned char *out)
 {
-	int i;
-	for (i = 0; i < samplesize; i++)
+	int i = 3;
+	for (i = 0; i < ctx->samplesize; i++)
 	{
 		int shift = ((ctx->samplesize - i - 1) * 8);
 		//int shift = (i * 8);
-//		dbg("shift %d %d", i, shift);
+		//dbg("shift %d %d", i, shift);
 		if (shift < 0)
 			break;
 		*(out + i) = (sample >> (bitspersample - shift ) ) & 0x00FF;
@@ -81,6 +81,7 @@ static int filter_run(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *b
 	int i;
 	int j;
 	int bufferlen = 0;
+
 	for (i = 0; i < audio->nsamples; i++)
 	{
 		signed int sample = audio->samples[0][i];
@@ -89,7 +90,7 @@ static int filter_run(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *b
 			if (j < audio->nchannels)
 				sample = audio->samples[(j % audio->nchannels)][i];
 			bufferlen += sampled(ctx, sample, audio->bitspersample,
-						buffer + bufferlen, ctx->samplesize);
+						buffer + bufferlen);
 			if (bufferlen >= size)
 				goto filter_exit;
 		}

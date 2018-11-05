@@ -20,10 +20,42 @@ struct jsonrpc_method_entry_t
 	struct jsonrpc_method_entry_t *next;
 };
 
+/**
+ * @brief generate a response to a jsonRPC
+ * 
+ * This function unpack a string to get informations about the RPC.
+ * The requested method is searched into the method_table and
+ * the associated function is called.
+ * The function continues with the response generation.
+ *
+ * @param input			string corresponding to a jsonRPC.
+ * @param input_len		length of the input string.
+ * @param method_table	table of methods to manage.
+ * @param userdata		argument fot the callback associated to every methods.
+ * 
+ * @return the response string to send. The "answer" and the "notification"
+ * don't generate string.
+ */
 char *jsonrpc_handler(const char *input, size_t input_len,
 	struct jsonrpc_method_entry_t method_table[],
 	void *userdata);
 
+/**
+ * @brief generate a jsonRPC string
+ *
+ * This function search the method into the method_table.
+ * It can generate only "request" or "notification".
+ * To send a request the user needs to manage the answer.
+ * This function will generate the request. jsonrpc_handler will manage
+ * the response. To do that the method_table must contain an entry for
+ * the request ("r" type) and an entry for the answer ("a" type).
+ * 
+ * @param method		name of the RPC to generate.
+ * @param methodlen		length of the string.
+ * @param method_table	table of methods to manage (same of method_handler).
+ * @param userdata		argument fot the callback associated to every methods.
+ * @param pid			id of the generated request.
+ */
 char *jsonrpc_request(const char *method, int methodlen,
 		struct jsonrpc_method_entry_t method_table[],
 		char *userdata, unsigned long *pid);

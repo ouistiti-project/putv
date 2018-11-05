@@ -244,13 +244,17 @@ json_t *jsonrpc_handle_request_single(json_t *json_request,
 
 	if (rc != TYPE_RECEIVE_RESPONSE)
 	{
-		for (entry=method_table; entry->name!=NULL; entry++) {
-			if (0==strcmp(entry->name, str_method) && entry->type == rc) {
+		for (entry=method_table; entry->name!=NULL; entry++)
+		{
+			if (0==strcmp(entry->name, str_method) && entry->type == rc)
+			{
 				break;
 			}
 		}
 	}
-	else if (json_id != NULL) {
+	else if (json_id != NULL)
+	{
+		/** receive response to a request **/
 		unsigned long id = json_integer_value(json_id);
 		for (entry=method_table; entry->name!=NULL; entry++) {
 			if (entry->next != NULL && entry->type == rc) {
@@ -383,17 +387,10 @@ json_t *jsonrpc_jrequest(const char *method,
 	struct jsonrpc_method_entry_t *entry;
 	json_t *request = NULL;
 	json_t *params = NULL;
-	unsigned long id;
+	srandom(time(NULL));
 
-	for (entry=method_table; entry->name!=NULL; entry++) {
-		if (0==strcmp(entry->name, method) && entry->type == TYPE_SEND_REQUEST) {
-			struct jsonrpc_method_entry_t *new = calloc(1, sizeof(*new));
-			if (new) {
-				memcpy(new, entry, sizeof(*new));
-				new->id = id;
-				entry->next = new;
-			}
-		}
+	for (entry=method_table; entry->name!=NULL; entry++)
+	{
 		if (0==strcmp(entry->name, method) && (entry->type == 'r' || entry->type == 'n')) {
 			break;
 		}
@@ -414,8 +411,23 @@ json_t *jsonrpc_jrequest(const char *method,
 	}
 
 	if (entry->type == 'r')	{
-		srandom(time(NULL));
-		id = random();
+		unsigned long id = random();
+		/**
+		 * because we need to keep the id for the response
+		 * we create a new entry into the table which will be destroy on the response
+		 */
+		struct jsonrpc_method_entry_t *entry;
+		for (entry=method_table; entry->name!=NULL; entry++)
+		{
+			if (0==strcmp(entry->name, method) && entry->type == TYPE_SEND_REQUEST) {
+				struct jsonrpc_method_entry_t *new = calloc(1, sizeof(*new));
+				if (new) {
+					memcpy(new, entry, sizeof(*new));
+					new->id = id;
+					entry->next = new;
+				}
+			}
+		}
 		if (pid != NULL)
 			*pid = id;
 		json_error_t error;

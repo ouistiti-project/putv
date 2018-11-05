@@ -34,6 +34,8 @@
 #include <string.h>
 #include <errno.h>
 
+#include <pwd.h>
+
 #include "player.h"
 typedef struct src_s src_t;
 typedef struct src_ctx_s src_ctx_t;
@@ -80,11 +82,11 @@ static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 static src_ctx_t *src_init(player_ctx_t *ctx, const char *url)
 {
 	int fd;
+	const char *path = NULL;
 	if (!strcmp(url, "-"))
 		fd = 0;
 	else
 	{
-		const char *path = NULL;
 		if (strstr(url, "://") != NULL)
 		{
 			path = strstr(url, "file://") + 7;
@@ -92,6 +94,15 @@ static src_ctx_t *src_init(player_ctx_t *ctx, const char *url)
 		else
 		{
 			path = url;
+		}
+		if (path[0] == '~')
+		{
+			struct passwd *pw = NULL;
+			pw = getpwuid(geteuid());
+			chdir(pw->pw_dir);
+			path++;
+			if (path[0] == '/')
+				path++;
 		}
 		if (path != NULL)
 			fd = open(path, O_RDWR);
@@ -104,7 +115,10 @@ static src_ctx_t *src_init(player_ctx_t *ctx, const char *url)
 		src->ctx = ctx;
 		return src;
 	}
-	err("src file error: %s", strerror(errno));
+	if (path != NULL)
+		err("src file %s error: %s", path, strerror(errno));
+	else
+		err("src file %s error: %s", url, strerror(errno));
 	return NULL;
 }
 

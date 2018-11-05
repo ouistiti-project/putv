@@ -307,7 +307,7 @@ static int _find(media_ctx_t *ctx, media_dirlist_t **pit, int *pmediaid, _findcb
 					sprintf(path,PROTOCOLNAME"%s/%s", it->path, it->items[it->index]->d_name);
 					const char *mime = utils_getmime(path);
 					ret = -1;
-					if (mime != NULL)
+					if (mime != mime_octetstream)
 						ret = cb(arg, ctx, *pmediaid, path, mime);
 					free(path);
 					if (ret > 0)

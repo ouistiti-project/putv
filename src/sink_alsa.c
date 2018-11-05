@@ -123,12 +123,14 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 		pcm_format = SND_PCM_FORMAT_S24_LE;
 		ctx->samplesize = 4;
 		ctx->nchannels = 2;
+		format = PCM_32bits_LE_stereo;
 		ret = snd_pcm_hw_params_set_format(ctx->playback_handle, hw_params, pcm_format);
 		if (ret < 0)
 		{
 			err("sink: format");
 			goto error;
 		}
+		warn("sink: alsa downgrade to 24bits over 32bits");
 	}
 	ctx->format = format;
 	ret = snd_pcm_hw_params_set_rate_near(ctx->playback_handle, hw_params, &rate, NULL);

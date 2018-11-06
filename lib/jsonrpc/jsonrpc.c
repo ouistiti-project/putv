@@ -242,28 +242,23 @@ json_t *jsonrpc_handle_request_single(json_t *json_request,
 	rc = jsonrpc_validate_request(json_request, &str_method, &json_params, &json_id, &json_error);
 	is_notification = json_id==NULL;
 
-	if (rc != TYPE_RECEIVE_RESPONSE)
+	for (entry=method_table; entry->name!=NULL; entry++)
 	{
-		for (entry=method_table; entry->name!=NULL; entry++)
+		if ((str_method != NULL) && (0==strcmp(entry->name, str_method)) && (entry->type == rc))
 		{
-			if (0==strcmp(entry->name, str_method) && entry->type == rc)
-			{
-				break;
-			}
+			break;
 		}
-	}
-	else if (json_id != NULL)
-	{
-		/** receive response to a request **/
-		unsigned long id = json_integer_value(json_id);
-		for (entry=method_table; entry->name!=NULL; entry++) {
-			if (entry->next != NULL && entry->type == rc) {
-				struct jsonrpc_method_entry_t *it = entry;
-				while (it->next) {
-					if (it->next->id == id)
-						break;
-					it = it->next;
-				}
+		else if ((entry->type == TYPE_RECEIVE_RESPONSE) && (json_id != NULL))
+		{
+			unsigned long id = json_integer_value(json_id);
+			struct jsonrpc_method_entry_t *it = entry;
+			while (it->next) {
+				if (it->next->id == id)
+					break;
+				it = it->next;
+			}
+			if (it->next != NULL)
+			{
 				struct jsonrpc_method_entry_t *old;
 				old = it->next;
 				if (it->next != NULL) {
@@ -387,7 +382,7 @@ json_t *jsonrpc_jrequest(const char *method,
 	struct jsonrpc_method_entry_t *entry;
 	json_t *request = NULL;
 	json_t *params = NULL;
-	srandom(time(NULL));
+	unsigned long id;
 
 	for (entry=method_table; entry->name!=NULL; entry++)
 	{
@@ -411,7 +406,8 @@ json_t *jsonrpc_jrequest(const char *method,
 	}
 
 	if (entry->type == 'r')	{
-		unsigned long id = random();
+		srandom(time(NULL));
+		id = random();
 		/**
 		 * because we need to keep the id for the response
 		 * we create a new entry into the table which will be destroy on the response
@@ -454,7 +450,7 @@ char *jsonrpc_request(const char *method, int methodlen,
 {
 	char *output = NULL;
 
-	json_t *request =jsonrpc_jrequest( method, method_table, userdata, pid);
+	json_t *request = jsonrpc_jrequest( method, method_table, userdata, pid);
 	if (request)
 		output = json_dumps(request, JSON_INDENT(2));
 

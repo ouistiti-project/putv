@@ -273,24 +273,27 @@ static void *alsa_thread(void *arg)
 		}
 
 		unsigned char *buff = ctx->in->ops->peer(ctx->in->ctx);
-		int length = ctx->in->ops->length(ctx->in->ctx);
-		_alsa_checksamplerate(ctx);
-		//snd_pcm_mmap_begin
-		ret = snd_pcm_writei(ctx->playback_handle, buff, length / divider);
-		if (ret == -EPIPE)
+		if (buff != NULL)
 		{
-			warn("pcm recover");
-			ret = snd_pcm_recover(ctx->playback_handle, ret, 0);
-		}
-		ctx->in->ops->pop(ctx->in->ctx, ret * divider);
-		if (ret < 0)
-		{
-			ctx->state = STATE_ERROR;
-			err("sink: error write pcm %d", ret);
-		}
-		else
-		{
-			sink_dbg("sink: play %d", ret);
+			int length = ctx->in->ops->length(ctx->in->ctx);
+			_alsa_checksamplerate(ctx);
+			//snd_pcm_mmap_begin
+			ret = snd_pcm_writei(ctx->playback_handle, buff, length / divider);
+			if (ret == -EPIPE)
+			{
+				warn("pcm recover");
+				ret = snd_pcm_recover(ctx->playback_handle, ret, 0);
+			}
+			ctx->in->ops->pop(ctx->in->ctx, ret * divider);
+			if (ret < 0)
+			{
+				ctx->state = STATE_ERROR;
+				err("sink: error write pcm %d", ret);
+			}
+			else
+			{
+				sink_dbg("sink: play %d", ret);
+			}
 		}
 	}
 	dbg("sink: thread end");

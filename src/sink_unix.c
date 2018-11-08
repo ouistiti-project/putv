@@ -75,9 +75,9 @@ struct sink_ctx_s
 
 #define sink_dbg(...)
 
-#define SERVER_POLICY SCHED_FIFO
+#define SERVER_POLICY SCHED_RR
 #define SERVER_PRIORITY 55
-#define SINK_POLICY SCHED_FIFO
+#define SINK_POLICY SCHED_RR
 #define SINK_PRIORITY 45
 
 static const char *jitter_name = "unix socket";
@@ -142,7 +142,7 @@ static int sink_unxiclient(thread_info_t *info)
 		{
 			pthread_cond_wait(&ctx->event, &ctx->mutex);
 		}
-dbg("send %ld %d %d", ctx->length, ctx->counter, counter);
+		sink_dbg("send %ld %d %d", ctx->length, ctx->counter, counter);
 		if (ctx->length > 0)
 		{
 			ret = send(info->sock, ctx->out, ctx->length, MSG_NOSIGNAL| MSG_DONTWAIT);
@@ -200,7 +200,7 @@ static void *sink_thread(void *arg)
 		pthread_cond_broadcast(&ctx->event);
 		pthread_yield();
 #endif
-dbg("sink: boom %d", ctx->counter);
+		sink_dbg("sink: boom %d", ctx->counter);
 		ctx->in->ops->pop(ctx->in->ctx, ctx->length);
 		pthread_yield();
 	}
@@ -239,6 +239,7 @@ static int sink_run(sink_ctx_t *ctx)
 	pthread_attr_setschedparam(&attr, &params);
 	pthread_create(&ctx->thread2, &attr, server_thread, ctx);
 	pthread_attr_destroy(&attr);
+
 	return 0;
 }
 

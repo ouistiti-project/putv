@@ -53,6 +53,9 @@ struct sink_ctx_s
 	unsigned int samplerate;
 	int samplesize;
 	int nchannels;
+#ifdef SYNC_ACK
+	pthread_cond_t ack;
+#endif
 	pthread_cond_t event;
 	pthread_mutex_t mutex;
 	int counter;
@@ -72,6 +75,11 @@ struct sink_ctx_s
 
 #define sink_dbg(...)
 
+#define SERVER_POLICY SCHED_FIFO
+#define SERVER_PRIORITY 55
+#define SINK_POLICY SCHED_FIFO
+#define SINK_PRIORITY 45
+
 static const char *jitter_name = "unix socket";
 static sink_ctx_t *sink_init(player_ctx_t *player, const char *filepath)
 {
@@ -84,6 +92,9 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *filepath)
 
 	pthread_mutex_init(&ctx->mutex, NULL);
 	pthread_cond_init(&ctx->event, NULL);
+#ifdef SYNC_ACK
+	pthread_cond_init(&ctx->ack, NULL);
+#endif
 
 	unsigned int size;
 	jitter_t *jitter = jitter_scattergather_init(jitter_name, 6, size);
@@ -106,33 +117,51 @@ static jitter_t *sink_jitter(sink_ctx_t *ctx)
 static int sink_unxiclient(thread_info_t *info)
 {
 	sink_ctx_t *ctx = (sink_ctx_t *)info->userctx;
-	int ret = 1;
-	int counter = 0;
+	int ret;
+	int run = 1;
+	struct sched_param params;
+
+	//params.sched_priority = sched_get_priority_min(SCHED_FIFO);
+	params.sched_priority = SERVER_PRIORITY;
+	ret = pthread_setschedparam(pthread_self(), SERVER_POLICY, &params);
+	if (ret)
+		err("sink: thread priority not changed %s", strerror(errno));
+	err("sink: thread priority not changed %s", strerror(errno));
+#ifdef SINK_UNIX_WAITCLIENT
 	if ( ctx->nbclients == 0)
 	{
-//		player_state(ctx->player, STATE_PLAY);
+		player_state(ctx->player, STATE_PLAY);
 	}
+#endif
 	ctx->nbclients++;
-	while (ret > 0)
+	int counter = ctx->counter;
+	while (run)
 	{
 		pthread_mutex_lock(&ctx->mutex);
 		while (ctx->counter <= counter)
 		{
 			pthread_cond_wait(&ctx->event, &ctx->mutex);
 		}
-		counter = ctx->counter;
-dbg("send %d %d %d", ctx->length, ctx->counter, counter);
+dbg("send %ld %d %d", ctx->length, ctx->counter, counter);
 		if (ctx->length > 0)
-			ret = send(info->sock, ctx->out, ctx->length, MSG_NOSIGNAL);
-		else
-			ret = 1;
+		{
+			ret = send(info->sock, ctx->out, ctx->length, MSG_NOSIGNAL| MSG_DONTWAIT);
+			if (ret < 0)
+				run = 0;
+		}
+		counter = ctx->counter;
 		pthread_mutex_unlock(&ctx->mutex);
+#ifdef SYNC_ACK
+		pthread_cond_broadcast(&ctx->ack);
+#endif
 	}
 	ctx->nbclients--;
+#ifdef SINK_UNIX_WAITCLIENT
 	if ( ctx->nbclients == 0)
 	{
-//		player_state(ctx->player, STATE_STOP);
+		player_state(ctx->player, STATE_STOP);
 	}
+#endif
 	return ret;
 }
 
@@ -140,6 +169,11 @@ static void *sink_thread(void *arg)
 {
 	sink_ctx_t *ctx = (sink_ctx_t *)arg;
 	int run = 1;
+
+	struct sched_param params;
+
+	params.sched_priority = SINK_PRIORITY;
+	pthread_setschedparam(pthread_self(), SINK_POLICY, &params);
 
 	/* start decoding */
 	dbg("sink: thread run");
@@ -152,12 +186,23 @@ static void *sink_thread(void *arg)
 			break;
 		}
 		pthread_mutex_lock(&ctx->mutex);
-		ctx->length = ctx->in->ops->length(ctx->in->ctx);
-		memcpy(ctx->out, buff, ctx->length);
+		int length = ctx->in->ops->length(ctx->in->ctx);
+		memcpy(ctx->out, buff, length);
+		ctx->length = length;
 		ctx->counter++;
 		pthread_mutex_unlock(&ctx->mutex);
+#ifdef SYNC_ACK
+		pthread_mutex_lock(&ctx->mutex);
 		pthread_cond_broadcast(&ctx->event);
+		pthread_cond_wait(&ctx->ack, &ctx->mutex);
+		pthread_mutex_unlock(&ctx->mutex);
+#else
+		pthread_cond_broadcast(&ctx->event);
+		pthread_yield();
+#endif
+dbg("sink: boom %d", ctx->counter);
 		ctx->in->ops->pop(ctx->in->ctx, ctx->length);
+		pthread_yield();
 	}
 	dbg("sink: thread end");
 	return NULL;
@@ -172,8 +217,28 @@ static void *server_thread(void *arg)
 
 static int sink_run(sink_ctx_t *ctx)
 {
+	pthread_attr_t attr;
+	struct sched_param params;
+
+	pthread_attr_init(&attr);
+	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+	pthread_attr_setscope(&attr, PTHREAD_SCOPE_PROCESS);
+	pthread_attr_setinheritsched(&attr, PTHREAD_EXPLICIT_SCHED);
+	pthread_attr_setschedpolicy(&attr, SINK_POLICY);
+	params.sched_priority = SINK_PRIORITY;
+	pthread_attr_setschedparam(&attr, &params);
 	pthread_create(&ctx->thread, NULL, sink_thread, ctx);
-	pthread_create(&ctx->thread2, NULL, server_thread, ctx);
+	pthread_attr_destroy(&attr);
+
+	pthread_attr_init(&attr);
+	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+	pthread_attr_setscope(&attr, PTHREAD_SCOPE_PROCESS);
+	pthread_attr_setinheritsched(&attr, PTHREAD_INHERIT_SCHED);
+	pthread_attr_setschedpolicy(&attr, SERVER_POLICY);
+	params.sched_priority = SERVER_PRIORITY;
+	pthread_attr_setschedparam(&attr, &params);
+	pthread_create(&ctx->thread2, &attr, server_thread, ctx);
+	pthread_attr_destroy(&attr);
 	return 0;
 }
 

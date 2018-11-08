@@ -345,7 +345,7 @@ static int mad_run(decoder_ctx_t *ctx, jitter_t *jitter)
 	return 0;
 }
 
-static int decoder_check(char *path)
+static int decoder_check(const char *path)
 {
 	char *ext = strrchr(path, '.');
 	if (ext)

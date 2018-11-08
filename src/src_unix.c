@@ -30,9 +30,11 @@
 #include <pthread.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/ioctl.h>
+#include <pwd.h>
 
 #include "player.h"
 #include "jitter.h"
@@ -63,10 +65,29 @@ struct src_ctx_s
 #define src_dbg(...)
 
 static const char *jitter_name = "unxi socket";
-static src_ctx_t *src_init(player_ctx_t *player, const char *filepath)
+static src_ctx_t *src_init(player_ctx_t *player, const char *url)
 {
 	int count = 2;
 	src_ctx_t *ctx = calloc(1, sizeof(*ctx));
+	const char *path = NULL;
+
+	if (strstr(url, "://") != NULL)
+	{
+		path = strstr(url, "file://") + 7;
+	}
+	else
+	{
+		path = url;
+	}
+	if (path[0] == '~')
+	{
+		struct passwd *pw = NULL;
+		pw = getpwuid(geteuid());
+		chdir(pw->pw_dir);
+		path++;
+		if (path[0] == '/')
+			path++;
+	}
 
 	ctx->ops = src_unix;
 	ctx->player = player;
@@ -80,7 +101,7 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *filepath)
 	struct sockaddr_un addr;
 	memset(&addr, 0, sizeof(struct sockaddr_un));
 	addr.sun_family = AF_UNIX;
-	strncpy(addr.sun_path, filepath, sizeof(addr.sun_path) - 1);
+	strncpy(addr.sun_path, path, sizeof(addr.sun_path) - 1);
 
 	int ret = connect(ctx->handle, (struct sockaddr *) &addr, sizeof(addr));
 	if (ret < 0)

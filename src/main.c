@@ -229,6 +229,12 @@ int main(int argc, char **argv)
 	sink->run(sink_ctx);
 	sink_jitter = sink->jitter(sink_ctx);
 
+#ifdef USE_REALTIME
+	struct sched_param params;
+	params.sched_priority = 50;
+	sched_setscheduler(0, REALTIME_SCHED, &params);
+#endif
+
 	run_player(player, sink_jitter);
 
 	sink->destroy(sink_ctx);

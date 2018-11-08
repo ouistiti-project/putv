@@ -148,7 +148,7 @@ static unsigned char *jitter_pull(jitter_ctx_t *jitter)
 	while ((private->in != NULL) &&
 		((private->level + jitter->size) > (jitter->size * jitter->count)))
 	{
-		jitter_dbg("jitter %s pull block on %p (%d/%d)", jitter->name, private->in, private->level, (jitter->size * jitter->count));
+		jitter_dbg("jitter %s pull block on %p (%d/%ld)", jitter->name, private->in, private->level, (jitter->size * jitter->count));
 		pthread_cond_wait(&private->condpush, &private->mutex);
 	}
 	pthread_mutex_unlock(&private->mutex);
@@ -159,7 +159,7 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 {
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
 
-	jitter_dbg("jitter %s push %p %d, %p", jitter->name, private->in, len, private->in + len);
+	jitter_dbg("jitter %s push %p %ld, %p", jitter->name, private->in, len, private->in + len);
 	pthread_mutex_lock(&private->mutex);
 	private->level += len;
 	private->in += len;
@@ -181,7 +181,7 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 		len = VARIATIC_INPUT * (private->in - private->bufferend);
 		memcpy(private->bufferstart, private->bufferend, len);
 		private->in = private->bufferstart + len;
-		jitter_dbg("jitter variatic move %d",len);
+		jitter_dbg("jitter variatic move %ld",len);
 	}
 	pthread_mutex_unlock(&private->mutex);
 
@@ -204,17 +204,17 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 	if (private->state == JITTER_RUNNING)
 	{
 		pthread_cond_broadcast(&private->condpeer);
-		jitter_dbg("jitter %s push A %d/%d", jitter->name, len, private->level);
+		jitter_dbg("jitter %s push A %ld/%d", jitter->name, len, private->level);
 	}
 	else if (private->state == JITTER_FILLING &&
 			private->level >= (jitter->thredhold * jitter->size))
 	{
-		jitter_dbg("jitter %s push B %d/%d", jitter->name, len, private->level);
+		jitter_dbg("jitter %s push B %ld/%d", jitter->name, len, private->level);
 		private->state = JITTER_RUNNING;
 	}
 	else
 	{
-		jitter_dbg("jitter %s push C %d/%d", jitter->name, len, private->level);
+		jitter_dbg("jitter %s push C %ld/%d", jitter->name, len, private->level);
 	}
 }
 
@@ -282,7 +282,7 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter)
 static void jitter_pop(jitter_ctx_t *jitter, size_t len)
 {
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
-	jitter_dbg("jitter %s pop %p %d, %p", jitter->name, private->out, len, private->out + len);
+	jitter_dbg("jitter %s pop %p %ld, %p", jitter->name, private->out, len, private->out + len);
 
 	if (private->state == JITTER_STOP)
 		return;
@@ -293,12 +293,12 @@ static void jitter_pop(jitter_ctx_t *jitter, size_t len)
 	pthread_mutex_unlock(&private->mutex);
 	if (private->state == JITTER_RUNNING)
 	{
-		jitter_dbg("jitter %s pop A %d/%d", jitter->name, len, private->level);
+		jitter_dbg("jitter %s pop A %ld/%d", jitter->name, len, private->level);
 		pthread_cond_broadcast(&private->condpush);
 	}
 	else
 	{
-		jitter_dbg("jitter %s pop B %d/%d %p %p", jitter->name, len, private->level, private->in, private->out);
+		jitter_dbg("jitter %s pop B %ld/%d %p %p", jitter->name, len, private->level, private->in, private->out);
 	}
 	if (private->level <= 0)
 		private->state = JITTER_FILLING;

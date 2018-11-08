@@ -248,7 +248,7 @@ static void *decoder_thread(void *arg)
 	return (void *)result;
 }
 
-static int decoder_check(char *path)
+static int decoder_check(const char *path)
 {
 	char *ext = strrchr(path, '.');
 	if (ext)

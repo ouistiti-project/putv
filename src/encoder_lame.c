@@ -150,7 +150,7 @@ static void *lame_thread(void *arg)
 		inlength /= sizeof(short int) * ctx->nchannels;
 		ctx->nsamples += inlength;
 		if (inlength < ctx->samplesframe)
-			warn("encoder lame: frame too small %d %d %d", inlength, ctx->nsamples, ctx->in->ctx->size);
+			warn("encoder lame: frame too small %d %ld %ld", inlength, ctx->nsamples, ctx->in->ctx->size);
 		if (ctx->in->ctx->frequence != ctx->samplerate)
 		{
 			ctx->samplerate = ctx->in->ctx->frequence;
@@ -202,7 +202,7 @@ static void *lame_thread(void *arg)
 		if (ret < 0)
 		{
 			if (ret == -1)
-				err("lame error %d, not enought memory %d", ret, ctx->out->ctx->size);
+				err("lame error %d, not enought memory %ld", ret, ctx->out->ctx->size);
 			else
 				err("lame error %d", ret);
 			run = 0;
@@ -218,7 +218,7 @@ static void *lame_thread(void *arg)
 		stop.tv_nsec += 1000000000;
 		stop.tv_sec -= 1;
 	}
-	dbg("encode during %u.%u", stop.tv_sec, stop.tv_nsec);
+	dbg("encode during %lu.%lu", stop.tv_sec, stop.tv_nsec);
 #endif
 	return (void *)result;
 }

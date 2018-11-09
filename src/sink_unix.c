@@ -75,10 +75,10 @@ struct sink_ctx_s
 
 #define sink_dbg(...)
 
-#define SERVER_POLICY SCHED_RR
-#define SERVER_PRIORITY 55
-#define SINK_POLICY SCHED_RR
-#define SINK_PRIORITY 45
+#define SERVER_POLICY REALTIME_SCHED
+#define SERVER_PRIORITY 65
+#define SINK_POLICY REALTIME_SCHED
+#define SINK_PRIORITY 55
 
 static const char *jitter_name = "unix socket";
 static sink_ctx_t *sink_init(player_ctx_t *player, const char *filepath)
@@ -119,20 +119,14 @@ static int sink_unxiclient(thread_info_t *info)
 	sink_ctx_t *ctx = (sink_ctx_t *)info->userctx;
 	int ret;
 	int run = 1;
-	struct sched_param params;
 
-	//params.sched_priority = sched_get_priority_min(SCHED_FIFO);
-	params.sched_priority = SERVER_PRIORITY;
-	ret = pthread_setschedparam(pthread_self(), SERVER_POLICY, &params);
-	if (ret)
-		err("sink: thread priority not changed %s", strerror(errno));
-	err("sink: thread priority not changed %s", strerror(errno));
 #ifdef SINK_UNIX_WAITCLIENT
 	if ( ctx->nbclients == 0)
 	{
 		player_state(ctx->player, STATE_PLAY);
 	}
 #endif
+
 	ctx->nbclients++;
 	int counter = ctx->counter;
 	while (run)
@@ -169,11 +163,6 @@ static void *sink_thread(void *arg)
 {
 	sink_ctx_t *ctx = (sink_ctx_t *)arg;
 	int run = 1;
-
-	struct sched_param params;
-
-	params.sched_priority = SINK_PRIORITY;
-	pthread_setschedparam(pthread_self(), SINK_POLICY, &params);
 
 	/* start decoding */
 	dbg("sink: thread run");
@@ -217,6 +206,7 @@ static void *server_thread(void *arg)
 
 static int sink_run(sink_ctx_t *ctx)
 {
+#ifdef USE_REALTIME
 	pthread_attr_t attr;
 	struct sched_param params;
 
@@ -239,6 +229,10 @@ static int sink_run(sink_ctx_t *ctx)
 	pthread_attr_setschedparam(&attr, &params);
 	pthread_create(&ctx->thread2, &attr, server_thread, ctx);
 	pthread_attr_destroy(&attr);
+#else
+	pthread_create(&ctx->thread, NULL, sink_thread, ctx);
+	pthread_create(&ctx->thread2, &attr, server_thread, ctx);
+#endif
 
 	return 0;
 }

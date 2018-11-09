@@ -284,7 +284,9 @@ static void jitter_pop(jitter_ctx_t *jitter, size_t len)
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
 	jitter_dbg("jitter %s pop %p %ld, %p", jitter->name, private->out, len, private->out + len);
 
-	if (private->state == JITTER_STOP)
+	if (private->state == JITTER_FILLING)
+		warn("jitter pop during filling");
+	if (private->state != JITTER_RUNNING)
 		return;
 
 	pthread_mutex_lock(&private->mutex);

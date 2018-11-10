@@ -34,9 +34,13 @@
 #include <sys/un.h>
 #include <sys/ioctl.h>
 
+#include <unistd.h>
+#include <poll.h>
+
 #include "player.h"
 #include "jitter.h"
 #include "filter.h"
+#include "unix_server.h"
 typedef struct sink_s sink_t;
 typedef struct sink_ctx_s sink_ctx_t;
 struct sink_ctx_s
@@ -53,6 +57,9 @@ struct sink_ctx_s
 	unsigned int samplerate;
 	int samplesize;
 	int nchannels;
+#ifndef USE_REALTIME
+	thread_info_t *clients[MAX_CLIENTS];
+#endif
 #ifdef SYNC_ACK
 	pthread_cond_t ack;
 #endif
@@ -63,7 +70,6 @@ struct sink_ctx_s
 };
 #define SINK_CTX
 #include "sink.h"
-#include "unix_server.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -76,9 +82,9 @@ struct sink_ctx_s
 #define sink_dbg(...)
 
 #define SERVER_POLICY REALTIME_SCHED
-#define SERVER_PRIORITY 65
+#define SERVER_PRIORITY 45
 #define SINK_POLICY REALTIME_SCHED
-#define SINK_PRIORITY 55
+#define SINK_PRIORITY 65
 
 static const char *jitter_name = "unix socket";
 static sink_ctx_t *sink_init(player_ctx_t *player, const char *filepath)
@@ -128,6 +134,31 @@ static int sink_unxiclient(thread_info_t *info)
 #endif
 
 	ctx->nbclients++;
+
+#ifndef USE_REALTIME
+	int i;
+	for (i = 0; i < MAX_CLIENTS; i++)
+	{
+		if (ctx->clients[i] == NULL)
+		{
+			ctx->clients[i] = info;
+			break;
+		}
+	}
+	if (i < MAX_CLIENTS)
+	{
+		while (run)
+		{
+			struct pollfd poll_set[1];
+			int numfds = 0;
+			poll_set[0].fd = info->sock;
+			numfds++;
+			ret = poll(poll_set, numfds, -1);
+			if (poll_set[0].revents & POLLHUP)
+				run = 0;
+		}
+	}
+#else
 	int counter = ctx->counter;
 	while (run)
 	{
@@ -149,6 +180,7 @@ static int sink_unxiclient(thread_info_t *info)
 		pthread_cond_broadcast(&ctx->ack);
 #endif
 	}
+#endif
 	ctx->nbclients--;
 #ifdef SINK_UNIX_WAITCLIENT
 	if ( ctx->nbclients == 0)
@@ -179,6 +211,25 @@ static void *sink_thread(void *arg)
 		memcpy(ctx->out, buff, length);
 		ctx->length = length;
 		ctx->counter++;
+
+#ifndef USE_REALTIME
+		int i;
+		int ret;
+		for (i = 0; i < MAX_CLIENTS; i++)
+		{
+			thread_info_t *info = ctx->clients[i];
+			if (ctx->length > 0 && info && info->sock != 0)
+			{
+				ret = send(info->sock, ctx->out, ctx->length, MSG_NOSIGNAL| MSG_DONTWAIT);
+				if (ret < 0)
+				{
+					close(info->sock);
+					ctx->clients[i] = NULL;
+				}
+			}
+		}
+#endif
+
 		pthread_mutex_unlock(&ctx->mutex);
 #ifdef SYNC_ACK
 		pthread_mutex_lock(&ctx->mutex);
@@ -217,7 +268,7 @@ static int sink_run(sink_ctx_t *ctx)
 	pthread_attr_setschedpolicy(&attr, SINK_POLICY);
 	params.sched_priority = SINK_PRIORITY;
 	pthread_attr_setschedparam(&attr, &params);
-	pthread_create(&ctx->thread, NULL, sink_thread, ctx);
+	pthread_create(&ctx->thread, &attr, sink_thread, ctx);
 	pthread_attr_destroy(&attr);
 
 	pthread_attr_init(&attr);
@@ -231,7 +282,7 @@ static int sink_run(sink_ctx_t *ctx)
 	pthread_attr_destroy(&attr);
 #else
 	pthread_create(&ctx->thread, NULL, sink_thread, ctx);
-	pthread_create(&ctx->thread2, &attr, server_thread, ctx);
+	pthread_create(&ctx->thread2, NULL, server_thread, ctx);
 #endif
 
 	return 0;

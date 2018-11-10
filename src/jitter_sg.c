@@ -97,7 +97,7 @@ jitter_t *jitter_scattergather_init(const char *name, unsigned int count, size_t
 	private->buffer = malloc(count * size);
 	if (private->buffer == NULL)
 	{
-		err("jitter %s not enought memory %u", name, count * size);
+		err("jitter %s not enought memory %lu", name, count * size);
 		free(private);
 		free(ctx);
 		return NULL;
@@ -132,7 +132,7 @@ jitter_t *jitter_scattergather_init(const char *name, unsigned int count, size_t
 	jitter_t *jitter = calloc(1, sizeof(*jitter));
 	jitter->ctx = ctx;
 	jitter->ops = jitter_scattergather;
-	dbg("jitter %s create scattergather (%d*%d)", name, count, size);
+	dbg("jitter %s create scattergather (%d*%ld)", name, count, size);
 	return jitter;
 }
 

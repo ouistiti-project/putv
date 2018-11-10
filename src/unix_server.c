@@ -30,9 +30,11 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <errno.h>
+#include <libgen.h>
 
 #include "player.h"
 #include "unix_server.h"
@@ -85,6 +87,9 @@ int unixserver_run(client_routine_t routine, void *userctx, const char *socketpa
 		memset(&addr, 0, sizeof(struct sockaddr_un));
 		addr.sun_family = AF_UNIX;
 		strncpy(addr.sun_path, socketpath, sizeof(addr.sun_path));
+		char *directory = dirname(socketpath);
+		umask(0);
+		mkdir(directory, 0777);
 		unlink(addr.sun_path);
 
 		firstinfo.sock = sock;
@@ -112,7 +117,7 @@ int unixserver_run(client_routine_t routine, void *userctx, const char *socketpa
 		}
 	}
 	if (ret) {
-		fprintf(stderr, "Unix server error : %s\n", strerror(errno));
+		fprintf(stderr, "Unix server %s error : %s\n", socketpath, strerror(errno));
 	}
 	return ret;
 }

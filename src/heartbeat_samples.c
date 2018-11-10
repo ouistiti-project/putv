@@ -49,14 +49,14 @@ struct heartbeat_ctx_s
 #define dbg(...)
 #endif
 
+#define heartbeat_dbg(...)
+
 heartbeat_ctx_t *heartbeat_init(unsigned int samplerate, unsigned int samplesize, unsigned int nchannels)
 {
 	heartbeat_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->samplerate = samplerate;
 	ctx->samplesize = samplesize;
 	ctx->nchannels = nchannels;
-	clockid_t clockid = CLOCK_REALTIME;
-	clock_gettime(clockid, &ctx->clock);
 
 	return ctx;
 }
@@ -71,6 +71,8 @@ static int heartbeat_wait(heartbeat_ctx_t *ctx, void *arg)
 	heartbeat_samples_t *beat = (heartbeat_samples_t *)arg;
 	clockid_t clockid = CLOCK_REALTIME;
 	unsigned long msec = beat->nsamples * 1000 / ctx->samplerate;
+	if (ctx->clock.tv_sec == 0 && ctx->clock.tv_nsec == 0)
+		clock_gettime(clockid, &ctx->clock);
 	ctx->clock.tv_nsec += (msec % 1000) * 1000000;
 	ctx->clock.tv_sec += msec / 1000;
 	if (ctx->clock.tv_nsec > 1000000000)
@@ -78,6 +80,8 @@ static int heartbeat_wait(heartbeat_ctx_t *ctx, void *arg)
 		ctx->clock.tv_nsec -= 1000000000;
 		ctx->clock.tv_sec += 1;
 	}
+	struct timespec rest;
+	memset(&rest, 0, sizeof(rest));
 	struct timespec now = {0, 0};
 	clock_gettime(clockid, &now);
 	if (now.tv_sec > ctx->clock.tv_sec ||
@@ -91,12 +95,16 @@ static int heartbeat_wait(heartbeat_ctx_t *ctx, void *arg)
 			now.tv_sec -= 1;
 		}
 		if (now.tv_nsec > 10000000)
-			dbg("heartbeat to late %u.%u", now.tv_sec, now.tv_nsec);
+			heartbeat_dbg("heartbeat to late %u.%u", now.tv_sec, now.tv_nsec);
 		//clock_gettime(clockid, &ctx->clock);
 		return -1;
 	}
 	int flags = TIMER_ABSTIME;
-	clock_nanosleep(clockid, flags, &ctx->clock, NULL);
+	while (clock_nanosleep(clockid, flags, &ctx->clock, &rest) != 0)
+	{
+		err("heartbeat hook");
+	}
+	heartbeat_dbg("heartbeat: boom %d", msec);
 	clock_gettime(clockid, &ctx->clock);
 	beat->nsamples = 0;
 

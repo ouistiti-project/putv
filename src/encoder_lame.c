@@ -46,8 +46,9 @@ struct encoder_ctx_s
 {
 	const encoder_t *ops;
 	lame_global_flags *encoder;
-	unsigned int samplerate;
-	unsigned int nchannels;
+	unsigned short samplerate;
+	unsigned char nchannels;
+	unsigned char samplesize;
 	int samplesframe;
 	int dumpfd;
 	pthread_t thread;
@@ -108,6 +109,7 @@ static encoder_ctx_t *encoder_init(player_ctx_t *player)
 
 	ctx->nchannels = 2;
 	ctx->samplerate = DEFAULT_SAMPLERATE;
+	ctx->samplesize = sizeof(signed short);
 
 	encoder_lame_init(ctx);
 #ifdef LAME_DUMP
@@ -116,7 +118,7 @@ static encoder_ctx_t *encoder_init(player_ctx_t *player)
 	//ctx->samplesframe = lame_get_framesize(ctx->encoder);
 	ctx->samplesframe = 576;
 	jitter_t *jitter = jitter_scattergather_init(jitter_name, 3,
-				ctx->samplesframe * sizeof(signed short) * ctx->nchannels);
+				ctx->samplesframe * ctx->samplesize * ctx->nchannels);
 	ctx->in = jitter;
 	jitter->format = PCM_16bits_LE_stereo;
 	jitter->ctx->frequence = 0;
@@ -147,7 +149,7 @@ static void *lame_thread(void *arg)
 
 		ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx);
 		unsigned int inlength = ctx->in->ops->length(ctx->in->ctx);
-		inlength /= sizeof(short int) * ctx->nchannels;
+		inlength /= ctx->samplesize * ctx->nchannels;
 		ctx->nsamples += inlength;
 		if (inlength < ctx->samplesframe)
 			warn("encoder lame: frame too small %d %ld %ld", inlength, ctx->nsamples, ctx->in->ctx->size);
@@ -178,6 +180,8 @@ static void *lame_thread(void *arg)
 		{
 			dbg("encoder lame flush");
 			ret = lame_encode_flush_nogap(ctx->encoder, ctx->outbuffer, ctx->out->ctx->size);
+			/* TODO : request media data from player to set new ID3 tag */
+			lame_init_bitstream(ctx->encoder);
 		}
 		if (ret > 0)
 		{

@@ -277,7 +277,12 @@ static int _media_execute(sqlite3_stmt *statement, media_parse_t cb, void *data)
 			id = sqlite3_column_int(statement, index);
 		dbg("media: %d %s", id, url);
 		if (cb != NULL)
-			cb(data, url, (const char *)info, mime);
+		{
+			int ret;
+			ret = cb(data, id, url, (const char *)info, mime);
+			if (ret != 0)
+				break;
+		}
 
 		ret = sqlite3_step(statement);
 	}

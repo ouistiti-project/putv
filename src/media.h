@@ -5,7 +5,7 @@
 
 typedef struct media_ctx_s media_ctx_t;
 
-typedef int (*media_parse_t)(void *arg, const char *url, const char *info, const char *mime);
+typedef int (*media_parse_t)(void *arg, int id, const char *url, const char *info, const char *mime);
 
 typedef enum
 {

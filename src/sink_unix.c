@@ -27,12 +27,14 @@
  *****************************************************************************/
 #include <stdio.h>
 #include <string.h>
-#include <pthread.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/ioctl.h>
+
+#define __USE_GNU
+#include <pthread.h>
 
 #include <unistd.h>
 #include <poll.h>

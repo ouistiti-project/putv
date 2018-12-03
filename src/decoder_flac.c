@@ -245,7 +245,7 @@ static void *decoder_thread(void *arg)
 	}
 	ctx->out->ops->flush(ctx->out->ctx);
 
-	return (void *)result;
+	return (void *)(intptr_t)result;
 }
 
 static int decoder_check(const char *path)

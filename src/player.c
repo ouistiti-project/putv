@@ -27,9 +27,11 @@
  *****************************************************************************/
 #include <string.h>
 #include <stdlib.h>
-#include <pthread.h>
 #include <stdio.h>
 #include <unistd.h>
+
+#define __USE_GNU
+#include <pthread.h>
 
 #include "player.h"
 #include "media.h"

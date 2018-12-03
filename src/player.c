@@ -153,7 +153,7 @@ struct _player_play_s
 	struct _player_decoder_s *dec;
 };
 
-static int _player_play(void* arg, const char *url, const char *info, const char *mime)
+static int _player_play(void* arg, int id, const char *url, const char *info, const char *mime)
 {
 	struct _player_play_s *player = (struct _player_play_s *)arg;
 	player_ctx_t *ctx = player->ctx;

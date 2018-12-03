@@ -77,11 +77,11 @@ static int method_remove(cmds_ctx_t *ctx, char *arg)
 		return -1;
 }
 
-static int _print_entry(void *arg, const char *url,
+static int _print_entry(void *arg, int id, const char *url,
 		const char *info, const char *mime)
 {
 	int *index = (int*)arg;
-	printf("playlist[%d]: %s\n", *index, url);
+	printf("playlist[%d]: %d => %s\n", *index, id, url);
 	if (info != NULL)
 		printf("\t%s\n", info);
 	(*index)++;
@@ -94,7 +94,7 @@ static int method_list(cmds_ctx_t *ctx, char *arg)
 	return ctx->media->ops->list(ctx->media->ctx, _print_entry, (void *)&value);
 }
 
-static int _import_entry(void *arg, const char *url,
+static int _import_entry(void *arg, int id, const char *url,
 		const char *info, const char *mime)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)arg;
@@ -152,10 +152,10 @@ static int method_loop(cmds_ctx_t *ctx, char *arg)
 	return enable;
 }
 
-static int _display(void *arg, const char *url, const char *info, const char *mime)
+static int _display(void *arg, int id, const char *url, const char *info, const char *mime)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t*)arg;
-	printf("player: media %s\n", url);
+	printf("player: media %d => %s\n", id, url);
 }
 
 void cmds_line_onchange(void *arg, player_ctx_t *player, state_t state)

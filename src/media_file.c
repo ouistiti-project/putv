@@ -92,7 +92,7 @@ static int media_remove(media_ctx_t *ctx, int id, const char *path)
 
 static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data)
 {
-	if (cb != NULL && cb(data, ctx->url, NULL, utils_getmime(ctx->url)) < 0)
+	if (cb != NULL && cb(data, 1, ctx->url, NULL, utils_getmime(ctx->url)) < 0)
 		return -1;
 	return 1;
 }
@@ -113,7 +113,7 @@ static int media_play(media_ctx_t *ctx, media_parse_t cb, void *data)
 
 	if (ctx->mediaid == 1 && ctx->url != NULL)
 	{
-		ret = cb(data, ctx->url, NULL, utils_getmime(ctx->url));
+		ret = cb(data, 1, ctx->url, NULL, utils_getmime(ctx->url));
 	}
 	return ctx->mediaid;
 }

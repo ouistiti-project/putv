@@ -153,7 +153,7 @@ struct _find_mediaid_s
 	void *arg;
 };
 
-static int _run_cb(_find_mediaid_t *mdata, const char *path, const char *mime)
+static int _run_cb(_find_mediaid_t *mdata, int id, const char *path, const char *mime)
 {
 	int ret = 0;
 	if (mdata->cb != NULL)
@@ -199,7 +199,7 @@ static int _run_cb(_find_mediaid_t *mdata, const char *path, const char *mime)
 		json_decref(object);
 		id3_file_close(fd);
 #endif
-		ret = mdata->cb(mdata->arg, path, info, mime);
+		ret = mdata->cb(mdata->arg, id, path, info, mime);
 		if (info != NULL)
 			free(info);
 	}
@@ -230,11 +230,11 @@ static int _find_mediaid(void *arg, media_ctx_t *ctx, int mediaid, const char *p
 	_find_mediaid_t *mdata = (_find_mediaid_t *)arg;
 	if (mdata->id >= 0 && mdata->id == mediaid)
 	{
-		_run_cb(mdata, path, mime);
+		_run_cb(mdata, mediaid, path, mime);
 		ret = 0;
 	}
 	else if (mdata->id == -1 && mdata->cb != NULL)
-		_run_cb(mdata, path, mime);
+		_run_cb(mdata, mediaid, path, mime);
 
 	return ret;
 }
@@ -389,7 +389,7 @@ static int media_play(media_ctx_t *ctx, media_parse_t cb, void *data)
 		if (path)
 		{
 			sprintf(path,PROTOCOLNAME"%s/%s", it->path, it->items[it->index]->d_name);
-			ret = cb(data, path, NULL, utils_getmime(path));
+			ret = cb(data, ctx->mediaid, path, NULL, utils_getmime(path));
 			free(path);
 		}
 	}

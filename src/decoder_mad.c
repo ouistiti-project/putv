@@ -306,7 +306,7 @@ static void *mad_thread(void *arg)
 		ctx->out->ops->push(ctx->out->ctx, ctx->outbufferlen, NULL);
 	}
 
-	return (void *)result;
+	return (void *)(intptr_t)result;
 }
 
 static int mad_run(decoder_ctx_t *ctx, jitter_t *jitter)

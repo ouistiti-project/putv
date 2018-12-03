@@ -31,6 +31,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
+#define __USE_GNU
 #include <pthread.h>
 
 #include <curl/curl.h>

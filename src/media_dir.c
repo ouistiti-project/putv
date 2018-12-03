@@ -33,6 +33,7 @@
 #include <dirent.h>
 #include <fcntl.h>
 
+#define __USE_GNU
 #include <pthread.h>
 
 #ifdef USE_INOTIFY

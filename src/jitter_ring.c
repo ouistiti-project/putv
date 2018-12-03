@@ -29,6 +29,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#define __USE_GNU
 #include <pthread.h>
 
 #include "jitter.h"

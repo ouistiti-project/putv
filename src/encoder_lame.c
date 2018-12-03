@@ -224,7 +224,7 @@ static void *lame_thread(void *arg)
 	}
 	dbg("encode during %lu.%lu", stop.tv_sec, stop.tv_nsec);
 #endif
-	return (void *)result;
+	return (void *)(intptr_t)result;
 }
 
 static int encoder_run(encoder_ctx_t *ctx, jitter_t *jitter)

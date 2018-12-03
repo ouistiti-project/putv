@@ -300,7 +300,7 @@ static void *_cmds_line_pthread(void *arg)
 	int ret;
 	cmds_ctx_t *ctx = (cmds_ctx_t *)arg;
 	ret = cmds_line_cmd(ctx);
-	return (void*)ret;
+	return (void*)(intptr_t)ret;
 }
 
 static int cmds_line_run(cmds_ctx_t *ctx)

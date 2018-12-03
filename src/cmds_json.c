@@ -403,6 +403,19 @@ static void jsonrpc_onchange(void * userctx, player_ctx_t *ctx, state_t state)
 	}
 }
 
+struct _cmds_send_s
+{
+	int sock;
+};
+static int _cmds_send(const char *buff, size_t size, void *arg)
+{
+	struct _cmds_send_s *data = (struct _cmds_send_s *)arg;
+	int sock = data->sock;
+	int ret;
+	ret = send(sock, buff, size, MSG_DONTWAIT | MSG_NOSIGNAL);
+	return (ret == size)?0:-1;
+}
+
 static int jsonrpc_command(thread_info_t *info)
 {
 	int ret = 0;
@@ -429,9 +442,24 @@ static int jsonrpc_command(thread_info_t *info)
 			ret = recv(sock, buffer, 1500, MSG_NOSIGNAL);
 			if (ret > 0)
 			{
-				char *out = jsonrpc_handler(buffer, ret, method_table, ctx);
-				ret = strlen(out);
-				ret = send(sock, out, ret, MSG_DONTWAIT | MSG_NOSIGNAL);
+				json_error_t error;
+				json_t *request = json_loadb(buffer, ret, 0, &error);
+				if (request != NULL)
+				{
+					json_t *response = jsonrpc_jresponse(request, method_table, ctx);
+					if (response != NULL)
+					{
+						struct _cmds_send_s data = {sock = sock};
+						json_dump_callback(response, _cmds_send, &data, JSON_INDENT(2));
+						json_decref(response);
+					}
+					json_decref(request);
+				}
+			}
+			if (ret == 0)
+			{
+				unixserver_remove(info);
+				sock = 0;
 			}
 		}
 		if (ret < 0)
@@ -439,6 +467,7 @@ static int jsonrpc_command(thread_info_t *info)
 			if (errno != EAGAIN)
 			{
 				unixserver_remove(info);
+				sock = 0;
 			}
 		}
 	}

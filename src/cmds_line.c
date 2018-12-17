@@ -94,6 +94,18 @@ static int method_list(cmds_ctx_t *ctx, char *arg)
 	return ctx->media->ops->list(ctx->media->ctx, _print_entry, (void *)&value);
 }
 
+static int method_info(cmds_ctx_t *ctx, char *arg)
+{
+	int value = 0;
+	return ctx->media->ops->current(ctx->media->ctx, _print_entry, (void *)&value);
+}
+
+static int method_search(cmds_ctx_t *ctx, char *arg)
+{
+	int id = atoi(arg);
+	return ctx->media->ops->find(ctx->media->ctx, id, _print_entry, (void *)&id);
+}
+
 static int _import_entry(void *arg, int id, const char *url,
 		const char *info, const char *mime)
 {
@@ -249,6 +261,16 @@ static int cmds_line_cmd(cmds_ctx_t *ctx)
 				{
 					method = method_import;
 					i += 6;
+				}
+				if (!strncmp(buffer + i, "search",6))
+				{
+					method = method_search;
+					i += 6;
+				}
+				if (!strncmp(buffer + i, "info",4))
+				{
+					method = method_info;
+					i += 4;
 				}
 				if (!strncmp(buffer + i, "play",4))
 				{

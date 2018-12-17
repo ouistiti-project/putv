@@ -33,7 +33,6 @@
 
 #include "player.h"
 #include "media.h"
-#include "decoder.h"
 
 struct media_ctx_s
 {
@@ -60,19 +59,6 @@ static int media_current(media_ctx_t *ctx, media_parse_t cb, void *data);
 static int media_play(media_ctx_t *ctx, media_parse_t play, void *data);
 static int media_next(media_ctx_t *ctx);
 static int media_end(media_ctx_t *ctx);
-
-static const char *utils_getmime(const char *path)
-{
-#ifdef DECODER_MAD
-	if (!decoder_mad->check(path))
-		return decoder_mad->mime;
-#endif
-#ifdef DECODER_FLAC
-	if (!decoder_flac->check(path))
-		return decoder_flac->mime;
-#endif
-	return mime_octetstream;
-}
 
 static int media_count(media_ctx_t *ctx)
 {

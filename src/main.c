@@ -142,7 +142,7 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
-	media_ctx = MEDIA->init(mediapath);
+	media_ctx = MEDIA->init(mediapath, name);
 	if (media_ctx == NULL)
 	{
 		err("media not found %s", mediapath);

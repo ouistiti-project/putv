@@ -30,12 +30,13 @@
 #include <pthread.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #include <sqlite3.h>
 
 #include "player.h"
 #include "media.h"
-#include "decoder.h"
 
 struct media_ctx_s
 {

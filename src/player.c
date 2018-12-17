@@ -68,8 +68,6 @@ struct player_ctx_s
 	pthread_mutex_t mutex;
 };
 
-const char const *mime_octetstream = "octet/stream";
-
 player_ctx_t *player_init(media_t *media)
 {
 	player_ctx_t *ctx = calloc(1, sizeof(*ctx));

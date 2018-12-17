@@ -47,7 +47,6 @@
 
 #include "player.h"
 #include "media.h"
-#include "decoder.h"
 
 #define N_(string) string
 
@@ -108,19 +107,6 @@ static int media_play(media_ctx_t *ctx, media_parse_t play, void *data);
 static int media_next(media_ctx_t *ctx);
 static media_dirlist_t *media_random(media_ctx_t *ctx, int enable);
 static int media_end(media_ctx_t *ctx);
-
-static const char *utils_getmime(const char *path)
-{
-#ifdef DECODER_MAD
-	if (!decoder_mad->check(path))
-		return decoder_mad->mime;
-#endif
-#ifdef DECODER_FLAC
-	if (!decoder_flac->check(path))
-		return decoder_flac->mime;
-#endif
-	return mime_octetstream;
-}
 
 static char *utils_getpath(const char *url)
 {
@@ -314,7 +300,7 @@ static int _find(media_ctx_t *ctx, media_dirlist_t **pit, int *pmediaid, _findcb
 					sprintf(path,PROTOCOLNAME"%s/%s", it->path, it->items[it->index]->d_name);
 					const char *mime = utils_getmime(path);
 					ret = -1;
-					if (mime != mime_octetstream)
+					if (strcmp(mime, mime_octetstream) != 0)
 						ret = cb(arg, ctx, *pmediaid, path, mime);
 					free(path);
 					if (ret > 0)

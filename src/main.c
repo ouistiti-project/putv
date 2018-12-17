@@ -93,7 +93,7 @@ static int run_player(player_ctx_t *player, jitter_t *sink_jitter)
 #define RANDOM 0x10
 int main(int argc, char **argv)
 {
-	const char *mediapath = SYSCONFDIR"/putv.db";
+	const char *mediapath = DATADIR;
 	const char *outarg = "default";
 	media_ctx_t *media_ctx;
 	pthread_t thread;

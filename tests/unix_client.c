@@ -164,7 +164,10 @@ int main(int argc, char *argv[])
 	char *url = argv[1];
 	unixsocket_t *ctx;
 
-	ctx = _init(url);
-	_run(ctx);
+	if (argc > 1)
+	{
+		ctx = _init(url);
+		_run(ctx);
+	}
 	return 0;
 }

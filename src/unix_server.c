@@ -88,7 +88,7 @@ int unixserver_run(client_routine_t routine, void *userctx, const char *socketpa
 		memset(&addr, 0, sizeof(struct sockaddr_un));
 		addr.sun_family = AF_UNIX;
 		strncpy(addr.sun_path, socketpath, sizeof(addr.sun_path));
-		char *directory = dirname(socketpath);
+		char *directory = dirname((char *)socketpath);
 		umask(0);
 		mkdir(directory, 0777);
 		unlink(addr.sun_path);

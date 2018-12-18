@@ -157,20 +157,23 @@ static int findmedia(sqlite3 *db, const char *path)
 		sqlite3_bind_text(statement, sqlite3_bind_parameter_index(statement, "@NAME"), path, -1, SQLITE_STATIC);
 
 		int wordid = _execute(statement);
-		const char *queries[] = {
-			"select \"id\" from \"opus\" where \"titleid\"=@ID",
-			"select \"id\" from \"opus\" inner join artist on artist.id=opus.artistid  where artist.wordid=@ID",
-			"select \"id\" from \"opus\" inner join album on album.id=opus.albumid  where album.wordid=@ID",
-			NULL
-		};
-		int i = 0;
-		while (id == -1 && queries[i] != NULL)
+		if (wordid != -1)
 		{
-			sqlite3_prepare_v2(db, queries[i], -1, &statement, NULL);
-			/** set the default value of @FIELDS **/
-			sqlite3_bind_int(statement, sqlite3_bind_parameter_index(statement, "@ID"), wordid);
-			id = _execute(statement);
-			i++;
+			const char *queries[] = {
+				"select \"id\" from \"opus\" where \"titleid\"=@ID",
+				"select \"id\" from \"opus\" inner join artist on artist.id=opus.artistid  where artist.wordid=@ID",
+				"select \"id\" from \"opus\" inner join album on album.id=opus.albumid  where album.wordid=@ID",
+				NULL
+			};
+			int i = 0;
+			while (id == -1 && queries[i] != NULL)
+			{
+				sqlite3_prepare_v2(db, queries[i], -1, &statement, NULL);
+				/** set the default value of @FIELDS **/
+				sqlite3_bind_int(statement, sqlite3_bind_parameter_index(statement, "@ID"), wordid);
+				id = _execute(statement);
+				i++;
+			}
 		}
 	}
 #endif
@@ -182,34 +185,34 @@ static int media_remove(media_ctx_t *ctx, int id, const char *path)
 {
 	int ret;
 	sqlite3 *db = ctx->db;
-	sqlite3_stmt *statement;
-	int size = 256;
-	char *sql = sqlite3_malloc(size);
 	if (path != NULL)
 	{
-		snprintf(sql, size, "delete from \"media\" where \"url\"=@PATH");
-		ret = sqlite3_prepare_v2(db, sql, size, &statement, NULL);
-		/** set the default value of @FIELDS **/
-		int index = sqlite3_bind_parameter_index(statement, "@PATH");
-		ret = sqlite3_bind_text(statement, index, path, -1, SQLITE_STATIC);
+		id = findmedia(db, path);
 	}
-	else if (id > 0)
+	if (id > 0)
 	{
-		snprintf(sql, size, "delete from \"media\" where \"id\"=@ID");
-		ret = sqlite3_prepare_v2(db, sql, size, &statement, NULL);
-		/** set the default value of @FIELDS **/
+		sqlite3_stmt *statement;
+#ifndef MEDIA_SQLITE_EXT
+		char *sql = "delete from \"media\" where \"id\"=@ID";
+#else
+		char *sql = "delete from \"media\" where \"opusid\"=@ID";
+#endif
+		ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
+		SQLITE3_CHECK(ret, -1, sql);
+
 		int index = sqlite3_bind_parameter_index(statement, "@ID");
 		ret = sqlite3_bind_int(statement, index, id);
+		SQLITE3_CHECK(ret, -1, sql);
+
+		ret = sqlite3_step(statement);
+		if (ret != SQLITE_DONE)
+			ret = -1;
+		else
+		{
+			dbg("putv: remove media %s", path);
+		}
+		sqlite3_finalize(statement);
 	}
-	ret = sqlite3_step(statement);
-	if (ret != SQLITE_DONE)
-		ret = -1;
-	else
-	{
-		dbg("putv: remove media %s", path);
-	}
-	sqlite3_finalize(statement);
-	sqlite3_free(sql);
 	return ret;
 }
 
@@ -661,6 +664,26 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 	{
 		int id = sqlite3_last_insert_rowid(db);
 		dbg("putv: new media[%d] %s", id, path);
+
+		sqlite3_stmt *statement;
+		char *sql = "insert into \"playlist\" (\"id\") values(@ID);";
+
+		ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
+		SQLITE3_CHECK(ret, -1, sql);
+
+		index = sqlite3_bind_parameter_index(statement, "@ID");
+#ifndef MEDIA_SQLITE_EXT
+		ret = sqlite3_bind_int(statement, index, id);
+#else
+		ret = sqlite3_bind_int(statement, index, opusid);
+#endif
+		SQLITE3_CHECK(ret, -1, sql);
+		ret = sqlite3_step(statement);
+		if (ret != SQLITE_DONE)
+		{
+			err("media sqlite: error on insert %d", ret);
+			ret = -1;
+		}
 	}
 	free(tpath);
 	sqlite3_finalize(statement);
@@ -946,12 +969,23 @@ static media_ctx_t *media_init(const char *dbpath, const char *dbname)
 		{
 #ifndef MEDIA_SQLITE_EXT
 			const char *query[] = {
-				"create table media (\"id\" INTEGER PRIMARY KEY, \"url\" TEXT UNIQUE NOT NULL, \"mime\" TEXT, \"info\" BLOB, \"opusid\" INTEGER);",
+"create table media (\"id\" INTEGER PRIMARY KEY, \"url\" TEXT UNIQUE NOT NULL, \"mime\" TEXT, \"info\" BLOB, \"opusid\" INTEGER);",
+"create table playlist (\"id\" INTEGER, FOREIGN KEY (id) REFERENCES media(id) ON UPDATE SET NULL);",
 				NULL,
 			};
 			ret = _media_initdb(db, query);
 #else
-			err("generate the DB first");
+			const char *query[] = {
+"create table media (id INTEGER PRIMARY KEY, url TEXT UNIQUE NOT NULL, mime TEXT, info BLOB, opusid INTEGER, FOREIGN KEY (opusid) REFERENCES opus(id) ON UPDATE SET NULL);",
+"create table opus (id INTEGER PRIMARY KEY,  titleid INTEGER UNIQUE NOT NULL, artistid INTEGER, otherid INTEGER, albumid INTEGER, genreid INTEGER, FOREIGN KEY (titleid) REFERENCES word(id), FOREIGN KEY (artistid) REFERENCES artist(id) ON UPDATE SET NULL, FOREIGN KEY (albumid) REFERENCES album(id) ON UPDATE SET NULL, FOREIGN KEY (genreid) REFERENCES word(id) ON UPDATE SET NULL);",
+"create table album (id INTEGER PRIMARY KEY, wordid INTEGER UNIQUE NOT NULL, artistid INTEGER, genreid INTEGER, FOREIGN KEY (wordid) REFERENCES word(id), FOREIGN KEY (artistid) REFERENCES artist(id) ON UPDATE SET NULL, FOREIGN KEY (genreid) REFERENCES word(id) ON UPDATE SET NULL);",
+"create table artist (id INTEGER PRIMARY KEY, wordid INTEGER UNIQUE NOT NULL, info BLOB, FOREIGN KEY (wordid) REFERENCES word(id));",
+"create table genre (id INTEGER PRIMARY KEY, wordid INTEGER, FOREIGN KEY (wordid) REFERENCES word(id));",
+"create table playlist (id INTEGER, FOREIGN KEY (id) REFERENCES opus(id) ON UPDATE SET NULL);",
+"create table word (id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL);",
+				NULL,
+			};
+			ret = _media_initdb(db, query);
 #endif
 		}
 		if (ret == SQLITE_OK)

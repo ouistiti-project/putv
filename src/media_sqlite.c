@@ -59,6 +59,16 @@ struct media_ctx_s
 #define dbg(...)
 #endif
 
+#ifdef DEBUG
+#define SQLITE3_CHECK(ret, value, sql) \
+		if (ret != SQLITE_OK) {\
+			err("%s(%d) %s", __FUNCTION__, __LINE__, sql); \
+			return value; \
+		}
+#else
+#define SQLITE3_CHECK(...)
+#endif
+
 static int media_count(media_ctx_t *ctx);
 static int media_insert(media_ctx_t *ctx, const char *path, const char *info, const char *mime);
 static int media_find(media_ctx_t *ctx, int id,  media_parse_t cb, void *data);
@@ -105,9 +115,10 @@ static int media_count(media_ctx_t *ctx)
 #else
 	char *sql = "select \"id\" from \"opus\" ";
 #endif
-	sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
+	int ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
+	SQLITE3_CHECK(ret, -1, sql);
 
-	int ret = sqlite3_step(statement);
+	ret = sqlite3_step(statement);
 	if (ret != SQLITE_ERROR)
 	{
 		do
@@ -129,11 +140,14 @@ static int findmedia(sqlite3 *db, const char *path)
 #else
 	char *sql = "select \"opusid\" from \"media\" where \"url\"=@PATH";
 #endif
-	sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
-	/** set the default value of @FIELDS **/
-	sqlite3_bind_text(statement, sqlite3_bind_parameter_index(statement, "@PATH"), path, -1, SQLITE_STATIC);
+	int ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
+	SQLITE3_CHECK(ret, -1, sql);
+
+	ret = sqlite3_bind_text(statement, sqlite3_bind_parameter_index(statement, "@PATH"), path, -1, SQLITE_STATIC);
+	SQLITE3_CHECK(ret, -1, sql);
 
 	int id = _execute(statement);
+
 #ifdef MEDIA_SQLITE_EXT
 	if (id == -1)
 	{
@@ -205,34 +219,34 @@ static int opus_insert_word(media_ctx_t *ctx, const char *word, int *exist)
 	sqlite3 *db = ctx->db;
 	int ret;
 	char *wordselect = "select \"id\" from \"word\" where \"name\" = @WORD";
-	char *wordinsert = "insert into \"word\" (\"name\") values (@WORD)";
 	
 	sqlite3_stmt *st_select;
 	ret = sqlite3_prepare_v2(db, wordselect, -1, &st_select, NULL);
-	if (ret != SQLITE_OK)
-		return -1;
-
-	sqlite3_stmt *st_insert;
-	ret = sqlite3_prepare_v2(db, wordinsert, -1, &st_insert, NULL);
-	if (ret != SQLITE_OK)
-	{
-		sqlite3_finalize(st_select);
-		return -1;
-	}
+	SQLITE3_CHECK(ret, -1, wordselect);
 
 	int index;
 	index = sqlite3_bind_parameter_index(st_select, "@WORD");
 
 	int id = -1;
 	ret = sqlite3_bind_text(st_select, index, word, -1, SQLITE_STATIC);
+	SQLITE3_CHECK(ret, -1, wordselect);
+
 	ret = sqlite3_step(st_select);
 	if (ret != SQLITE_ROW)
 	{
+		char *wordinsert = "insert into \"word\" (\"name\") values (@WORD)";
+		sqlite3_stmt *st_insert;
+		ret = sqlite3_prepare_v2(db, wordinsert, -1, &st_insert, NULL);
+		SQLITE3_CHECK(ret, -1, wordinsert);
+
 		ret = sqlite3_bind_text(st_insert, index, word, -1, SQLITE_STATIC);
+		SQLITE3_CHECK(ret, -1, wordinsert);
+
 		ret = sqlite3_step(st_insert);
 		id = sqlite3_last_insert_rowid(db);
 		if (exist != NULL)
 			*exist = 0;
+		sqlite3_finalize(st_insert);
 	}
 	else
 	{
@@ -242,7 +256,6 @@ static int opus_insert_word(media_ctx_t *ctx, const char *word, int *exist)
 			id = sqlite3_column_int(st_select, 0);
 	}
 	sqlite3_finalize(st_select);
-	sqlite3_finalize(st_insert);
 	return id;
 }
 
@@ -253,39 +266,31 @@ static int opus_insert_info(media_ctx_t *ctx, const char *table, int wordid)
 	char *wordselect = "select \"id\" from \"%s\" where \"wordid\" = @WORDID";
 	char *wordinsert = "insert into \"%s\" (\"wordid\") values (@WORDID)";
 
-	char *sql = malloc(strlen(wordselect) + strlen(table) + 1);
-	sprintf(sql, wordselect, table);
+	char sql[48 + 20 + 1];
+	snprintf(sql, 69, wordselect, table);
 
 	sqlite3_stmt *st_select;
 	ret = sqlite3_prepare_v2(db, sql, -1, &st_select, NULL);
-	if (ret != SQLITE_OK)
-	{
-		free(sql);
-		return -1;
-	}
+	SQLITE3_CHECK(ret, -1, sql);
 
 	int index;
 	index = sqlite3_bind_parameter_index(st_select, "@WORDID");
 
 	int id = -1;
 	ret = sqlite3_bind_int(st_select, index, wordid);
+	SQLITE3_CHECK(ret, -1, sql);
 	ret = sqlite3_step(st_select);
 	if (ret != SQLITE_ROW)
 	{
-		free(sql);
-		char *sql = malloc(strlen(wordinsert) + strlen(table) + 1);
-		sprintf(sql, wordinsert, table);
+		snprintf(sql, 69, wordinsert, table);
 
 		sqlite3_stmt *st_insert;
 		ret = sqlite3_prepare_v2(db, sql, -1, &st_insert, NULL);
-		if (ret != SQLITE_OK)
-		{
-			free(sql);
-			sqlite3_finalize(st_select);
-			return -1;
-		}
+		SQLITE3_CHECK(ret, -1, sql);
 
 		ret = sqlite3_bind_int(st_insert, index, wordid);
+		SQLITE3_CHECK(ret, -1, sql);
+
 		ret = sqlite3_step(st_insert);
 		sqlite3_finalize(st_insert);
 		/**
@@ -300,7 +305,6 @@ static int opus_insert_info(media_ctx_t *ctx, const char *table, int wordid)
 		if (type == SQLITE_INTEGER)
 			id = sqlite3_column_int(st_select, 0);
 	}
-	free(sql);
 	sqlite3_finalize(st_select);
 	return id;
 }
@@ -333,16 +337,13 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid)
 	sqlite3_stmt *st_select;
 	int ret;
 	ret = sqlite3_prepare_v2(db, sql, -1, &st_select, NULL);
-	if (ret != SQLITE_OK)
-	{
-		err("%s %s", __FUNCTION__, sql);
-		return NULL;
-	}
+	SQLITE3_CHECK(ret, NULL, sql);
 
 	int index;
 
 	index = sqlite3_bind_parameter_index(st_select, "@ID");
-	sqlite3_bind_int(st_select, index, opusid);
+	ret = sqlite3_bind_int(st_select, index, opusid);
+	SQLITE3_CHECK(ret, NULL, sql);
 
 	ret = sqlite3_step(st_select);
 	if (ret == SQLITE_ROW)
@@ -356,18 +357,14 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid)
 			char *sql = "select name from word where id=@ID";
 			sqlite3_stmt *st_select;
 			ret = sqlite3_prepare_v2(db, sql, -1, &st_select, NULL);
-			if (ret != SQLITE_OK)
-			{
-				err("%s %s", __FUNCTION__, sql);
-				goto error;
-			}
+			SQLITE3_CHECK(ret, NULL, sql);
 
 			int index;
 
 			index = sqlite3_bind_parameter_index(st_select, "@ID");
-			sqlite3_bind_int(st_select, index, wordid);
+			ret = sqlite3_bind_int(st_select, index, wordid);
+			SQLITE3_CHECK(ret, NULL, sql);
 
-			int ret;
 			ret = sqlite3_step(st_select);
 			if (ret == SQLITE_ROW)
 			{
@@ -389,18 +386,14 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid)
 			char *sql = "select name from word inner join artist on word.id=artist.wordid where artist.id=@ID";
 			sqlite3_stmt *st_select;
 			ret = sqlite3_prepare_v2(db, sql, -1, &st_select, NULL);
-			if (ret != SQLITE_OK)
-			{
-				err("%s %s", __FUNCTION__, sql);
-				goto error;
-			}
+			SQLITE3_CHECK(ret, NULL, sql);
 
 			int index;
 
 			index = sqlite3_bind_parameter_index(st_select, "@ID");
-			sqlite3_bind_int(st_select, index, wordid);
+			ret = sqlite3_bind_int(st_select, index, wordid);
+			SQLITE3_CHECK(ret, NULL, sql);
 
-			int ret;
 			ret = sqlite3_step(st_select);
 			if (ret == SQLITE_ROW)
 			{
@@ -422,18 +415,14 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid)
 			char *sql = "select name from word inner join album on word.id=album.wordid where album.id=@ID";
 			sqlite3_stmt *st_select;
 			ret = sqlite3_prepare_v2(db, sql, -1, &st_select, NULL);
-			if (ret != SQLITE_OK)
-			{
-				err("%s %s", __FUNCTION__, sql);
-				goto error;
-			}
+			SQLITE3_CHECK(ret, NULL, sql);
 
 			int index;
 
 			index = sqlite3_bind_parameter_index(st_select, "@ID");
-			sqlite3_bind_int(st_select, index, wordid);
+			ret = sqlite3_bind_int(st_select, index, wordid);
+			SQLITE3_CHECK(ret, NULL, sql);
 
-			int ret;
 			ret = sqlite3_step(st_select);
 			if (ret == SQLITE_ROW)
 			{
@@ -452,21 +441,17 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid)
 		if (type == SQLITE_INTEGER)
 		{
 			wordid = sqlite3_column_int(st_select, 3);
-			char *sql = "select name from word inner join word on word.id=genre.wordid where genre.id=@ID";
+			char *sql = "select name from word inner join genre on word.id=genre.wordid where genre.id=@ID";
 			sqlite3_stmt *st_select;
 			ret = sqlite3_prepare_v2(db, sql, -1, &st_select, NULL);
-			if (ret != SQLITE_OK)
-			{
-				err("%s %s", __FUNCTION__, sql);
-				goto error;
-			}
+			SQLITE3_CHECK(ret, NULL, sql);
 
 			int index;
 
 			index = sqlite3_bind_parameter_index(st_select, "@ID");
-			sqlite3_bind_int(st_select, index, wordid);
+			ret = sqlite3_bind_int(st_select, index, wordid);
+			SQLITE3_CHECK(ret, NULL, sql);
 
-			int ret;
 			ret = sqlite3_step(st_select);
 			if (ret == SQLITE_ROW)
 			{
@@ -485,9 +470,6 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid)
 	sqlite3_finalize(st_select);
 
 	return json_info;
-error:
-	sqlite3_finalize(st_select);
-	return NULL;
 }
 
 
@@ -548,36 +530,41 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int mediaid)
 
 	sqlite3_stmt *st_select;
 	ret = sqlite3_prepare_v2(db, select, -1, &st_select, NULL);
-	if (ret != SQLITE_OK)
-		return -1;
+	SQLITE3_CHECK(ret, -1, select);
 
 	int index;
 
 	index = sqlite3_bind_parameter_index(st_select, "@TITLEID");
-	sqlite3_bind_int(st_select, index, titleid);
+	ret = sqlite3_bind_int(st_select, index, titleid);
+	SQLITE3_CHECK(ret, -1, select);
 	index = sqlite3_bind_parameter_index(st_select, "@ARTISTID");
-	sqlite3_bind_int(st_select, index, artistid);
+	ret = sqlite3_bind_int(st_select, index, artistid);
+	SQLITE3_CHECK(ret, -1, select);
 	index = sqlite3_bind_parameter_index(st_select, "@ALBUMID");
-	sqlite3_bind_int(st_select, index, albumid);
+	ret = sqlite3_bind_int(st_select, index, albumid);
+	SQLITE3_CHECK(ret, -1, select);
 	ret = sqlite3_step(st_select);
 	if (ret != SQLITE_ROW)
 	{
 		char *insert = "insert into \"opus\" (\"titleid\",\"artistid\",\"albumid\",\"genreid\") values (@TITLEID,@ARTISTID,@ALBUMID,@GENREID)";
 		sqlite3_stmt *st_insert;
 		ret = sqlite3_prepare_v2(db, insert, -1, &st_insert, NULL);
-		if (ret != SQLITE_OK)
-			return -1;
+		SQLITE3_CHECK(ret, -1, select);
 
 		int index;
 
 		index = sqlite3_bind_parameter_index(st_insert, "@TITLEID");
-		sqlite3_bind_int(st_insert, index, titleid);
+		ret = sqlite3_bind_int(st_insert, index, titleid);
+		SQLITE3_CHECK(ret, -1, select);
 		index = sqlite3_bind_parameter_index(st_insert, "@ARTISTID");
-		sqlite3_bind_int(st_insert, index, artistid);
+		ret = sqlite3_bind_int(st_insert, index, artistid);
+		SQLITE3_CHECK(ret, -1, select);
 		index = sqlite3_bind_parameter_index(st_insert, "@ALBUMID");
-		sqlite3_bind_int(st_insert, index, albumid);
-		index = sqlite3_bind_parameter_index(st_insert, "@GERNREID");
-		sqlite3_bind_int(st_insert, index, genreid);
+		ret = sqlite3_bind_int(st_insert, index, albumid);
+		SQLITE3_CHECK(ret, -1, select);
+		index = sqlite3_bind_parameter_index(st_insert, "@GENREID");
+		ret = sqlite3_bind_int(st_insert, index, genreid);
+		SQLITE3_CHECK(ret, -1, select);
 		ret = sqlite3_step(st_insert);
 		if (ret != SQLITE_DONE)
 		{
@@ -626,8 +613,7 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 #endif
 
 	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
-	if (ret != SQLITE_OK)
-		return -1;
+	SQLITE3_CHECK(ret, -1, sql);
 
 	int index;
 	char *tpath = NULL;
@@ -643,6 +629,7 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 	}
 	index = sqlite3_bind_parameter_index(statement, "@PATH");
 	ret = sqlite3_bind_text(statement, index, tpath, -1, SQLITE_STATIC);
+	SQLITE3_CHECK(ret, -1, sql);
 
 #ifndef MEDIA_SQLITE_EXT
 	index = sqlite3_bind_parameter_index(statement, "@INFO");
@@ -654,6 +641,7 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 	index = sqlite3_bind_parameter_index(statement, "@OPUSID");
 	ret = sqlite3_bind_int(statement, index, opusid);
 #endif
+	SQLITE3_CHECK(ret, -1, sql);
 	index = sqlite3_bind_parameter_index(statement, "@MIME");
 	if (mime == NULL)
 		mime = utils_getmime(path);
@@ -661,6 +649,7 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 		ret = sqlite3_bind_text(statement, index, mime, -1, SQLITE_STATIC);
 	else
 		ret = sqlite3_bind_null(statement, index);
+	SQLITE3_CHECK(ret, -1, sql);
 
 	ret = sqlite3_step(statement);
 	if (ret != SQLITE_DONE)
@@ -747,16 +736,19 @@ static int _media_execute(media_ctx_t *ctx, sqlite3_stmt *statement, media_parse
 static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data)
 {
 	int count;
+	int ret;
 	sqlite3_stmt *statement;
 #ifndef MEDIA_SQLITE_EXT
 	char *sql = "select \"url\", \"mime\", \"id\", \"info\" from \"media\" where id = @ID";
 #else
 	char *sql = "select \"url\", \"mime\", \"opusid\" from \"media\" where opusid = @ID";
 #endif
-	sqlite3_prepare_v2(ctx->db, sql, -1, &statement, NULL);
+	ret = sqlite3_prepare_v2(ctx->db, sql, -1, &statement, NULL);
+	SQLITE3_CHECK(ret, -1, sql);
 
 	int index = sqlite3_bind_parameter_index(statement, "@ID");
-	sqlite3_bind_int(statement, index, id);
+	ret = sqlite3_bind_int(statement, index, id);
+	SQLITE3_CHECK(ret, -1, sql);
 
 	count = _media_execute(ctx, statement, cb, data);
 	sqlite3_finalize(statement);
@@ -781,6 +773,7 @@ static int media_list(media_ctx_t *ctx, media_parse_t cb, void *data)
 	char *sql = "select \"url\", \"mime\", \"opusid\" from \"media\"";
 #endif
 	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
+	SQLITE3_CHECK(ret, -1, sql);
 
 	count = _media_execute(ctx, statement, cb, data);
 	sqlite3_finalize(statement);
@@ -796,31 +789,28 @@ static int media_play(media_ctx_t *ctx, media_parse_t cb, void *data)
 
 static int media_next(media_ctx_t *ctx)
 {
+	int ret;
 	sqlite3_stmt *statement;
-#ifndef MEDIA_SQLITE_EXT
-		char *sql[] = {
-			"select \"id\" from \"media\" where id > @ID",
-			"select \"id\" from \"media\""
-			};
-#else
-		char *sql[] = {
-			"select \"id\" from \"opus\" where id > @ID",
-			"select \"id\" from \"opus\""
-			};
-#endif
+	char *sql[] = {
+		"select \"id\" from \"playlist\" where id > @ID",
+		"select \"id\" from \"playlist\""
+		};
 	if (ctx->mediaid != 0)
 	{
-		sqlite3_prepare_v2(ctx->db, sql[0], -1, &statement, NULL);
+		ret = sqlite3_prepare_v2(ctx->db, sql[0], -1, &statement, NULL);
+		SQLITE3_CHECK(ret, -1, sql[0]);
 
 		int index = sqlite3_bind_parameter_index(statement, "@ID");
-		sqlite3_bind_int(statement, index, ctx->mediaid);
+		ret = sqlite3_bind_int(statement, index, ctx->mediaid);
+		SQLITE3_CHECK(ret, -1, sql[0]);
 	}
 	else
 	{
-		sqlite3_prepare_v2(ctx->db, sql[1], -1, &statement, NULL);
+		ret = sqlite3_prepare_v2(ctx->db, sql[1], -1, &statement, NULL);
+		SQLITE3_CHECK(ret, -1, sql[1]);
 	}
 
-	int ret = sqlite3_step(statement);
+	ret = sqlite3_step(statement);
 	if (ret == SQLITE_ROW)
 	{
 		ctx->mediaid = sqlite3_column_int(statement, 0);

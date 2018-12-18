@@ -176,11 +176,14 @@ static int _run_cb(_find_mediaid_t *mdata, int id, const char *path, const char 
 				id3_ucs4_t const *ucs4;
 				field    = id3_frame_field(frame, 1);
 				ucs4 = id3_field_getstrings(field, 0);
+				if (labels[i].id == ID3_FRAME_GENRE && ucs4 != NULL)
+					ucs4 = id3_genre_name(ucs4);
 				json_t *value;
 				if (ucs4 != NULL)
 				{
-					char *latin1 = id3_ucs4_latin1duplicate(ucs4);
+					char *latin1 = id3_ucs4_utf8duplicate(ucs4);
 					value = json_string(latin1);
+					free(latin1);
 				}
 				else
 					value = json_null();

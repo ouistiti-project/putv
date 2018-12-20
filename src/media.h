@@ -21,7 +21,7 @@ typedef enum
 typedef struct media_ops_s media_ops_t;
 struct media_ops_s
 {
-	media_ctx_t *(*init)();
+	media_ctx_t *(*init)(const char *url, ...);
 	void (*destroy)(media_ctx_t *ctx);
 
 	int (*count)(media_ctx_t *ctx);
@@ -39,11 +39,13 @@ struct media_ops_s
 typedef struct media_s media_t;
 struct media_s
 {
-	media_ops_t *ops;
+	const media_ops_t *ops;
 	media_ctx_t *ctx;
 };
 
-extern media_ops_t *media_sqlite;
-extern media_ops_t *media_file;
-extern media_ops_t *media_dir;
+media_t *media_build(const char *url);
+
+extern const media_ops_t *media_sqlite;
+extern const media_ops_t *media_file;
+extern const media_ops_t *media_dir;
 #endif

@@ -166,7 +166,7 @@ static void media_destroy(media_ctx_t *ctx)
 	free(ctx);
 }
 
-media_ops_t *media_file = &(media_ops_t)
+const media_ops_t *media_file = &(const media_ops_t)
 {
 	.init = media_init,
 	.destroy = media_destroy,

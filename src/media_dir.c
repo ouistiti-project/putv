@@ -32,6 +32,7 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 
 #define __USE_GNU
 #include <pthread.h>
@@ -107,24 +108,6 @@ static int media_play(media_ctx_t *ctx, media_parse_t play, void *data);
 static int media_next(media_ctx_t *ctx);
 static media_dirlist_t *media_random(media_ctx_t *ctx, int enable);
 static int media_end(media_ctx_t *ctx);
-
-static char *utils_getpath(const char *url)
-{
-	char *path = strstr(url, "file://");
-	if (path == NULL)
-	{
-		if (strstr(url, "://"))
-		{
-			return NULL;
-		}
-		path = (char *)url;
-	}
-	else
-		path += sizeof("file://") - 1;
-	if (path[0] == '/')
-		path++;
-	return path;
-}
 
 /**
  * directory browsing functions
@@ -246,13 +229,14 @@ static int _find(media_ctx_t *ctx, media_dirlist_t **pit, int *pmediaid, _findcb
 	media_dirlist_t *it = *pit;
 	if (it == NULL)
 	{
-		it = calloc(1, sizeof(*it));
-		char *path = utils_getpath(ctx->url);
+		char *path = utils_getpath(ctx->url, "file://");
 		if (path == NULL)
 		{
-			free(it);
 			return -1;
 		}
+		if (path[0] == '/')
+			path++;
+		it = calloc(1, sizeof(*it));
 		it->path = malloc(1 + strlen(path) + 1);
 		sprintf(it->path,"/%s", path);
 		it->nitems = scandir(it->path, &it->items, NULL, alphasort);
@@ -554,6 +538,13 @@ static media_ctx_t *media_init(const char *url)
 	media_ctx_t *ctx = NULL;
 	if (url)
 	{
+		int ret;
+		struct stat pathstat;
+		const char *path = utils_getpath(url, "file://");
+		ret = stat(path, &pathstat);
+		if ((ret != 0)  || ! S_ISDIR(pathstat.st_mode))
+			return NULL;
+
 		ctx = calloc(1, sizeof(*ctx));
 		ctx->mediaid = 0;
 		ctx->url = url;
@@ -564,7 +555,7 @@ static media_ctx_t *media_init(const char *url)
 		_find(ctx, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
 #ifdef USE_INOTIFY
 		ctx->inotifyfd = inotify_init();
-		ctx->dirfd = inotify_add_watch(ctx->inotifyfd, utils_getpath(ctx->url),
+		ctx->dirfd = inotify_add_watch(ctx->inotifyfd, utils_getpath(ctx->url, "file://"),
 						IN_MODIFY | IN_CREATE | IN_DELETE);
 		pthread_create(&ctx->thread, NULL, _check_dir, (void *)ctx);
 		ctx->options |= OPTION_INOTIFY;

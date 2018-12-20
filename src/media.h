@@ -6,6 +6,7 @@
 extern const char const *mime_octetstream;
 
 const char *utils_getmime(const char *path);
+const char *utils_getpath(const char *url, const char *proto);
 
 typedef struct media_ctx_s media_ctx_t;
 

@@ -953,15 +953,16 @@ static int _media_initdb(sqlite3 *db, const char *query[])
 	return ret;
 }
 
-static media_ctx_t *media_init(const char *dbpath, const char *dbname)
+static media_ctx_t *media_init(const char *url)
 {
 	media_ctx_t *ctx = NULL;
 	sqlite3 *db = NULL;
 	int ret = SQLITE_ERROR;
 
+	const char *dbpath = utils_getpath(url, "db://");
 	if (dbpath)
 	{
-		ret = _media_opendb(&db, dbpath, dbname);
+		ret = _media_opendb(&db, dbpath, "putv");
 	}
 	if (db)
 	{

@@ -25,6 +25,9 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *****************************************************************************/
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include "media.h"
 #include "decoder.h"
@@ -52,3 +55,18 @@ const char *utils_getmime(const char *path)
 	return mime_octetstream;
 }
 
+const char *utils_getpath(const char *url, const char *proto)
+{
+	const char *path = strstr(url, proto);
+	if (path == NULL)
+	{
+		if (strstr(url, "://"))
+		{
+			return NULL;
+		}
+		path = url;
+	}
+	else
+		path += strlen(proto);
+	return path;
+}

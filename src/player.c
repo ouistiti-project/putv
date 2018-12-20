@@ -49,6 +49,17 @@
 #define dbg(...)
 #endif
 
+typedef struct player_decoder_s player_decoder_t;
+
+struct player_decoder_s
+{
+	const decoder_t *decoder;
+	decoder_ctx_t *decoder_ctx;
+	const src_t *src;
+	src_ctx_t *src_ctx;
+	int mediaid;
+};
+
 typedef struct player_event_s player_event_t;
 struct player_event_s
 {
@@ -61,9 +72,9 @@ struct player_event_s
 struct player_ctx_s
 {
 	media_t *media;
-	int mediaid;
 	state_t state;
 	player_event_t *events;
+	player_decoder_t *current;
 	pthread_cond_t cond;
 	pthread_mutex_t mutex;
 };
@@ -119,7 +130,12 @@ state_t player_state(player_ctx_t *ctx, state_t state)
 
 int player_mediaid(player_ctx_t *ctx)
 {
-	return ctx->mediaid;
+	if (ctx->current != NULL)
+	{
+		dbg("current media %d", ctx->current->mediaid);
+		return ctx->current->mediaid;
+	}
+	return -1;
 }
 
 int player_waiton(player_ctx_t *ctx, int state)
@@ -137,28 +153,21 @@ int player_waiton(player_ctx_t *ctx, int state)
 	return 0;
 }
 
-struct _player_decoder_s
-{
-	const decoder_t *decoder;
-	decoder_ctx_t *decoder_ctx;
-	const src_t *src;
-	src_ctx_t *src_ctx;
-};
-
 struct _player_play_s
 {
 	player_ctx_t *ctx;
-	struct _player_decoder_s *dec;
+	player_decoder_t *dec;
 };
 
 static int _player_play(void* arg, int id, const char *url, const char *info, const char *mime)
 {
 	struct _player_play_s *player = (struct _player_play_s *)arg;
 	player_ctx_t *ctx = player->ctx;
-	struct _player_decoder_s *dec;
+	player_decoder_t *dec;
 
 	dec = calloc(1, sizeof(*dec));
 	dec->src = SRC;
+	dec->mediaid = id;
 #ifdef DECODER_MAD
 	if (mime && !strcmp(mime, decoder_mad->mime))
 		dec->decoder = decoder_mad;
@@ -196,7 +205,6 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 		.ctx = ctx,
 		.dec = NULL,
 	};
-	struct _player_decoder_s *current_dec = NULL;
 	while (ctx->state != STATE_ERROR)
 	{
 		pthread_mutex_lock(&ctx->mutex);
@@ -212,23 +220,22 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 		do
 		{
 			player.dec = NULL;
-			int nextid = ctx->media->ops->play(ctx->media->ctx, _player_play, &player);
-			if (current_dec != NULL)
+			ctx->media->ops->play(ctx->media->ctx, _player_play, &player);
+			if (ctx->current != NULL)
 			{
 				dbg("player: wait");
-				current_dec->decoder->destroy(current_dec->decoder_ctx);
-				current_dec->src->destroy(current_dec->src_ctx);
-				free(current_dec);
-				current_dec = NULL;
+				ctx->current->decoder->destroy(ctx->current->decoder_ctx);
+				ctx->current->src->destroy(ctx->current->src_ctx);
+				free(ctx->current);
+				ctx->current = NULL;
 			}
-			ctx->mediaid = nextid;
 			if (ctx->state != STATE_STOP && player.dec != NULL)
 			{
-				current_dec = player.dec;
+				ctx->current = player.dec;
 				dbg("player: play");
 				ctx->state = STATE_PLAY;
-				current_dec->decoder->run(current_dec->decoder_ctx, encoder_jitter);
-				current_dec->src->run(current_dec->src_ctx, current_dec->decoder->jitter(current_dec->decoder_ctx));
+				ctx->current->decoder->run(ctx->current->decoder_ctx, encoder_jitter);
+				ctx->current->src->run(ctx->current->src_ctx, ctx->current->decoder->jitter(ctx->current->decoder_ctx));
 				ctx->media->ops->next(ctx->media->ctx);
 			}
 			else

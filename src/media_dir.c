@@ -229,7 +229,7 @@ static int _find(media_ctx_t *ctx, media_dirlist_t **pit, int *pmediaid, _findcb
 	media_dirlist_t *it = *pit;
 	if (it == NULL)
 	{
-		char *path = utils_getpath(ctx->url, "file://");
+		const char *path = utils_getpath(ctx->url, "file://");
 		if (path == NULL)
 		{
 			return -1;

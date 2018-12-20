@@ -70,3 +70,39 @@ const char *utils_getpath(const char *url, const char *proto)
 		path += strlen(proto);
 	return path;
 }
+
+media_t *media_build(const char *url)
+{
+	const media_ops_t *const media_list[] = {
+	#ifdef MEDIA_DIR
+		media_dir,
+	#endif
+	#ifdef MEDIA_FILE
+		media_file,
+	#endif
+	#ifdef MEDIA_SQLITE
+		media_sqlite,
+	#endif
+		NULL
+	};
+
+	int i = 0;
+	media_ctx_t *media_ctx = NULL;
+	while (media_list[i] != NULL)
+	{
+		media_ctx = media_list[i]->init(url);
+		if (media_ctx != NULL)
+			break;
+		i++;
+	}
+	if (media_ctx == NULL)
+	{
+		err("media not found %s", url);
+		return NULL;
+	}
+	media_t *media = calloc(1, sizeof(*media));
+	media->ops = media_list[i];
+	media->ctx = media_ctx;
+
+	return media;
+}

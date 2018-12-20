@@ -336,7 +336,8 @@ static int method_change(json_t *json_params, json_t **result, void *userdata)
 		.result = json_object(),
 	};
 
-	if (ctx->media->ops->current(ctx->media->ctx, _display, &display) == 1)
+	int id = player_mediaid(ctx->player);
+	if (ctx->media->ops->find(ctx->media->ctx, id, _display, &display) == 1)
 	{
 		*result = display.result;
 	}

@@ -96,8 +96,8 @@ static int method_list(cmds_ctx_t *ctx, char *arg)
 
 static int method_info(cmds_ctx_t *ctx, char *arg)
 {
-	int value = 0;
-	return ctx->media->ops->current(ctx->media->ctx, _print_entry, (void *)&value);
+	int id = player_mediaid(ctx->player);
+	return ctx->media->ops->find(ctx->media->ctx, id, _print_entry, (void *)&id);
 }
 
 static int method_search(cmds_ctx_t *ctx, char *arg)

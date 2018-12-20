@@ -347,11 +347,6 @@ static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *arg)
 	return ret;
 }
 
-static int media_current(media_ctx_t *ctx, media_parse_t cb, void *arg)
-{
-	return media_find(ctx, ctx->mediaid, cb, arg);
-}
-
 static int media_list(media_ctx_t *ctx, media_parse_t cb, void *arg)
 {
 	int ret;
@@ -601,7 +596,6 @@ const media_ops_t *media_dir = &(const media_ops_t)
 	.next = media_next,
 	.play = media_play,
 	.list = media_list,
-	.current = media_current,
 	.find = media_find,
 	.remove = media_remove,
 	.insert = media_insert,

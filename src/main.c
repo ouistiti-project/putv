@@ -161,7 +161,7 @@ int main(int argc, char **argv)
 	{
 		player_state(player, STATE_PLAY);
 #ifdef USE_TIMER
-		if (media->ops->current(media->ctx, NULL, NULL) != 0)
+		if (player_mediaid(player) != 0)
 		{
 			int ret;
 			struct sigevent event;

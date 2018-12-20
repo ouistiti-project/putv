@@ -212,7 +212,9 @@ static int _find_mediaid(void *arg, media_ctx_t *ctx, int mediaid, const char *p
 		ret = 0;
 	}
 	else if (mdata->id == -1 && mdata->cb != NULL)
+	{
 		_run_cb(mdata, mediaid, path, mime);
+	}
 
 	return ret;
 }
@@ -288,7 +290,9 @@ static int _find(media_ctx_t *ctx, media_dirlist_t **pit, int *pmediaid, _findcb
 					const char *mime = utils_getmime(path);
 					ret = -1;
 					if (strcmp(mime, mime_octetstream) != 0)
+					{
 						ret = cb(arg, ctx, *pmediaid, path, mime);
+					}
 					free(path);
 					if (ret > 0)
 						(*pmediaid)++;
@@ -553,6 +557,7 @@ static media_ctx_t *media_init(const char *url)
 		ctx->count = MINCOUNT;
 		_find_mediaid_t data = {ctx->mediaid, NULL, NULL};
 		_find(ctx, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
+		ctx->mediaid = -1;
 #ifdef USE_INOTIFY
 		ctx->inotifyfd = inotify_init();
 		ctx->dirfd = inotify_add_watch(ctx->inotifyfd, utils_getpath(ctx->url, "file://"),

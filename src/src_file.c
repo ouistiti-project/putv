@@ -105,7 +105,7 @@ static src_ctx_t *src_init(player_ctx_t *ctx, const char *url)
 				path++;
 		}
 		if (path != NULL)
-			fd = open(path, O_RDWR);
+			fd = open(path, O_RDONLY);
 	}
 	if (fd >= 0)
 	{

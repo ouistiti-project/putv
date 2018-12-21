@@ -27,9 +27,11 @@
  *****************************************************************************/
 #include <string.h>
 #include <stdlib.h>
-#include <pthread.h>
 #include <stdio.h>
 #include <unistd.h>
+
+#define __USE_GNU
+#include <pthread.h>
 
 #include "player.h"
 #include "media.h"
@@ -65,8 +67,6 @@ struct player_ctx_s
 	pthread_cond_t cond;
 	pthread_mutex_t mutex;
 };
-
-const char const *mime_octetstream = "octet/stream";
 
 player_ctx_t *player_init(media_t *media)
 {
@@ -151,7 +151,7 @@ struct _player_play_s
 	struct _player_decoder_s *dec;
 };
 
-static int _player_play(void* arg, const char *url, const char *info, const char *mime)
+static int _player_play(void* arg, int id, const char *url, const char *info, const char *mime)
 {
 	struct _player_play_s *player = (struct _player_play_s *)arg;
 	player_ctx_t *ctx = player->ctx;

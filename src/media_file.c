@@ -33,7 +33,6 @@
 
 #include "player.h"
 #include "media.h"
-#include "decoder.h"
 
 struct media_ctx_s
 {
@@ -61,19 +60,6 @@ static int media_play(media_ctx_t *ctx, media_parse_t play, void *data);
 static int media_next(media_ctx_t *ctx);
 static int media_end(media_ctx_t *ctx);
 
-static const char *utils_getmime(const char *path)
-{
-#ifdef DECODER_MAD
-	if (!decoder_mad->check(path))
-		return decoder_mad->mime;
-#endif
-#ifdef DECODER_FLAC
-	if (!decoder_flac->check(path))
-		return decoder_flac->mime;
-#endif
-	return mime_octetstream;
-}
-
 static int media_count(media_ctx_t *ctx)
 {
 	return 1;
@@ -92,7 +78,7 @@ static int media_remove(media_ctx_t *ctx, int id, const char *path)
 
 static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data)
 {
-	if (cb != NULL && cb(data, ctx->url, NULL, utils_getmime(ctx->url)) < 0)
+	if (cb != NULL && cb(data, 1, ctx->url, NULL, utils_getmime(ctx->url)) < 0)
 		return -1;
 	return 1;
 }
@@ -113,7 +99,7 @@ static int media_play(media_ctx_t *ctx, media_parse_t cb, void *data)
 
 	if (ctx->mediaid == 1 && ctx->url != NULL)
 	{
-		ret = cb(data, ctx->url, NULL, utils_getmime(ctx->url));
+		ret = cb(data, 1, ctx->url, NULL, utils_getmime(ctx->url));
 	}
 	return ctx->mediaid;
 }
@@ -180,7 +166,7 @@ static void media_destroy(media_ctx_t *ctx)
 	free(ctx);
 }
 
-media_ops_t *media_file = &(media_ops_t)
+const media_ops_t *media_file = &(const media_ops_t)
 {
 	.init = media_init,
 	.destroy = media_destroy,

@@ -93,9 +93,8 @@ static int run_player(player_ctx_t *player, jitter_t *sink_jitter)
 #define RANDOM 0x10
 int main(int argc, char **argv)
 {
-	const char *mediapath = SYSCONFDIR"/putv.db";
+	const char *mediapath = "file://"DATADIR;
 	const char *outarg = "default";
-	media_ctx_t *media_ctx;
 	pthread_t thread;
 	const char *root = "/tmp";
 	int mode = 0;
@@ -142,32 +141,18 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
-	media_ctx = MEDIA->init(mediapath);
-	if (media_ctx == NULL)
-	{
-		err("media not found %s", mediapath);
+	media_t *media = media_build(mediapath);
+	if (media == NULL)
 		return -1;
-	}
-	media_t *media = &(media_t)
-	{
-		.ops = MEDIA,
-		.ctx = media_ctx,
-	};
-
-	if (mode & SRC_STDIN)
-	{
-		dbg("insert stdin");
-		media->ops->insert(media_ctx, "-", NULL, "audio/mp3");
-	}
 
 	if (mode & LOOP)
 	{
-		media->ops->options(media_ctx, MEDIA_LOOP, 1);
+		media->ops->options(media->ctx, MEDIA_LOOP, 1);
 	}
 
 	if (mode & RANDOM)
 	{
-		media->ops->options(media_ctx, MEDIA_RANDOM, 1);
+		media->ops->options(media->ctx, MEDIA_RANDOM, 1);
 	}
 
 	player_ctx_t *player = player_init(media);
@@ -176,7 +161,7 @@ int main(int argc, char **argv)
 	{
 		player_state(player, STATE_PLAY);
 #ifdef USE_TIMER
-		if (media->ops->current(media_ctx, NULL, NULL) != 0)
+		if (media->ops->current(media->ctx, NULL, NULL) != 0)
 		{
 			int ret;
 			struct sigevent event;

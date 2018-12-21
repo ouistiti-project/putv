@@ -66,41 +66,69 @@ static const char const *str_pause = "pause";
 static int _print_entry(void *arg, const char *url,
 		const char *info, const char *mime)
 {
+	if (url == NULL)
+		return -1;
+
 	json_t *object = (json_t*)arg;
-	json_t *json_url;
-	if (url != NULL)
-		json_url = json_string(url);
-	else
-		json_url = json_null();
+	json_t *json_sources = json_array();
+	int i;
+	for (i = 0; i < 1; i++)
+	{
+		json_t *json_source = json_object();
+		json_t *json_url = json_string(url);
+		json_object_set(json_source, "url", json_url);
+
+		if (mime != NULL)
+		{
+			json_t *json_mime = json_string(mime);
+			json_object_set(json_source, "mime", json_mime);
+		}
+		json_array_append_new(json_sources, json_source);
+	}
 
 	json_t *json_info;
 	if (info != NULL)
 	{
 		json_error_t error;
 		json_info = json_loads(info, 0, &error);
+		json_object_set(object, "info", json_info);
 	}
-	else
-		json_info = json_null();
 
-	json_t *json_mime = json_string(mime);
-	if (mime != NULL)
-		json_mime = json_string(mime);
-	else
-		json_mime = json_null();
-
-	json_object_set(object, "url", json_url);
-	json_object_set(object, "info", json_info);
-	json_object_set(object, "mime", json_mime);
+	json_object_set(object, "sources", json_sources);
 	return 0;
 }
 
-static int _append_entry(void *arg, const char *url,
+#define MAX_ITEMS 10
+typedef struct entry_s
+{
+	json_t *list;
+	int max;
+	int first;
+	int index;
+} entry_t;
+
+static int _append_entry(void *arg, int id, const char *url,
 		const char *info, const char *mime)
 {
-	json_t *list = (json_t*)arg;
-	json_t *object = json_object();
-	_print_entry(object, url, info, mime);
-	json_array_append_new(list, object);
+	entry_t *entry = (entry_t*)arg;
+
+	entry->index++;
+	if ((entry->index > entry->first) && (entry->index <= (entry->first + entry->max)))
+	{
+		json_t *object = json_object();
+		if (_print_entry(object, url, info, mime) == 0)
+		{
+			json_t *index = json_integer(id);
+			json_object_set(object, "id", index);
+			json_array_append_new(entry->list, object);
+		}
+		else
+			json_decref(object);
+	}
+	if (entry->index > (entry->first + entry->max))
+	{
+		return -1;
+	}
 	return 0;
 }
 
@@ -108,9 +136,30 @@ static int method_list(json_t *json_params, json_t **result, void *userdata)
 {
 	int ret;
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
-	json_t *list = json_array();
-	ret = ctx->media->ops->list(ctx->media->ctx, _append_entry, (void *)list);
-	*result = json_pack("{s:o}", "playlist", list);
+
+	int count = ctx->media->ops->count(ctx->media->ctx);
+	int nbitems = MAX_ITEMS;
+	nbitems = (count < nbitems)? count:nbitems;
+
+	entry_t entry;
+	entry.list = json_array();
+
+	json_t *maxitems = json_object_get(json_params, "maxitems");
+	if (maxitems)
+		entry.max = (json_integer_value(maxitems) < nbitems)?json_integer_value(maxitems):nbitems;
+	else
+		entry.max = nbitems;
+
+	json_t *first = json_object_get(json_params, "first");
+	if (first)
+		entry.first = json_integer_value(first);
+	else
+		entry.first = 0;
+
+	entry.index = 0;
+	ctx->media->ops->list(ctx->media->ctx, _append_entry, (void *)&entry);
+	*result = json_pack("{s:i,s:i,s:o}", "count", count, "nbitems", nbitems, "playlist", entry.list);
+
 	return 0;
 }
 
@@ -242,7 +291,7 @@ struct _display_ctx_s
 	json_t *result;
 };
 
-static int _display(void *arg, const char *url, const char *info, const char *mime)
+static int _display(void *arg, int id, const char *url, const char *info, const char *mime)
 {
 	_display_ctx_t *display =(_display_ctx_t *)arg;
 	cmds_ctx_t *ctx = display->ctx;
@@ -271,6 +320,8 @@ static int _display(void *arg, const char *url, const char *info, const char *mi
 
 	json_object_set(object, "state", json_state);
 	_print_entry(object, url, info, mime);
+	json_t *index = json_integer(id);
+	json_object_set(object, "id", index);
 
 	if (json_is_array(result))
 		json_array_append_new(result, object);
@@ -331,7 +382,7 @@ static struct jsonrpc_method_entry_t method_table[] = {
 	{ 'r', "pause", method_pause, "" },
 	{ 'r', "stop", method_stop, "" },
 	{ 'r', "next", method_next, "" },
-	{ 'r', "list", method_list, "" },
+	{ 'r', "list", method_list, "o" },
 	{ 'r', "append", method_append, "[]" },
 	{ 'r', "remove", method_remove, "[]" },
 	{ 'n', "change", method_change, "o" },
@@ -350,6 +401,19 @@ static void jsonrpc_onchange(void * userctx, player_ctx_t *ctx, state_t state)
 	{
 		//TODO remove notification from player
 	}
+}
+
+struct _cmds_send_s
+{
+	int sock;
+};
+static int _cmds_send(const char *buff, size_t size, void *arg)
+{
+	struct _cmds_send_s *data = (struct _cmds_send_s *)arg;
+	int sock = data->sock;
+	int ret;
+	ret = send(sock, buff, size, MSG_DONTWAIT | MSG_NOSIGNAL);
+	return (ret == size)?0:-1;
 }
 
 static int jsonrpc_command(thread_info_t *info)
@@ -378,9 +442,24 @@ static int jsonrpc_command(thread_info_t *info)
 			ret = recv(sock, buffer, 1500, MSG_NOSIGNAL);
 			if (ret > 0)
 			{
-				char *out = jsonrpc_handler(buffer, ret, method_table, ctx);
-				ret = strlen(out);
-				ret = send(sock, out, ret, MSG_DONTWAIT | MSG_NOSIGNAL);
+				json_error_t error;
+				json_t *request = json_loadb(buffer, ret, 0, &error);
+				if (request != NULL)
+				{
+					json_t *response = jsonrpc_jresponse(request, method_table, ctx);
+					if (response != NULL)
+					{
+						struct _cmds_send_s data = {sock = sock};
+						json_dump_callback(response, _cmds_send, &data, JSON_INDENT(2));
+						json_decref(response);
+					}
+					json_decref(request);
+				}
+			}
+			if (ret == 0)
+			{
+				unixserver_remove(info);
+				sock = 0;
 			}
 		}
 		if (ret < 0)
@@ -388,6 +467,7 @@ static int jsonrpc_command(thread_info_t *info)
 			if (errno != EAGAIN)
 			{
 				unixserver_remove(info);
+				sock = 0;
 			}
 		}
 	}

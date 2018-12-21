@@ -56,6 +56,7 @@ struct decoder_ctx_s
 };
 #define DECODER_CTX
 #include "decoder.h"
+#include "decoder.h"
 #include "jitter.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -306,7 +307,7 @@ static void *mad_thread(void *arg)
 		ctx->out->ops->push(ctx->out->ctx, ctx->outbufferlen, NULL);
 	}
 
-	return (void *)result;
+	return (void *)(intptr_t)result;
 }
 
 static int mad_run(decoder_ctx_t *ctx, jitter_t *jitter)

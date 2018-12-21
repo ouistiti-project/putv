@@ -32,7 +32,9 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 
+#define __USE_GNU
 #include <pthread.h>
 
 #ifdef USE_INOTIFY
@@ -46,7 +48,6 @@
 
 #include "player.h"
 #include "media.h"
-#include "decoder.h"
 
 #define N_(string) string
 
@@ -108,37 +109,6 @@ static int media_next(media_ctx_t *ctx);
 static media_dirlist_t *media_random(media_ctx_t *ctx, int enable);
 static int media_end(media_ctx_t *ctx);
 
-static const char *utils_getmime(const char *path)
-{
-#ifdef DECODER_MAD
-	if (!decoder_mad->check(path))
-		return decoder_mad->mime;
-#endif
-#ifdef DECODER_FLAC
-	if (!decoder_flac->check(path))
-		return decoder_flac->mime;
-#endif
-	return mime_octetstream;
-}
-
-static char *utils_getpath(const char *url)
-{
-	char *path = strstr(url, "file://");
-	if (path == NULL)
-	{
-		if (strstr(url, "://"))
-		{
-			return NULL;
-		}
-		path = (char *)url;
-	}
-	else
-		path += sizeof("file://") - 1;
-	if (path[0] == '/')
-		path++;
-	return path;
-}
-
 /**
  * directory browsing functions
  **/
@@ -152,7 +122,7 @@ struct _find_mediaid_s
 	void *arg;
 };
 
-static int _run_cb(_find_mediaid_t *mdata, const char *path, const char *mime)
+static int _run_cb(_find_mediaid_t *mdata, int id, const char *path, const char *mime)
 {
 	int ret = 0;
 	if (mdata->cb != NULL)
@@ -189,8 +159,17 @@ static int _run_cb(_find_mediaid_t *mdata, const char *path, const char *mime)
 				id3_ucs4_t const *ucs4;
 				field    = id3_frame_field(frame, 1);
 				ucs4 = id3_field_getstrings(field, 0);
-				char *latin1 = id3_ucs4_latin1duplicate(ucs4);
-				json_t *value = json_string(latin1);
+				if (labels[i].id == ID3_FRAME_GENRE && ucs4 != NULL)
+					ucs4 = id3_genre_name(ucs4);
+				json_t *value;
+				if (ucs4 != NULL)
+				{
+					char *latin1 = id3_ucs4_utf8duplicate(ucs4);
+					value = json_string(latin1);
+					free(latin1);
+				}
+				else
+					value = json_null();
 				json_object_set(object, labels[i].label, value);
 			}
 		}
@@ -198,7 +177,7 @@ static int _run_cb(_find_mediaid_t *mdata, const char *path, const char *mime)
 		json_decref(object);
 		id3_file_close(fd);
 #endif
-		ret = mdata->cb(mdata->arg, path, info, mime);
+		ret = mdata->cb(mdata->arg, id, path, info, mime);
 		if (info != NULL)
 			free(info);
 	}
@@ -229,11 +208,13 @@ static int _find_mediaid(void *arg, media_ctx_t *ctx, int mediaid, const char *p
 	_find_mediaid_t *mdata = (_find_mediaid_t *)arg;
 	if (mdata->id >= 0 && mdata->id == mediaid)
 	{
-		_run_cb(mdata, path, mime);
+		_run_cb(mdata, mediaid, path, mime);
 		ret = 0;
 	}
 	else if (mdata->id == -1 && mdata->cb != NULL)
-		_run_cb(mdata, path, mime);
+	{
+		_run_cb(mdata, mediaid, path, mime);
+	}
 
 	return ret;
 }
@@ -250,13 +231,14 @@ static int _find(media_ctx_t *ctx, media_dirlist_t **pit, int *pmediaid, _findcb
 	media_dirlist_t *it = *pit;
 	if (it == NULL)
 	{
-		it = calloc(1, sizeof(*it));
-		char *path = utils_getpath(ctx->url);
+		const char *path = utils_getpath(ctx->url, "file://");
 		if (path == NULL)
 		{
-			free(it);
 			return -1;
 		}
+		if (path[0] == '/')
+			path++;
+		it = calloc(1, sizeof(*it));
 		it->path = malloc(1 + strlen(path) + 1);
 		sprintf(it->path,"/%s", path);
 		it->nitems = scandir(it->path, &it->items, NULL, alphasort);
@@ -307,8 +289,10 @@ static int _find(media_ctx_t *ctx, media_dirlist_t **pit, int *pmediaid, _findcb
 					sprintf(path,PROTOCOLNAME"%s/%s", it->path, it->items[it->index]->d_name);
 					const char *mime = utils_getmime(path);
 					ret = -1;
-					if (mime != mime_octetstream)
+					if (strcmp(mime, mime_octetstream) != 0)
+					{
 						ret = cb(arg, ctx, *pmediaid, path, mime);
+					}
 					free(path);
 					if (ret > 0)
 						(*pmediaid)++;
@@ -388,7 +372,7 @@ static int media_play(media_ctx_t *ctx, media_parse_t cb, void *data)
 		if (path)
 		{
 			sprintf(path,PROTOCOLNAME"%s/%s", it->path, it->items[it->index]->d_name);
-			ret = cb(data, path, NULL, utils_getmime(path));
+			ret = cb(data, ctx->mediaid, path, NULL, utils_getmime(path));
 			free(path);
 		}
 	}
@@ -558,6 +542,13 @@ static media_ctx_t *media_init(const char *url)
 	media_ctx_t *ctx = NULL;
 	if (url)
 	{
+		int ret;
+		struct stat pathstat;
+		const char *path = utils_getpath(url, "file://");
+		ret = stat(path, &pathstat);
+		if ((ret != 0)  || ! S_ISDIR(pathstat.st_mode))
+			return NULL;
+
 		ctx = calloc(1, sizeof(*ctx));
 		ctx->mediaid = 0;
 		ctx->url = url;
@@ -566,9 +557,10 @@ static media_ctx_t *media_init(const char *url)
 		ctx->count = MINCOUNT;
 		_find_mediaid_t data = {ctx->mediaid, NULL, NULL};
 		_find(ctx, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
+		ctx->mediaid = -1;
 #ifdef USE_INOTIFY
 		ctx->inotifyfd = inotify_init();
-		ctx->dirfd = inotify_add_watch(ctx->inotifyfd, utils_getpath(ctx->url),
+		ctx->dirfd = inotify_add_watch(ctx->inotifyfd, utils_getpath(ctx->url, "file://"),
 						IN_MODIFY | IN_CREATE | IN_DELETE);
 		pthread_create(&ctx->thread, NULL, _check_dir, (void *)ctx);
 		ctx->options |= OPTION_INOTIFY;
@@ -602,7 +594,7 @@ static void media_destroy(media_ctx_t *ctx)
 	free(ctx);
 }
 
-media_ops_t *media_dir = &(media_ops_t)
+const media_ops_t *media_dir = &(const media_ops_t)
 {
 	.init = media_init,
 	.destroy = media_destroy,

@@ -77,11 +77,11 @@ static int method_remove(cmds_ctx_t *ctx, char *arg)
 		return -1;
 }
 
-static int _print_entry(void *arg, const char *url,
+static int _print_entry(void *arg, int id, const char *url,
 		const char *info, const char *mime)
 {
 	int *index = (int*)arg;
-	printf("playlist[%d]: %s\n", *index, url);
+	printf("playlist[%d]: %d => %s\n", *index, id, url);
 	if (info != NULL)
 		printf("\t%s\n", info);
 	(*index)++;
@@ -94,7 +94,19 @@ static int method_list(cmds_ctx_t *ctx, char *arg)
 	return ctx->media->ops->list(ctx->media->ctx, _print_entry, (void *)&value);
 }
 
-static int _import_entry(void *arg, const char *url,
+static int method_info(cmds_ctx_t *ctx, char *arg)
+{
+	int value = 0;
+	return ctx->media->ops->current(ctx->media->ctx, _print_entry, (void *)&value);
+}
+
+static int method_search(cmds_ctx_t *ctx, char *arg)
+{
+	int id = atoi(arg);
+	return ctx->media->ops->find(ctx->media->ctx, id, _print_entry, (void *)&id);
+}
+
+static int _import_entry(void *arg, int id, const char *url,
 		const char *info, const char *mime)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)arg;
@@ -152,10 +164,10 @@ static int method_loop(cmds_ctx_t *ctx, char *arg)
 	return enable;
 }
 
-static int _display(void *arg, const char *url, const char *info, const char *mime)
+static int _display(void *arg, int id, const char *url, const char *info, const char *mime)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t*)arg;
-	printf("player: media %s\n", url);
+	printf("player: media %d => %s\n", id, url);
 }
 
 void cmds_line_onchange(void *arg, player_ctx_t *player, state_t state)
@@ -250,6 +262,16 @@ static int cmds_line_cmd(cmds_ctx_t *ctx)
 					method = method_import;
 					i += 6;
 				}
+				if (!strncmp(buffer + i, "search",6))
+				{
+					method = method_search;
+					i += 6;
+				}
+				if (!strncmp(buffer + i, "info",4))
+				{
+					method = method_info;
+					i += 4;
+				}
 				if (!strncmp(buffer + i, "play",4))
 				{
 					method = method_play;
@@ -300,7 +322,7 @@ static void *_cmds_line_pthread(void *arg)
 	int ret;
 	cmds_ctx_t *ctx = (cmds_ctx_t *)arg;
 	ret = cmds_line_cmd(ctx);
-	return (void*)ret;
+	return (void*)(intptr_t)ret;
 }
 
 static int cmds_line_run(cmds_ctx_t *ctx)

@@ -71,6 +71,7 @@ struct media_ctx_s
 struct media_dirlist_s
 {
 	char *path;
+	int level;
 	/**
 	 * items into the directory
 	 */
@@ -128,55 +129,59 @@ static int _run_cb(_find_mediaid_t *mdata, int id, const char *path, const char 
 	if (mdata->cb != NULL)
 	{
 		char *info = NULL;
-#ifdef USE_ID3TAG
 		json_t *object = NULL;
-		int i;
-		static struct
-		{
-			char const *id;
-			char const *label;
-		} const labels[] = 
-		{
-		{ ID3_FRAME_TITLE,  N_("Title")     },
-		{ ID3_FRAME_ARTIST, N_("Artist")    },
-		{ ID3_FRAME_ALBUM,  N_("Album")     },
-		{ ID3_FRAME_TRACK,  N_("Track")     },
-		{ ID3_FRAME_YEAR,   N_("Year")      },
-		{ ID3_FRAME_GENRE,  N_("Genre")     },
-		};
-		struct id3_file *fd = id3_file_open(path + PROTOCOLNAME_LENGTH, ID3_FILE_MODE_READONLY);
-		struct id3_tag *tag = id3_file_tag(fd);
 
 		object = json_object();
 
-		for (i = 0; i < sizeof(labels) / sizeof(labels[0]); ++i)
+#if defined(USE_ID3TAG)
+		if (mime && !strcmp(mime, "audio/mp3"))
 		{
-			struct id3_frame const *frame;
-			frame = id3_tag_findframe(tag, labels[i].id, 0);
-			if (frame)
+			static struct
 			{
-				union id3_field const *field;
-				id3_ucs4_t const *ucs4;
-				field    = id3_frame_field(frame, 1);
-				ucs4 = id3_field_getstrings(field, 0);
-				if (labels[i].id == ID3_FRAME_GENRE && ucs4 != NULL)
-					ucs4 = id3_genre_name(ucs4);
-				json_t *value;
-				if (ucs4 != NULL)
+				char const *id;
+				char const *label;
+			} const labels[] = 
+			{
+			{ ID3_FRAME_TITLE,  N_("Title")     },
+			{ ID3_FRAME_ARTIST, N_("Artist")    },
+			{ ID3_FRAME_ALBUM,  N_("Album")     },
+			{ ID3_FRAME_TRACK,  N_("Track")     },
+			{ ID3_FRAME_YEAR,   N_("Year")      },
+			{ ID3_FRAME_GENRE,  N_("Genre")     },
+			};
+			struct id3_file *fd = id3_file_open(path + PROTOCOLNAME_LENGTH, ID3_FILE_MODE_READONLY);
+			struct id3_tag *tag = id3_file_tag(fd);
+
+			int i;
+			for (i = 0; i < sizeof(labels) / sizeof(labels[0]); ++i)
+			{
+				struct id3_frame const *frame;
+				frame = id3_tag_findframe(tag, labels[i].id, 0);
+				if (frame)
 				{
-					char *latin1 = id3_ucs4_utf8duplicate(ucs4);
-					value = json_string(latin1);
-					free(latin1);
+					union id3_field const *field;
+					id3_ucs4_t const *ucs4;
+					field    = id3_frame_field(frame, 1);
+					ucs4 = id3_field_getstrings(field, 0);
+					if (labels[i].id == ID3_FRAME_GENRE && ucs4 != NULL)
+						ucs4 = id3_genre_name(ucs4);
+					json_t *value;
+					if (ucs4 != NULL)
+					{
+						char *latin1 = id3_ucs4_utf8duplicate(ucs4);
+						value = json_string(latin1);
+						free(latin1);
+					}
+					else
+						value = json_null();
+					json_object_set(object, labels[i].label, value);
 				}
-				else
-					value = json_null();
-				json_object_set(object, labels[i].label, value);
 			}
+			id3_file_close(fd);
 		}
+#endif
 		info = json_dumps(object, JSON_INDENT(2));
 		json_decref(object);
-		id3_file_close(fd);
-#endif
 		ret = mdata->cb(mdata->arg, id, path, info, mime);
 		if (info != NULL)
 			free(info);
@@ -225,7 +230,7 @@ static int _find_display(void *arg, media_ctx_t *ctx, int mediaid, const char *p
 	return 1;
 }
 
-static int _find(media_ctx_t *ctx, media_dirlist_t **pit, int *pmediaid, _findcb_t cb, void *arg)
+static int _find(media_ctx_t *ctx, int level, media_dirlist_t **pit, int *pmediaid, _findcb_t cb, void *arg)
 {
 	int ret = -1;
 	media_dirlist_t *it = *pit;
@@ -243,7 +248,14 @@ static int _find(media_ctx_t *ctx, media_dirlist_t **pit, int *pmediaid, _findcb
 		sprintf(it->path,"/%s", path);
 		it->nitems = scandir(it->path, &it->items, NULL, alphasort);
 		*pmediaid = 0;
+		ctx->first = it;
 		
+	}
+	else if (it->level > level)
+	{
+		_find(ctx, level + 1, pit, pmediaid, cb, arg);
+		it = *pit;
+		it->index++;
 	}
 	while (it->nitems > 0 && it->index < it->nitems)
 	{
@@ -260,6 +272,7 @@ static int _find(media_ctx_t *ctx, media_dirlist_t **pit, int *pmediaid, _findcb
 				
 				if (new)
 				{
+					new->level = level + 1;
 					new->path = malloc(strlen(it->path) + 1 + strlen(it->items[it->index]->d_name) + 1);
 					if (new->path)
 					{
@@ -270,8 +283,19 @@ static int _find(media_ctx_t *ctx, media_dirlist_t **pit, int *pmediaid, _findcb
 					{
 						new->prev = it;
 						new->mediaid = *pmediaid;
-						ret = _find(ctx, &new, pmediaid, cb, arg);
-						if (ret == 0)
+						/**
+						 * recursive call of _find
+						 */
+						ret = _find(ctx, level + 1, &new, pmediaid, cb, arg);
+						/**
+						 * ret == 0 if all files of the directory are checked
+						 * ret > 0 if at least one file is checked
+						 * ret == -1 if no file are availlable in the directory
+						 */
+						if (ret >= 0)
+							/**
+							 * keep new to push the new structure for the next call of the function
+							 */
 							it = new;
 					}
 					else
@@ -343,7 +367,7 @@ static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *arg)
 	int mediaid = 0;
 	media_dirlist_t *dir = NULL;
 	_find_mediaid_t mdata = {id, cb, arg};
-	ret = _find(ctx, &dir, &mediaid, _find_mediaid, &mdata);
+	ret = _find(ctx, 0, &dir, &mediaid, _find_mediaid, &mdata);
 	return ret;
 }
 
@@ -353,7 +377,7 @@ static int media_list(media_ctx_t *ctx, media_parse_t cb, void *arg)
 	int mediaid = 0;
 	media_dirlist_t *dir = NULL;
 	_find_mediaid_t mdata = {-1, cb, arg};
-	ret = _find(ctx, &dir, &mediaid, _find_mediaid, &mdata);
+	ret = _find(ctx, 0, &dir, &mediaid, _find_mediaid, &mdata);
 	return ret;
 }
 
@@ -377,9 +401,23 @@ static int media_play(media_ctx_t *ctx, media_parse_t cb, void *data)
 static int media_next(media_ctx_t *ctx)
 {
 	int ret;
-	_find_mediaid_t data = {ctx->mediaid + 1, NULL, NULL};
 
-	ret = _find(ctx, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
+	if (ctx->options & OPTION_RANDOM)
+	{
+		ctx->mediaid = (random() % (ctx->count - 1));
+		_find_mediaid_t data = {ctx->mediaid, NULL, NULL};
+		ret = _find(ctx, 0, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
+		if (ctx->mediaid >= ctx->count)
+			ctx->mediaid = 0;
+		ctx->mediaid--;
+		warn("next media %d", ctx->mediaid + 1);
+		ctx->firstmediaid = -1;
+	}
+	else
+	{
+		_find_mediaid_t data = {ctx->mediaid + 1, NULL, NULL};
+		ret = _find(ctx, 0, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
+	}
 	if ((ctx->firstmediaid - 1) == ctx->mediaid)
 	{
 		if (!(ctx->options & OPTION_LOOP))
@@ -390,10 +428,6 @@ static int media_next(media_ctx_t *ctx)
 				ctx->current = _free_medialist(ctx->current, 0);
 			}
 			ctx->current = NULL;
-		}
-		else
-		{
-			ctx->current = media_random(ctx, ctx->options | OPTION_RANDOM);
 		}
 	}
 	if (ret != 0)
@@ -440,24 +474,6 @@ static media_dirlist_t *media_random(media_ctx_t *ctx, int enable)
 	if (enable)
 	{
 		ctx->options |= OPTION_RANDOM;
-		if (ctx->options & OPTION_RANDOM)
-		{
-			int ret;
-			if (ctx->count > 0)
-				ctx->firstmediaid = (random() % (ctx->count - 1));
-			_find_mediaid_t data = {ctx->firstmediaid, NULL, NULL};
-			ret = _find(ctx, &dir, &ctx->firstmediaid, _find_mediaid, &data);
-			if (ret != 0)
-			{
-				ctx->count = ctx->firstmediaid;
-				if (ctx->count > 0)
-					ctx->firstmediaid = (random() % (ctx->count - 1));
-				data.id = ctx->firstmediaid;
-				ret = _find(ctx, &dir, &ctx->firstmediaid, _find_mediaid, &data);
-			}
-			dir->index--;
-			ctx->mediaid = ctx->firstmediaid - 1;
-		}
 	}
 	else
 		ctx->options &= ~OPTION_RANDOM;
@@ -509,7 +525,7 @@ static void *_check_dir(void *arg)
 					if (ctx->mediaid != -1)
 					{
 						_find_mediaid_t data = {ctx->mediaid, NULL, NULL};
-						_find(ctx, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
+						_find(ctx, 0, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
 					}
 					if (ctx->options & OPTION_LOOP)
 						media_next(ctx);
@@ -517,7 +533,8 @@ static void *_check_dir(void *arg)
 				else if (event->mask & IN_DELETE)
 				{
 					_find_mediaid_t data = {ctx->mediaid, NULL, NULL};
-					_find(ctx, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
+					ctx->mediaid = -1;
+					_find(ctx, 0, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
 				}
 #if 0
 				else if (event->mask & IN_MODIFY)
@@ -545,14 +562,11 @@ static media_ctx_t *media_init(const char *url)
 			return NULL;
 
 		ctx = calloc(1, sizeof(*ctx));
-		ctx->mediaid = 0;
 		ctx->url = url;
 		ctx->mediaid = -1;
-		ctx->firstmediaid = -1;
-		ctx->count = MINCOUNT;
-		_find_mediaid_t data = {ctx->mediaid, NULL, NULL};
-		_find(ctx, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
-		ctx->mediaid = -1;
+		ctx->firstmediaid = 0;
+		_find_mediaid_t data = {-1, NULL, NULL};
+		_find(ctx, 0, &ctx->current, &ctx->count, _find_mediaid, &data);
 #ifdef USE_INOTIFY
 		ctx->inotifyfd = inotify_init();
 		ctx->dirfd = inotify_add_watch(ctx->inotifyfd, utils_getpath(ctx->url, "file://"),

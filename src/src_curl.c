@@ -74,6 +74,8 @@ static uint write_cb(char *in, uint size, uint nmemb, src_ctx_t *ctx)
 	{
 		if (player_waiton(ctx->player, STATE_PAUSE) < 0)
 		{
+			ctx->outbuffer = ctx->out->ops->pull(ctx->out->ctx);
+			ctx->out->ops->push(ctx->out->ctx, 0, NULL);
 			return 0;
 		}
 
@@ -132,7 +134,7 @@ static void *src_thread(void *arg)
 	int ret = curl_easy_perform(ctx->curl);
 	if ( ret != CURLE_OK)
 	{
-		dbg("src curl error %d on %s", ret, ctx->curl);
+		dbg("src curl error %d on %p", ret, ctx->curl);
 	}
 	//ctx->out->ops->reset(ctx->out->ctx);
 	else

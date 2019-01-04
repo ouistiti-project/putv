@@ -132,7 +132,6 @@ int player_mediaid(player_ctx_t *ctx)
 {
 	if (ctx->current != NULL)
 	{
-		dbg("current media %d", ctx->current->mediaid);
 		return ctx->current->mediaid;
 	}
 	return -1;

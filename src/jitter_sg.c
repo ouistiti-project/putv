@@ -77,6 +77,7 @@ struct jitter_private_s
 		JITTER_RUNNING,
 		JITTER_OVERFLOW,
 		JITTER_FLUSH,
+		JITTER_COMPLETE,
 	} state;
 };
 
@@ -198,9 +199,10 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 		/**
 		 * TODO check the ring buffer push 0 kills the jitter
 		 */
-		dbg("jitter %s push 0", jitter->name);
+		dbg("jitter sg %s push 0", jitter->name);
 		pthread_mutex_lock(&private->mutex);
 		private->in->state = SCATTER_FREE;
+		private->state = JITTER_COMPLETE;
 		pthread_mutex_unlock(&private->mutex);
 	}
 	else
@@ -259,31 +261,34 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter)
 	if (private->state == JITTER_STOP)
 		_jitter_init(jitter);
 	pthread_mutex_unlock(&private->mutex);
-	if ((private->in == private->out) &&
-		(private->out->state == SCATTER_FREE) &&
-		(jitter->produce != NULL))
+	if (private->out->state == SCATTER_FREE)
 	{
-		int len = 0;
-		do
+		if ((private->in == private->out) && (jitter->produce != NULL))
 		{
-			int ret;
-			ret = jitter->produce(jitter->producter, 
-				private->in->data + len, jitter->size - len);
-			if (ret > 0)
-				len += ret;
-			if (ret <= 0)
+			int len = 0;
+			do
 			{
-				len = ret;
-				break;
+				int ret;
+				ret = jitter->produce(jitter->producter, 
+					private->in->data + len, jitter->size - len);
+				if (ret > 0)
+					len += ret;
+				if (ret <= 0)
+				{
+					len = ret;
+					break;
+				}
+			} while (len < jitter->size);
+			if (len > 0)
+				jitter_push(jitter, len, NULL);
+			else
+			{
+				dbg("produce nothing");
+				return NULL;
 			}
-		} while (len < jitter->size);
-		if (len > 0)
-			jitter_push(jitter, len, NULL);
-		else
-		{
-			dbg("produce nothing");
-			return NULL;
 		}
+		else if (private->state == JITTER_COMPLETE)
+			return NULL;
 	}
 	pthread_mutex_lock(&private->mutex);
 	while ((private->state == JITTER_FILLING) &&

@@ -141,21 +141,8 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
-	media_t *media = media_build(mediapath);
-	if (media == NULL)
-		return -1;
-
-	if (mode & LOOP)
-	{
-		media->ops->options(media->ctx, MEDIA_LOOP, 1);
-	}
-
-	if (mode & RANDOM)
-	{
-		media->ops->options(media->ctx, MEDIA_RANDOM, 1);
-	}
-
-	player_ctx_t *player = player_init(media);
+	player_ctx_t *player = player_init();
+	player_change(player, mediapath, (mode & RANDOM), (mode & LOOP));
 
 	if (mode & AUTOSTART)
 	{
@@ -184,20 +171,20 @@ int main(int argc, char **argv)
 	if (!(mode & DAEMONIZE))
 	{
 		cmds[nbcmds].ops = cmds_line;
-		cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, media, NULL);
+		cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, NULL);
 		nbcmds++;
 	}
 #endif
 #ifdef CMDINPUT
 	cmds[nbcmds].ops = cmds_input;
-	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, media, CMDINPUT_PATH);
+	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, CMDINPUT_PATH);
 	nbcmds++;
 #endif
 #ifdef JSONRPC
 	char socketpath[256];
 	snprintf(socketpath, sizeof(socketpath) - 1, "%s/%s", root, name);
 	cmds[nbcmds].ops = cmds_json;
-	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, media, (void *)socketpath);
+	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, (void *)socketpath);
 	nbcmds++;
 #endif
 

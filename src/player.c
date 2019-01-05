@@ -72,6 +72,7 @@ struct player_event_s
 struct player_ctx_s
 {
 	media_t *media;
+	media_t *nextmedia;
 	state_t state;
 	player_event_t *events;
 	player_decoder_t *current;
@@ -79,16 +80,47 @@ struct player_ctx_s
 	pthread_mutex_t mutex;
 };
 
-player_ctx_t *player_init(media_t *media)
+player_ctx_t *player_init()
 {
 	player_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	pthread_mutex_init(&ctx->mutex, NULL);
 	pthread_cond_init(&ctx->cond, NULL);
-	ctx->media = media;
 	ctx->state = STATE_STOP;
 	return ctx;
 }
 
+int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop)
+{
+	media_t *media = media_build(mediapath);
+	if (media)
+	{
+		ctx->nextmedia = media;
+		ctx->state != STATE_STOP;
+		if (loop)
+		{
+			ctx->nextmedia->ops->options(media->ctx, MEDIA_LOOP, 1);
+		}
+
+		if (random)
+		{
+			ctx->nextmedia->ops->options(media->ctx, MEDIA_RANDOM, 1);
+		}
+
+	}
+	return 0;
+}
+
+void player_next(player_ctx_t *ctx)
+{
+	if (ctx->media != NULL)
+		ctx->media->ops->next(ctx->media->ctx);
+}
+
+media_t *player_media(player_ctx_t *ctx)
+{
+	return ctx->media;
+}
+	
 void player_destroy(player_ctx_t *ctx)
 {
 	player_state(ctx, STATE_ERROR);
@@ -214,6 +246,17 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 			pthread_cond_wait(&ctx->cond, &ctx->mutex);
 		}
 		pthread_mutex_unlock(&ctx->mutex);
+		if (ctx->media != ctx->nextmedia)
+		{
+			if (ctx->media)
+			{
+				ctx->media->ops->destroy(ctx->media->ctx);
+				free(ctx->media);
+			}
+			ctx->media = ctx->nextmedia;
+		}
+		if (ctx->media == NULL)
+			break;
 		ctx->media->ops->next(ctx->media->ctx);
 
 		do

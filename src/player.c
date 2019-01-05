@@ -98,12 +98,12 @@ int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop
 		ctx->state != STATE_STOP;
 		if (loop)
 		{
-			ctx->nextmedia->ops->options(media->ctx, MEDIA_LOOP, 1);
+			media->ops->options(media->ctx, MEDIA_LOOP, 1);
 		}
 
 		if (random)
 		{
-			ctx->nextmedia->ops->options(media->ctx, MEDIA_RANDOM, 1);
+			media->ops->options(media->ctx, MEDIA_RANDOM, 1);
 		}
 		if (ctx->media == NULL)
 			ctx->media = media;

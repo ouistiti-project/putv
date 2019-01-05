@@ -40,7 +40,7 @@ struct sink_ctx_s
 {
 	player_ctx_t *player;
 	const sink_t *ops;
-	const char *soundcard;
+	char *soundcard;
 	snd_pcm_t *playback_handle;
 	pthread_t thread;
 	jitter_t *in;
@@ -207,7 +207,22 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 	sink_ctx_t *ctx = calloc(1, sizeof(*ctx));
 
 	ctx->ops = sink_alsa;
-	ctx->soundcard = soundcard;
+	ctx->soundcard = strdup(soundcard);
+	char *setting = strchr(ctx->soundcard, ':');
+	if (setting != NULL)
+	{
+		*setting = '\0';
+		setting++;
+		if (!strncmp(setting, "16le", 4))
+			format = PCM_16bits_LE_stereo;
+		if (!strncmp(setting, "24le", 4))
+			format = PCM_24bits_LE_stereo;
+		if (!strncmp(setting, "32le", 4))
+			format = PCM_32bits_LE_stereo;
+		setting = strchr(ctx->soundcard, ',');
+		if (setting != NULL)
+			samplerate = atoi(++setting);
+	}
 
 	unsigned int size = LATENCE_MS * 1000000 / 44100;
 	if (_pcm_open(ctx, format, samplerate, &size) < 0)
@@ -320,6 +335,7 @@ static void alsa_destroy(sink_ctx_t *ctx)
 	pthread_join(ctx->thread, NULL);
 	_pcm_close(ctx);
 	jitter_scattergather_destroy(ctx->in);
+	free(ctx->soundcard);
 	free(ctx);
 }
 

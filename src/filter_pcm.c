@@ -47,6 +47,9 @@ struct filter_ctx_s
 #define dbg(...)
 #endif
 
+# define FRACBITS		28
+# define ONE		((sample_t)(0x10000000L))
+
 filter_ctx_t *filter_init(unsigned int samplerate, unsigned int samplesize, unsigned int nchannels)
 {
 	filter_ctx_t *ctx = calloc(1, sizeof(*ctx));
@@ -61,9 +64,34 @@ void filter_destroy(filter_ctx_t *ctx)
 	free(ctx);
 }
 
-static int sampled(filter_ctx_t *ctx, signed int sample, int bitspersample, unsigned char *out)
+/**
+ * @brief this function comes from mad decoder
+ * 
+ * @arg sample the 32bits sample
+ * @arg length the length of scaling (16 or 24)
+ * 
+ * @return sample
+ */
+static
+signed int scale_sample(sample_t sample, int length)
+{
+	/* round */
+	sample += (1L << (FRACBITS - length));
+
+	/* clip */
+	if (sample >= ONE)
+		sample = ONE - 1;
+	else if (sample < -ONE)
+		sample = -ONE;
+
+	/* quantize */
+	return sample >> (FRACBITS + 1 - length);
+}
+
+static int sampled(filter_ctx_t *ctx, sample_t sample, int bitspersample, unsigned char *out)
 {
 	int i = 3;
+	sample = scale_sample(sample, bitspersample);
 	for (i = 0; i < ctx->samplesize; i++)
 	{
 		int shift = ((ctx->samplesize - i - 1) * 8);
@@ -84,7 +112,7 @@ static int filter_run(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *b
 
 	for (i = 0; i < audio->nsamples; i++)
 	{
-		signed int sample = audio->samples[0][i];
+		sample_t sample = audio->samples[0][i];
 		for (j = 0; j < ctx->nchannels; j++)
 		{
 			if (j < audio->nchannels)

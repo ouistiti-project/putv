@@ -105,7 +105,8 @@ int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop
 		{
 			ctx->nextmedia->ops->options(media->ctx, MEDIA_RANDOM, 1);
 		}
-
+		if (ctx->media == NULL)
+			ctx->media = media;
 	}
 	return 0;
 }

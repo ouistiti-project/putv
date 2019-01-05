@@ -91,7 +91,9 @@ signed int scale_sample(sample_t sample, int length)
 static int sampled(filter_ctx_t *ctx, sample_t sample, int bitspersample, unsigned char *out)
 {
 	int i = 3;
+#ifdef FILTER_SCALING
 	sample = scale_sample(sample, bitspersample);
+#endif
 	for (i = 0; i < ctx->samplesize; i++)
 	{
 		int shift = ((ctx->samplesize - i - 1) * 8);

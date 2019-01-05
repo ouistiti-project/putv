@@ -234,6 +234,7 @@ static int _find(media_ctx_t *ctx, int level, media_dirlist_t **pit, int *pmedia
 {
 	int ret = -1;
 	media_dirlist_t *it = *pit;
+	const char *root = "";
 	if (it == NULL)
 	{
 		const char *path = utils_getpath(ctx->url, "file://");
@@ -241,11 +242,16 @@ static int _find(media_ctx_t *ctx, int level, media_dirlist_t **pit, int *pmedia
 		{
 			return -1;
 		}
+		if (path[0] == '~')
+		{
+			root = getenv("HOME");
+			path += 1;
+		}
 		if (path[0] == '/')
-			path++;
+			path += 1;
 		it = calloc(1, sizeof(*it));
-		it->path = malloc(1 + strlen(path) + 1);
-		sprintf(it->path,"/%s", path);
+		it->path = malloc(strlen(root) + 1 + strlen(path) + 1);
+		sprintf(it->path,"%s/%s", root, path);
 		it->nitems = scandir(it->path, &it->items, NULL, alphasort);
 		*pmediaid = 0;
 		ctx->first = it;
@@ -557,6 +563,11 @@ static media_ctx_t *media_init(const char *url)
 		int ret;
 		struct stat pathstat;
 		const char *path = utils_getpath(url, "file://");
+		if (path[0] == '~')
+		{
+			path += 2;
+			chdir(getenv("HOME"));
+		}
 		ret = stat(path, &pathstat);
 		if ((ret != 0)  || ! S_ISDIR(pathstat.st_mode))
 			return NULL;

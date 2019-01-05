@@ -231,9 +231,10 @@ enum mad_flow error(void *data,
 	}
 }
 
-//#define LATENCE 200 /*ms*/
-//#define BUFFERSIZE (40*LATENCE)
-#define BUFFERSIZE (MAD_BUFFER_MDLEN)
+/// MAD_BUFFER_MDLEN is too small on ARM device
+//#define BUFFERSIZE (MAD_BUFFER_MDLEN)
+#define LATENCE 200 /*ms*/
+#define BUFFERSIZE (40*LATENCE)
 
 /// NBBUFFER must be at least 3 otherwise the decoder block on the end of the source
 #define NBUFFER 3

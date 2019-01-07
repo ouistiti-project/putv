@@ -144,11 +144,15 @@ static int filter_run(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *b
 
 	for (i = 0; i < audio->nsamples; i++)
 	{
+		
 		sample_t sample = audio->samples[0][i];
 		for (j = 0; j < ctx->nchannels; j++)
 		{
 			if (j < audio->nchannels)
 				sample = audio->samples[(j % audio->nchannels)][i];
+#ifdef FILTER_VOLUMEUP
+			sample = sample << FILTER_VOLUMEUP;
+#endif
 			bufferlen += sampled(ctx, sample, audio->bitspersample,
 						buffer + bufferlen);
 			if (bufferlen >= size)

@@ -79,7 +79,7 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 		case PCM_32bits_LE_stereo:
 			config.format = PCM_FORMAT_S32_LE;
 		break;
-		case PCM_24bits_LE_stereo:
+		case PCM_24bits3_LE_stereo:
 			config.format = PCM_FORMAT_S24_LE;
 		break;
 		case PCM_16bits_LE_stereo:

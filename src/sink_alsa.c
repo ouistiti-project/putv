@@ -79,7 +79,12 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 			ctx->samplesize = 4;
 			ctx->nchannels = 2;
 		break;
-		case PCM_24bits_LE_stereo:
+		case PCM_24bits4_LE_stereo:
+			pcm_format = SND_PCM_FORMAT_S24_LE;
+			ctx->samplesize = 4;
+			ctx->nchannels = 2;
+		break;
+		case PCM_24bits3_LE_stereo:
 			pcm_format = SND_PCM_FORMAT_S24_3LE;
 			ctx->samplesize = 3;
 			ctx->nchannels = 2;
@@ -216,7 +221,7 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 		if (!strncmp(setting, "16le", 4))
 			format = PCM_16bits_LE_stereo;
 		if (!strncmp(setting, "24le", 4))
-			format = PCM_24bits_LE_stereo;
+			format = PCM_24bits4_LE_stereo;
 		if (!strncmp(setting, "32le", 4))
 			format = PCM_32bits_LE_stereo;
 		setting = strchr(ctx->soundcard, ',');
@@ -273,7 +278,10 @@ static void *alsa_thread(void *arg)
 		case PCM_32bits_LE_stereo:
 			divider = 8;
 		break;
-		case PCM_24bits_LE_stereo:
+		case PCM_24bits4_LE_stereo:
+			divider = 8;
+		break;
+		case PCM_24bits3_LE_stereo:
 			divider = 6;
 		break;
 		case PCM_16bits_LE_stereo:

@@ -42,7 +42,8 @@ typedef enum
 {
 	PCM_16bits_LE_mono,
 	PCM_16bits_LE_stereo,
-	PCM_24bits_LE_stereo,
+	PCM_24bits3_LE_stereo,
+	PCM_24bits4_LE_stereo,
 	PCM_32bits_LE_stereo,
 	PCM_32bits_BE_stereo,
 	MPEG2_3_MP3,

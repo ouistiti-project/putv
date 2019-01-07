@@ -123,14 +123,15 @@ static int sampled(filter_ctx_t *ctx, sample_t sample, int bitspersample, unsign
 #ifdef FILTER_SCALING
 	sample = scale_sample(sample, bitspersample);
 #endif
-	for (i = 0; i < ctx->samplesize; i++)
+
+	int samplesize = ctx->samplesize & ~0x80;
+	for (i = 0; i < samplesize; i++)
 	{
-		int shift = ((ctx->samplesize - i - 1) * 8);
+		int shift = ((samplesize - i - 1 - ((ctx->samplesize & 0x80)?1:0)) * 8);
 		//int shift = (i * 8);
 		//dbg("shift %d %d", i, shift);
-		if (shift < 0)
-			break;
-		*(out + i) = (sample >> (bitspersample - shift ) ) & 0x00FF;
+		if (shift >= 0)
+			*(out + i) = (sample >> (bitspersample - shift ) ) & 0x00FF;
 	}
 	return i;
 }

@@ -1,6 +1,8 @@
 #ifndef __FILTER_H__
 #define __FILTER_H__
 
+#include "jitter.h"
+
 # define SIZEOF_INT 4
 
 #if SIZEOF_INT >= 4
@@ -26,7 +28,7 @@ typedef void filter_ctx_t;
 typedef struct filter_ops_s filter_ops_t;
 struct filter_ops_s
 {
-	filter_ctx_t *(*init)(unsigned int rate, unsigned int size, unsigned int nchannels);
+	filter_ctx_t *(*init)(unsigned int rate, jitter_format_t format);
 	int (*run)(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *buffer, size_t size);
 	void (*destroy)(filter_ctx_t *);
 };

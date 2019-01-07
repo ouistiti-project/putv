@@ -283,35 +283,10 @@ static void *mad_thread(void *arg)
 
 static int mad_run(decoder_ctx_t *ctx, jitter_t *jitter)
 {
-	int samplesize = 4;
-	int nchannels = 2;
 	ctx->out = jitter;
-	switch (ctx->out->format)
-	{
-	case PCM_16bits_LE_mono:
-		samplesize = 2;
-		nchannels = 1;
-	break;
-	case PCM_16bits_LE_stereo:
-		samplesize = 2;
-		nchannels = 2;
-	break;
-	case PCM_24bits_LE_stereo:
-		samplesize = 3;
-		nchannels = 2;
-	break;
-	case PCM_32bits_BE_stereo:
-	case PCM_32bits_LE_stereo:
-		samplesize = 4;
-		nchannels = 2;
-	break;
-	default:
-		err("decoder out format not supported %d", ctx->out->format);
-		return -1;
-	}
 #ifdef FILTER
 	ctx->filter.ops = filter_pcm;
-	ctx->filter.ctx = ctx->filter.ops->init(jitter->ctx->frequence, samplesize, nchannels);
+	ctx->filter.ctx = ctx->filter.ops->init(jitter->ctx->frequence, ctx->out->format);
 #endif
 	pthread_create(&ctx->thread, NULL, mad_thread, ctx);
 	return 0;

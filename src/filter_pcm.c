@@ -50,8 +50,37 @@ struct filter_ctx_s
 # define FRACBITS		28
 # define ONE		((sample_t)(0x10000000L))
 
-filter_ctx_t *filter_init(unsigned int samplerate, unsigned int samplesize, unsigned int nchannels)
+filter_ctx_t *filter_init(unsigned int samplerate, jitter_format_t format)
 {
+	unsigned int samplesize = 4;
+	unsigned int nchannels = 2;
+	switch (format)
+	{
+	case PCM_16bits_LE_mono:
+		samplesize = 2;
+		nchannels = 1;
+	break;
+	case PCM_16bits_LE_stereo:
+		samplesize = 2;
+		nchannels = 2;
+	break;
+	case PCM_24bits3_LE_stereo:
+		samplesize = 3;
+		nchannels = 2;
+	break;
+	case PCM_24bits4_LE_stereo:
+		samplesize = 4 | 0x80;
+		nchannels = 2;
+	break;
+	case PCM_32bits_BE_stereo:
+	case PCM_32bits_LE_stereo:
+		samplesize = 4;
+		nchannels = 2;
+	break;
+	default:
+		err("decoder out format not supported %d", format);
+		return NULL;
+	}
 	filter_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->samplerate = samplerate;
 	ctx->samplesize = samplesize;

@@ -947,12 +947,14 @@ static int _media_initdb(sqlite3 *db, const char *query[])
 	return ret;
 }
 
-static media_ctx_t *media_init(const char *url)
+static media_ctx_t *media_init(const char *url, ...)
 {
 	media_ctx_t *ctx = NULL;
 	sqlite3 *db = NULL;
 	int ret = SQLITE_ERROR;
 
+	if (strstr(url, "db://") == NULL)
+		return NULL;
 	const char *dbpath = utils_getpath(url, "db://");
 	if (dbpath)
 	{

@@ -555,7 +555,7 @@ static void *_check_dir(void *arg)
 }
 #endif
 
-static media_ctx_t *media_init(const char *url)
+static media_ctx_t *media_init(const char *url,...)
 {
 	media_ctx_t *ctx = NULL;
 	if (url)

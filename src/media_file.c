@@ -228,7 +228,7 @@ static int media_options(media_ctx_t *ctx, media_options_t option, int enable)
 	return ret;
 }
 
-static media_ctx_t *media_init(const char *url)
+static media_ctx_t *media_init(const char *url,...)
 {
 	media_ctx_t *ctx = NULL;
 	if (url)

@@ -50,6 +50,8 @@ struct filter_ctx_s
 # define FRACBITS		28
 # define ONE		((sample_t)(0x10000000L))
 
+#define SCALING_GAIN 7
+
 filter_ctx_t *filter_init(unsigned int samplerate, jitter_format_t format)
 {
 	unsigned int samplesize = 4;
@@ -119,11 +121,7 @@ signed int scale_sample(sample_t sample, int length)
 
 static int sampled(filter_ctx_t *ctx, sample_t sample, int bitspersample, unsigned char *out)
 {
-	int i = 3;
-#ifdef FILTER_SCALING
-	sample = scale_sample(sample, bitspersample);
-#endif
-
+	int i;
 	int samplesize = ctx->samplesize & ~0x80;
 	for (i = 0; i < samplesize; i++)
 	{
@@ -150,8 +148,9 @@ static int filter_run(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *b
 		{
 			if (j < audio->nchannels)
 				sample = audio->samples[(j % audio->nchannels)][i];
-#ifdef FILTER_VOLUMEUP
-			sample = sample << FILTER_VOLUMEUP;
+#ifdef FILTER_SCALING
+			sample = scale_sample(sample, audio->bitspersample);
+			sample = sample << SCALING_GAIN;
 #endif
 			bufferlen += sampled(ctx, sample, audio->bitspersample,
 						buffer + bufferlen);

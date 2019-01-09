@@ -136,16 +136,9 @@ static void *src_thread(void *arg)
 	{
 		dbg("src curl error %d on %p", ret, ctx->curl);
 	}
-	//ctx->out->ops->reset(ctx->out->ctx);
-	else
-	{
-		ctx->outbuffer = ctx->out->ops->pull(ctx->out->ctx);
-		if (ctx->outbuffer != NULL)
-		{
-			ctx->out->ops->push(ctx->out->ctx, 0, NULL);
-		}
-		ctx->out->ops->flush(ctx->out->ctx);
-	}
+	ctx->outbuffer = ctx->out->ops->pull(ctx->out->ctx);
+	ctx->out->ops->push(ctx->out->ctx, 0, NULL);
+	ctx->out->ops->flush(ctx->out->ctx);
 	return 0;
 }
 

@@ -160,10 +160,6 @@ static int media_list(media_ctx_t *ctx, media_parse_t cb, void *data)
 static int media_play(media_ctx_t *ctx, media_parse_t cb, void *data)
 {
 	int ret = -1;
-	if (ctx->current == NULL)
-	{
-		ctx->current = ctx->media;
-	}
 	if (ctx->current != NULL)
 	{
 		ret = cb(data, ctx->current->id, ctx->current->url, ctx->current->info, ctx->current->mime);
@@ -176,16 +172,13 @@ static int media_play(media_ctx_t *ctx, media_parse_t cb, void *data)
 static int media_next(media_ctx_t *ctx)
 {
 	int ret = -1;
-	if (ctx->current == NULL)
-	{
-		ctx->current = ctx->media;
-	}
-	else
-	{
+	if (ctx->current != NULL)
 		ctx->current = ctx->current->next;
-	}
 	if ((ctx->current == NULL) && (ctx->options & OPTION_LOOP))
+	{
+		dbg("media loop");
 		ctx->current = ctx->media;
+	}
 
 	if (ctx->current != NULL)
 		ret = ctx->current->id;
@@ -235,6 +228,7 @@ static media_ctx_t *media_init(const char *url,...)
 	{
 		ctx = calloc(1, sizeof(*ctx));
 		media_insert(ctx, url, NULL, utils_getmime(url));
+		ctx->current = ctx->media;
 	}
 	return ctx;
 }

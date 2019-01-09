@@ -308,6 +308,8 @@ static void jitter_flush(jitter_ctx_t *jitter)
 {
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
 	private->state = JITTER_FLUSH;
+	pthread_cond_broadcast(&private->condpush);
+	pthread_cond_broadcast(&private->condpeer);
 }
 
 static size_t jitter_length(jitter_ctx_t *jitter)

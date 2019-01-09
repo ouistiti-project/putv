@@ -63,7 +63,7 @@ struct sink_ctx_s
 
 #define sink_dbg(...)
 
-#define LATENCE_MS 500
+#define LATENCE_MS 700
 
 static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate, unsigned int *size)
 {

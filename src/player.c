@@ -56,7 +56,6 @@ struct player_decoder_s
 	const decoder_t *decoder;
 	decoder_ctx_t *decoder_ctx;
 	const src_t *src;
-	src_ctx_t *src_ctx;
 	int mediaid;
 };
 
@@ -198,7 +197,6 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 	player_decoder_t *dec;
 
 	dec = calloc(1, sizeof(*dec));
-	dec->src = SRC;
 	dec->mediaid = id;
 #ifdef DECODER_MAD
 	if (mime && !strcmp(mime, decoder_mad->mime))
@@ -215,9 +213,9 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 	{
 		dec->decoder_ctx = dec->decoder->init(ctx);
 		dbg("player: prepare %s", url);
-		dec->src_ctx = dec->src->init(ctx, url);
+		dec->src = src_build(ctx, url);
 	}
-	if (dec->src_ctx != NULL)
+	if (dec->src != NULL)
 	{
 		player->dec = dec;
 		return 0;
@@ -268,7 +266,7 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 			{
 				dbg("player: wait");
 				ctx->current->decoder->destroy(ctx->current->decoder_ctx);
-				ctx->current->src->destroy(ctx->current->src_ctx);
+				ctx->current->src->ops->destroy(ctx->current->src->ctx);
 				free(ctx->current);
 				ctx->current = NULL;
 			}
@@ -278,7 +276,7 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 				dbg("player: play");
 				ctx->state = STATE_PLAY;
 				ctx->current->decoder->run(ctx->current->decoder_ctx, encoder_jitter);
-				ctx->current->src->run(ctx->current->src_ctx, ctx->current->decoder->jitter(ctx->current->decoder_ctx));
+				ctx->current->src->ops->run(ctx->current->src->ctx, ctx->current->decoder->jitter(ctx->current->decoder_ctx));
 				ctx->media->ops->next(ctx->media->ctx);
 			}
 			else

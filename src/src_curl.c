@@ -37,11 +37,11 @@
 #include <curl/curl.h>
 
 #include "player.h"
-typedef struct src_s src_t;
+typedef struct src_ops_s src_ops_t;
 typedef struct src_ctx_s src_ctx_t;
 struct src_ctx_s
 {
-	const src_t *ops;
+	const src_ops_t *ops;
 	int dumpfd;
 	player_ctx_t *player;
 	jitter_t *out;
@@ -163,17 +163,10 @@ static void src_destroy(src_ctx_t *ctx)
 	free(ctx);
 }
 
-const src_t *src_curl = &(src_t)
+const src_ops_t *src_curl = &(src_ops_t)
 {
+	.protocol = "http://|file://",
 	.init = src_init,
 	.run = src_run,
 	.destroy = src_destroy,
 };
-
-#ifndef SRC_GET
-#define SRC_GET
-const src_t *src_get(src_ctx_t *ctx)
-{
-	return ctx->ops;
-}
-#endif

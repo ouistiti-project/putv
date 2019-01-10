@@ -64,6 +64,15 @@ src_t *src_build(player_ctx_t *player, const char *url)
 		NULL
 	};
 
+	const src_ops_t *src_default = NULL;
+	#if defined(SRC_FILE)
+	src_default = src_file;
+	#elif defined(SRC_UNIX)
+	src_default = src_unix;
+	#elif defined(SRC_CURL)
+	src_default = src_curl;
+	#endif
+
 	int i = 0;
 	src_ctx_t *src_ctx = NULL;
 	while (src_list[i] != NULL)
@@ -78,13 +87,24 @@ src_t *src_build(player_ctx_t *player, const char *url)
 			if (!(strncmp(url, protocol, len)))
 			{
 				src_ctx = src_list[i]->init(player, url);
+				src_default = src_list[i];
 				break;
 			}
 			protocol = next;
+			if (protocol)
+			{
+				protocol++;
+				len = strlen(protocol);
+			}
 		}
 		if (src_ctx != NULL)
 			break;
 		i++;
+	}
+
+	if (src_ctx == NULL && src_default != NULL)
+	{
+		src_ctx = src_default->init(player, url);
 	}
 	if (src_ctx == NULL)
 	{
@@ -92,7 +112,7 @@ src_t *src_build(player_ctx_t *player, const char *url)
 		return NULL;
 	}
 	src_t *src = calloc(1, sizeof(*src));
-	src->ops = src_list[i];
+	src->ops = src_default;
 	src->ctx = src_ctx;
 
 	return src;

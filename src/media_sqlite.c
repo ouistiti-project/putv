@@ -778,12 +778,6 @@ static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data)
 	return count;
 }
 
-static int media_current(media_ctx_t *ctx, media_parse_t cb, void *data)
-{
-	int ret = media_find(ctx, ctx->mediaid, cb, data);
-	return ret;
-}
-
 static int media_list(media_ctx_t *ctx, media_parse_t cb, void *data)
 {
 	int ret = 0;
@@ -806,7 +800,7 @@ static int media_list(media_ctx_t *ctx, media_parse_t cb, void *data)
 
 static int media_play(media_ctx_t *ctx, media_parse_t cb, void *data)
 {
-	media_current(ctx, cb, data);
+	media_find(ctx, ctx->mediaid, cb, data);
 	return ctx->mediaid;
 }
 
@@ -1019,7 +1013,6 @@ const media_ops_t *media_sqlite = &(const media_ops_t)
 	.next = media_next,
 	.play = media_play,
 	.list = media_list,
-	.current = media_current,
 	.find = media_find,
 	.insert = media_insert,
 	.remove = media_remove,

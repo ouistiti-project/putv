@@ -73,37 +73,6 @@ struct decoder_ctx_s
 //#define JITTER_destroy jitter_scattergather_destroy
 #define JITTER_init jitter_ringbuffer_init
 #define JITTER_destroy jitter_ringbuffer_destroy
-static
-signed int scale_16bits(mad_fixed_t sample)
-{
-	/* round */
-	sample += (1L << (MAD_F_FRACBITS - 16));
-
-	/* clip */
-	if (sample >= MAD_F_ONE)
-		sample = MAD_F_ONE - 1;
-	else if (sample < -MAD_F_ONE)
-		sample = -MAD_F_ONE;
-
-	/* quantize */
-	return sample >> (MAD_F_FRACBITS + 1 - 16);
-}
-
-static
-signed int scale_24bits(mad_fixed_t sample)
-{
-	/* round */
-	sample += (1L << (MAD_F_FRACBITS - 24));
-
-	/* clip */
-	if (sample >= MAD_F_ONE)
-		sample = MAD_F_ONE - 1;
-	else if (sample < -MAD_F_ONE)
-		sample = -MAD_F_ONE;
-
-	/* quantize */
-	return sample >> (MAD_F_FRACBITS + 1 - 24);
-}
 
 static
 enum mad_flow input(void *data,
@@ -262,10 +231,12 @@ enum mad_flow error(void *data,
 	}
 }
 
+/// MAD_BUFFER_MDLEN is too small on ARM device
+//#define BUFFERSIZE (MAD_BUFFER_MDLEN)
 #define LATENCE 200 /*ms*/
 #define BUFFERSIZE (40*LATENCE)
-//#define BUFFERSIZE (1*MAD_BUFFER_MDLEN)
 
+/// NBBUFFER must be at least 3 otherwise the decoder block on the end of the source
 #define NBUFFER 3
 
 static const char *jitter_name = "mad decoder";

@@ -40,7 +40,6 @@ typedef struct cmds_ctx_s cmds_ctx_t;
 struct cmds_ctx_s
 {
 	player_ctx_t *player;
-	media_t *media;
 	pthread_t thread;
 	int run;
 };
@@ -60,18 +59,20 @@ typedef int (*method_t)(cmds_ctx_t *ctx, char *arg);
 
 static int method_append(cmds_ctx_t *ctx, char *arg)
 {
-	return ctx->media->ops->insert(ctx->media->ctx, arg, NULL, NULL);
+	media_t *media = player_media(ctx->player);
+	return media->ops->insert(media->ctx, arg, NULL, NULL);
 }
 
 static int method_remove(cmds_ctx_t *ctx, char *arg)
 {
+	media_t *media = player_media(ctx->player);
 	if (arg != NULL)
 	{
 		int id = atoi(arg);
 		if (id > 0)
-			return ctx->media->ops->remove(ctx->media->ctx, id, NULL);
+			return media->ops->remove(media->ctx, id, NULL);
 		else
-			return ctx->media->ops->remove(ctx->media->ctx, 0, arg);
+			return media->ops->remove(media->ctx, 0, arg);
 	}
 	else
 		return -1;
@@ -91,26 +92,30 @@ static int _print_entry(void *arg, int id, const char *url,
 static int method_list(cmds_ctx_t *ctx, char *arg)
 {
 	int value = 0;
-	return ctx->media->ops->list(ctx->media->ctx, _print_entry, (void *)&value);
+	media_t *media = player_media(ctx->player);
+	return media->ops->list(media->ctx, _print_entry, (void *)&value);
 }
 
 static int method_info(cmds_ctx_t *ctx, char *arg)
 {
-	int value = 0;
-	return ctx->media->ops->current(ctx->media->ctx, _print_entry, (void *)&value);
+	int id = player_mediaid(ctx->player);
+	media_t *media = player_media(ctx->player);
+	return media->ops->find(media->ctx, id, _print_entry, (void *)&id);
 }
 
 static int method_search(cmds_ctx_t *ctx, char *arg)
 {
 	int id = atoi(arg);
-	return ctx->media->ops->find(ctx->media->ctx, id, _print_entry, (void *)&id);
+	media_t *media = player_media(ctx->player);
+	return media->ops->find(media->ctx, id, _print_entry, (void *)&id);
 }
 
 static int _import_entry(void *arg, int id, const char *url,
 		const char *info, const char *mime)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)arg;
-	ctx->media->ops->insert(ctx->media->ctx, url, info, mime);
+	media_t *media = player_media(ctx->player);
+	media->ops->insert(media->ctx, url, info, mime);
 	return 0;
 }
 
@@ -158,9 +163,10 @@ static int method_next(cmds_ctx_t *ctx, char *arg)
 static int method_loop(cmds_ctx_t *ctx, char *arg)
 {
 	int enable = 1;
+	media_t *media = player_media(ctx->player);
 	if (arg != NULL)
 		atoi(arg);
-	enable = ctx->media->ops->options(ctx->media->ctx, MEDIA_LOOP, enable);
+	enable = media->ops->options(media->ctx, MEDIA_LOOP, enable);
 	return enable;
 }
 
@@ -195,14 +201,14 @@ void cmds_line_onchange(void *arg, player_ctx_t *player, state_t state)
 		dbg("cmd line onchange");
 	}
 	int id = player_mediaid(player);
-	ctx->media->ops->find(ctx->media->ctx, id, _display, ctx);
+	media_t *media = player_media(ctx->player);
+	media->ops->find(media->ctx, id, _display, ctx);
 }
 
-static cmds_ctx_t *cmds_line_init(player_ctx_t *player, media_t *media, void *arg)
+static cmds_ctx_t *cmds_line_init(player_ctx_t *player, void *arg)
 {
 	cmds_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->player = player;
-	ctx->media = media;
 	return ctx;
 }
 

@@ -1,11 +1,19 @@
 #ifndef __FILTER_H__
 #define __FILTER_H__
 
+# define SIZEOF_INT 4
+
+#if SIZEOF_INT >= 4
+typedef   signed int sample_t;
+#else
+typedef   signed long sample_t;
+#endif
+
 #define MAXCHANNELS 8
 typedef struct filter_audio_s filter_audio_t;
 struct filter_audio_s
 {
-	signed int *samples[MAXCHANNELS];
+	sample_t *samples[MAXCHANNELS];
 	int bitspersample;
 	int nsamples;
 	int nchannels;

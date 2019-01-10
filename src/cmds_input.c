@@ -177,11 +177,11 @@ static int cmds_input_run(cmds_ctx_t *ctx)
 	return 0;
 }
 
-static cmds_ctx_t *cmds_input_init(player_ctx_t *player, media_t *media, void *arg)
+static cmds_ctx_t *cmds_input_init(player_ctx_t *player, void *arg)
 {
 	cmds_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->player = player;
-	ctx->media = media;
+	ctx->media = player_media(player);
 	ctx->inputpath = arg;
 	return ctx;
 }

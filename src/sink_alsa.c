@@ -40,7 +40,7 @@ struct sink_ctx_s
 {
 	player_ctx_t *player;
 	const sink_t *ops;
-	const char *soundcard;
+	char *soundcard;
 	snd_pcm_t *playback_handle;
 	pthread_t thread;
 	jitter_t *in;
@@ -62,6 +62,8 @@ struct sink_ctx_s
 #endif
 
 #define sink_dbg(...)
+
+#define LATENCE_MS 500
 
 static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate, unsigned int *size)
 {
@@ -145,6 +147,13 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 		err("sink: channels");
 		goto error;
 	}
+	snd_pcm_uframes_t buffer_size = *size;
+	ret = snd_pcm_hw_params_set_buffer_size_near(ctx->playback_handle, hw_params, &buffer_size);
+	if (ret < 0)
+	{
+		err("sink: channels");
+		goto error;
+	}
 
 	ret = snd_pcm_hw_params(ctx->playback_handle, hw_params);
 	if (ret < 0)
@@ -153,7 +162,6 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 		goto error;
 	}
 
-	snd_pcm_uframes_t buffer_size;
 	snd_pcm_hw_params_get_buffer_size(hw_params, &buffer_size);
 	snd_pcm_uframes_t periodsize;
 	snd_pcm_hw_params_get_period_size(hw_params, &periodsize, 0);
@@ -193,15 +201,31 @@ static int _pcm_close(sink_ctx_t *ctx)
 static const char *jitter_name = "alsa";
 static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 {
+	int samplerate = DEFAULT_SAMPLERATE;
 	int count = 2;
 	jitter_format_t format = SINK_ALSA_FORMAT;
 	sink_ctx_t *ctx = calloc(1, sizeof(*ctx));
 
 	ctx->ops = sink_alsa;
-	ctx->soundcard = soundcard;
+	ctx->soundcard = strdup(soundcard);
+	char *setting = strchr(ctx->soundcard, ':');
+	if (setting != NULL)
+	{
+		*setting = '\0';
+		setting++;
+		if (!strncmp(setting, "16le", 4))
+			format = PCM_16bits_LE_stereo;
+		if (!strncmp(setting, "24le", 4))
+			format = PCM_24bits_LE_stereo;
+		if (!strncmp(setting, "32le", 4))
+			format = PCM_32bits_LE_stereo;
+		setting = strchr(ctx->soundcard, ',');
+		if (setting != NULL)
+			samplerate = atoi(++setting);
+	}
 
-	unsigned int size;
-	if (_pcm_open(ctx, format, DEFAULT_SAMPLERATE, &size) < 0)
+	unsigned int size = LATENCE_MS * 1000000 / 44100;
+	if (_pcm_open(ctx, format, samplerate, &size) < 0)
 	{
 		err("sink: init error %s", strerror(errno));
 		free(ctx);
@@ -311,6 +335,7 @@ static void alsa_destroy(sink_ctx_t *ctx)
 	pthread_join(ctx->thread, NULL);
 	_pcm_close(ctx);
 	jitter_scattergather_destroy(ctx->in);
+	free(ctx->soundcard);
 	free(ctx);
 }
 

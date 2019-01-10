@@ -40,7 +40,6 @@ typedef struct cmds_ctx_s cmds_ctx_t;
 struct cmds_ctx_s
 {
 	player_ctx_t *player;
-	media_t *media;
 	const char *socketpath;
 	pthread_t thread;
 	thread_info_t *info;
@@ -137,7 +136,8 @@ static int method_list(json_t *json_params, json_t **result, void *userdata)
 	int ret;
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 
-	int count = ctx->media->ops->count(ctx->media->ctx);
+	media_t *media = player_media(ctx->player);
+	int count = media->ops->count(media->ctx);
 	int nbitems = MAX_ITEMS;
 	nbitems = (count < nbitems)? count:nbitems;
 
@@ -157,7 +157,7 @@ static int method_list(json_t *json_params, json_t **result, void *userdata)
 		entry.first = 0;
 
 	entry.index = 0;
-	ctx->media->ops->list(ctx->media->ctx, _append_entry, (void *)&entry);
+	media->ops->list(media->ctx, _append_entry, (void *)&entry);
 	*result = json_pack("{s:i,s:i,s:o}", "count", count, "nbitems", nbitems, "playlist", entry.list);
 
 	return 0;
@@ -166,7 +166,9 @@ static int method_list(json_t *json_params, json_t **result, void *userdata)
 static int method_remove(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
+	media_t *media = player_media(ctx->player);
 	int ret;
+
 	if (json_is_array(json_params))
 	{
 		size_t index;
@@ -176,12 +178,12 @@ static int method_remove(json_t *json_params, json_t **result, void *userdata)
 			if (json_is_string(value))
 			{
 				const char *str = json_string_value(value);
-				ret = ctx->media->ops->remove(ctx->media->ctx, 0, str);
+				ret = media->ops->remove(media->ctx, 0, str);
 			}
 			else if (json_is_integer(value))
 			{
 				int id = json_integer_value(value);
-				ret = ctx->media->ops->remove(ctx->media->ctx, id, NULL);
+				ret = media->ops->remove(media->ctx, id, NULL);
 			}
 		}
 	}
@@ -192,13 +194,13 @@ static int method_remove(json_t *json_params, json_t **result, void *userdata)
 		if (json_is_integer(value))
 		{
 			int id = json_integer_value(value);
-			ret = ctx->media->ops->remove(ctx->media->ctx, id, NULL);
+			ret = media->ops->remove(media->ctx, id, NULL);
 		}
 		value = json_object_get(value, "url");
 		if (json_is_string(value))
 		{
 			const char *str = json_string_value(value);
-			ret = ctx->media->ops->remove(ctx->media->ctx, 0, str);
+			ret = media->ops->remove(media->ctx, 0, str);
 		}
 	}
 	if (ret == -1)
@@ -213,6 +215,8 @@ static int method_remove(json_t *json_params, json_t **result, void *userdata)
 static int method_append(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
+	media_t *media = player_media(ctx->player);
+
 	if (json_is_array(json_params)) {
 		int ret;
 		size_t index;
@@ -222,14 +226,14 @@ static int method_append(json_t *json_params, json_t **result, void *userdata)
 			if (json_is_string(value))
 			{
 				const char *str = json_string_value(value);
-				ret = ctx->media->ops->insert(ctx->media->ctx, str, "", NULL);
+				ret = media->ops->insert(media->ctx, str, "", NULL);
 			}
 			else if (json_is_object(value))
 			{
 				json_t * path = json_object_get(value, "url");
 				json_t * info = json_object_get(value, "info");
 				json_t * mime = json_object_get(value, "mime");
-				ret = ctx->media->ops->insert(ctx->media->ctx, 
+				ret = media->ops->insert(media->ctx,
 						json_string_value(path),
 						json_string_value(info),
 						json_string_value(mime));
@@ -248,7 +252,9 @@ static int method_append(json_t *json_params, json_t **result, void *userdata)
 static int method_play(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
-	if (ctx->media->ops->count(ctx->media->ctx) > 0)
+	media_t *media = player_media(ctx->player);
+
+	if (media->ops->count(media->ctx) > 0)
 		player_state(ctx->player, STATE_PLAY);
 	else
 		player_state(ctx->player, STATE_STOP);
@@ -280,7 +286,8 @@ static int method_stop(json_t *json_params, json_t **result, void *userdata)
 static int method_next(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
-	ctx->media->ops->next(ctx->media->ctx);
+	media_t *media = player_media(ctx->player);
+	media->ops->next(media->ctx);
 	return 0;
 }
 
@@ -331,12 +338,14 @@ static int _display(void *arg, int id, const char *url, const char *info, const 
 static int method_change(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
+	media_t *media = player_media(ctx->player);
 	_display_ctx_t display = {
 		.ctx = ctx,
 		.result = json_object(),
 	};
 
-	if (ctx->media->ops->current(ctx->media->ctx, _display, &display) == 1)
+	int id = player_mediaid(ctx->player);
+	if (media->ops->find(media->ctx, id, _display, &display) == 1)
 	{
 		*result = display.result;
 	}
@@ -351,6 +360,7 @@ static int method_options(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 	int ret;
+	media_t *media = player_media(ctx->player);
 
 	*result = json_object();
 	json_t *value;
@@ -360,7 +370,7 @@ static int method_options(json_t *json_params, json_t **result, void *userdata)
 		if (json_is_boolean(value))
 		{
 			int state = json_boolean_value(value);
-			ret = ctx->media->ops->options(ctx->media->ctx, MEDIA_LOOP, state);
+			ret = media->ops->options(media->ctx, MEDIA_LOOP, state);
 			value = json_boolean(ret);
 			json_object_set(*result, "loop", value);
 		}
@@ -368,7 +378,7 @@ static int method_options(json_t *json_params, json_t **result, void *userdata)
 		if (json_is_boolean(value))
 		{
 			int state = json_boolean_value(value);
-			ret = ctx->media->ops->options(ctx->media->ctx, MEDIA_RANDOM, state);
+			ret = media->ops->options(media->ctx, MEDIA_RANDOM, state);
 			value = json_boolean(ret);
 			json_object_set(*result, "random", value);
 		}
@@ -474,12 +484,11 @@ static int jsonrpc_command(thread_info_t *info)
 	return ret;
 }
 
-static cmds_ctx_t *cmds_json_init(player_ctx_t *player, media_t *media, void *arg)
+static cmds_ctx_t *cmds_json_init(player_ctx_t *player, void *arg)
 {
 	cmds_ctx_t *ctx = NULL;
 	ctx = calloc(1, sizeof(*ctx));
 	ctx->player = player;
-	ctx->media = media;
 	ctx->socketpath = (const char *)arg;
 	return ctx;
 }

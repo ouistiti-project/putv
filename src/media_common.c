@@ -77,11 +77,11 @@ media_t *media_build(const char *url)
 	#ifdef MEDIA_DIR
 		media_dir,
 	#endif
-	#ifdef MEDIA_FILE
-		media_file,
-	#endif
 	#ifdef MEDIA_SQLITE
 		media_sqlite,
+	#endif
+	#ifdef MEDIA_FILE
+		media_file,
 	#endif
 		NULL
 	};

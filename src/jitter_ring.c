@@ -267,10 +267,7 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter)
 		pthread_cond_wait(&private->condpeer, &private->mutex);
 	}
 
-	/**
-	 * this cas may be true if private->in is NULL
-	 */
-	if (private->level <= 0)
+	if (private->in == NULL)
 	{
 		private->out = NULL;
 	}

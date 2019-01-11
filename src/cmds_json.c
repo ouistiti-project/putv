@@ -359,7 +359,7 @@ static int method_change(json_t *json_params, json_t **result, void *userdata)
 		value = json_object_get(json_params, "media");
 		if (json_is_string(value))
 		{
-			char *media = json_string_value(value);
+			const char *media = json_string_value(value);
 			if (player_change(ctx->player, media, 0, 0) == 0)
 			{
 				*result = json_pack("{s:s}", "media", "changed");

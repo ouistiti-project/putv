@@ -29,12 +29,24 @@
 #include <stdio.h>
 #include <string.h>
 
+# define SIZEOF_INT 4
+
+#if SIZEOF_INT >= 4
+typedef   signed int sample_t;
+#else
+typedef   signed long sample_t;
+#endif
+
 typedef struct filter_ctx_s filter_ctx_t;
+typedef int (*sampled_t)(filter_ctx_t *ctx, sample_t sample, int bitspersample, unsigned char *out);
+
 struct filter_ctx_s
 {
+	sampled_t sampled;
 	unsigned int samplerate;
-	unsigned int samplesize;
-	unsigned int nchannels;
+	unsigned char samplesize;
+	unsigned char shift;
+	unsigned char nchannels;
 };
 #define FILTER_CTX
 #include "filter.h"
@@ -52,32 +64,49 @@ struct filter_ctx_s
 
 #define SCALING_GAIN 7
 
+static int sampled_change(filter_ctx_t *ctx, sample_t sample, int bitspersample, unsigned char *out);
+static int sampled_copy32(filter_ctx_t *ctx, sample_t sample, int bitspersample, unsigned char *out);
+static int sampled_copy24(filter_ctx_t *ctx, sample_t sample, int bitspersample, unsigned char *out);
+static int sampled_copy16(filter_ctx_t *ctx, sample_t sample, int bitspersample, unsigned char *out);
+
 filter_ctx_t *filter_init(unsigned int samplerate, jitter_format_t format)
 {
-	unsigned int samplesize = 4;
-	unsigned int nchannels = 2;
+	unsigned char samplesize = 4;
+	unsigned char nchannels = 2;
+	unsigned char shift = 1;
+	sampled_t sampled = sampled_change;
 	switch (format)
 	{
 	case PCM_16bits_LE_mono:
 		samplesize = 2;
+		shift = 8;
 		nchannels = 1;
+		sampled = sampled_copy16;
 	break;
 	case PCM_16bits_LE_stereo:
 		samplesize = 2;
+		shift = 8;
 		nchannels = 2;
+		sampled = sampled_copy16;
 	break;
 	case PCM_24bits3_LE_stereo:
 		samplesize = 3;
+		shift = 16;
 		nchannels = 2;
+		sampled = sampled_copy24;
 	break;
 	case PCM_24bits4_LE_stereo:
-		samplesize = 4 | 0x80;
+		samplesize = 4;
+		shift = 16;
 		nchannels = 2;
+		sampled = sampled_copy24;
 	break;
 	case PCM_32bits_BE_stereo:
 	case PCM_32bits_LE_stereo:
 		samplesize = 4;
+		shift = 24;
 		nchannels = 2;
+		sampled = sampled_copy32;
 	break;
 	default:
 		err("decoder out format not supported %d", format);
@@ -86,7 +115,10 @@ filter_ctx_t *filter_init(unsigned int samplerate, jitter_format_t format)
 	filter_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->samplerate = samplerate;
 	ctx->samplesize = samplesize;
+	ctx->shift = shift;
+	ctx->sampled = sampled;
 	ctx->nchannels = nchannels;
+
 	return ctx;
 }
 
@@ -119,40 +151,56 @@ signed int scale_sample(sample_t sample, int length)
 	return sample >> (FRACBITS + 1 - length);
 }
 
-static int sampled(filter_ctx_t *ctx, sample_t sample, int bitspersample, unsigned char *out)
+static int sampled_change(filter_ctx_t *ctx, sample_t sample, int bitspersample, unsigned char *out)
 {
 	int i;
-	int samplesize = ctx->samplesize & ~0x80;
-	for (i = 0; i < samplesize; i++)
+	for (i = 0; i < ctx->samplesize; i++)
 	{
-		int shift = ((samplesize - i - 1 - ((ctx->samplesize & 0x80)?1:0)) * 8);
-		//int shift = (i * 8);
-		//dbg("shift %d %d", i, shift);
+		int shift = ctx->shift - (i * 8);
 		if (shift >= 0)
 			*(out + i) = (sample >> (bitspersample - shift ) ) & 0x00FF;
 	}
 	return i;
 }
 
+static int sampled_copy32(filter_ctx_t *ctx, sample_t sample, int bitspersample, unsigned char *out)
+{
+	*(sample_t *)out = sample;
+	return ctx->samplesize;
+}
+
+static int sampled_copy24(filter_ctx_t *ctx, sample_t sample, int bitspersample, unsigned char *out)
+{
+	*(sample_t *)out = sample >> 8;
+	return ctx->samplesize;
+}
+
+static int sampled_copy16(filter_ctx_t *ctx, sample_t sample, int bitspersample, unsigned char *out)
+{
+	*(sample_t *)out = sample >> 16;
+	return ctx->samplesize;
+}
+
 static int filter_run(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *buffer, size_t size)
 {
-	int i;
 	int j;
+	int i;
 	int bufferlen = 0;
 
 	for (i = 0; i < audio->nsamples; i++)
 	{
-		
-		sample_t sample = audio->samples[0][i];
+		sample_t sample;
 		for (j = 0; j < ctx->nchannels; j++)
 		{
 			if (j < audio->nchannels)
 				sample = audio->samples[(j % audio->nchannels)][i];
+			else
+				sample = audio->samples[0][i];
 #ifdef FILTER_SCALING
 			sample = scale_sample(sample, audio->bitspersample);
-			sample = sample << SCALING_GAIN;
+			sample = sample << (sizeof(sample_t) - audio->bitspersample - 1) ;
 #endif
-			bufferlen += sampled(ctx, sample, audio->bitspersample,
+			bufferlen += ctx->sampled(ctx, sample, audio->bitspersample,
 						buffer + bufferlen);
 			if (bufferlen >= size)
 				goto filter_exit;

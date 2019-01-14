@@ -33,10 +33,11 @@
 
 #include "player.h"
 typedef struct decoder_s decoder_t;
+typedef struct decoder_ops_s decoder_ops_t;
 typedef struct decoder_ctx_s decoder_ctx_t;
 struct decoder_ctx_s
 {
-	const decoder_t *ops;
+	const decoder_ops_t *ops;
 	player_ctx_t *ctx;
 	jitter_t *inout;
 };
@@ -81,7 +82,7 @@ static void decoder_destroy(decoder_ctx_t *ctx)
 	free(ctx);
 }
 
-const decoder_t *decoder_passthrough = &(decoder_t)
+const decoder_ops_t *decoder_passthrough = &(decoder_ops_t)
 {
 	.check = decoder_check,
 	.init = decoder_init,
@@ -90,11 +91,3 @@ const decoder_t *decoder_passthrough = &(decoder_t)
 	.destroy = decoder_destroy,
 	.mime = "octet/stream",
 };
-
-#ifndef DECODER_GET
-#define DECODER_GET
-const decoder_t *decoder_get(decoder_ctx_t *ctx)
-{
-	return ctx->ops;
-}
-#endif

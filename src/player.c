@@ -53,8 +53,7 @@ typedef struct player_decoder_s player_decoder_t;
 
 struct player_decoder_s
 {
-	const decoder_t *decoder;
-	decoder_ctx_t *decoder_ctx;
+	decoder_t *decoder;
 	const src_t *src;
 	int mediaid;
 };
@@ -192,38 +191,23 @@ struct _player_play_s
 
 static int _player_play(void* arg, int id, const char *url, const char *info, const char *mime)
 {
-	struct _player_play_s *player = (struct _player_play_s *)arg;
-	player_ctx_t *ctx = player->ctx;
-	player_decoder_t *dec;
+	struct _player_play_s *data = (struct _player_play_s *)arg;
+	player_ctx_t *player = data->ctx;
+	src_t *src = NULL;
 
-	dec = calloc(1, sizeof(*dec));
-	dec->mediaid = id;
-#ifdef DECODER_MAD
-	if (mime && !strcmp(mime, decoder_mad->mime))
-		dec->decoder = decoder_mad;
-#endif
-#ifdef DECODER_FLAC
-	if (mime && !strcmp(mime, decoder_flac->mime))
-		dec->decoder = decoder_flac;
-#endif
-	if (dec->decoder == NULL)
-		dec->decoder = DECODER;
-
-	if (dec->decoder != NULL)
+	dbg("player: prepare %s", url);
+	src = src_build(player, url, mime);
+	if (src != NULL)
 	{
-		dec->decoder_ctx = dec->decoder->init(ctx);
-		dbg("player: prepare %s", url);
-		dec->src = src_build(ctx, url);
-	}
-	if (dec->src != NULL)
-	{
-		player->dec = dec;
+		data->dec = calloc(1, sizeof(*data->dec));
+		data->dec->mediaid = id;
+		data->dec->src = src;
+		data->dec->decoder = src->audio[0];
 		return 0;
 	}
 	else
 	{
-		player->dec = NULL;
-		free(dec);
+		data->dec = NULL;
 	}
 	return -1;
 }
@@ -265,7 +249,7 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 			if (ctx->current != NULL)
 			{
 				dbg("player: wait");
-				ctx->current->decoder->destroy(ctx->current->decoder_ctx);
+				ctx->current->decoder->ops->destroy(ctx->current->decoder->ctx);
 				ctx->current->src->ops->destroy(ctx->current->src->ctx);
 				free(ctx->current);
 				ctx->current = NULL;
@@ -275,8 +259,8 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 				ctx->current = player.dec;
 				dbg("player: play");
 				ctx->state = STATE_PLAY;
-				ctx->current->decoder->run(ctx->current->decoder_ctx, encoder_jitter);
-				ctx->current->src->ops->run(ctx->current->src->ctx, ctx->current->decoder->jitter(ctx->current->decoder_ctx));
+				ctx->current->decoder->ops->run(ctx->current->decoder->ctx, encoder_jitter);
+				ctx->current->src->ops->run(ctx->current->src->ctx, ctx->current->decoder->ops->jitter(ctx->current->decoder->ctx));
 				ctx->media->ops->next(ctx->media->ctx);
 			}
 			else

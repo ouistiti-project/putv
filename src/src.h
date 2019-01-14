@@ -23,9 +23,11 @@ struct src_s
 {
 	const src_ops_t *ops;
 	src_ctx_t *ctx;
+	decoder_t *audio[4];
+	decoder_t *video[2];
 };
 
-src_t *src_build(player_ctx_t *player, const char *url);
+src_t *src_build(player_ctx_t *player, const char *url, const char *mime);
 
 extern const src_ops_t *src_file;
 extern const src_ops_t *src_curl;

@@ -1,5 +1,5 @@
 /*****************************************************************************
- * src_alsa.c
+ * decoder_mad.c
  * this file is part of https://github.com/ouistiti-project/putv
  *****************************************************************************
  * Copyright (C) 2016-2017
@@ -27,18 +27,13 @@
  *****************************************************************************/
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 #include <pthread.h>
 #include <errno.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <sys/ioctl.h>
-#include <pwd.h>
 
 #include "player.h"
 #include "decoder.h"
-#include "src.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -48,74 +43,33 @@
 #define dbg(...)
 #endif
 
-#define src_dbg(...)
+#define decoder_dbg(...)
 
-src_t *src_build(player_ctx_t *player, const char *url, const char *mime)
+decoder_t *decoder_build(player_ctx_t *player, const char *mime)
 {
-	const src_ops_t *const src_list[] = {
-	#ifdef SRC_FILE
-		src_file,
-	#endif
-	#ifdef SRC_UNIX
-		src_unix,
-	#endif
-	#ifdef SRC_CURL
-		src_curl,
-	#endif
-		NULL
-	};
+	decoder_t *decoder = NULL;
+	const decoder_ops_t *ops = NULL;
+	decoder_ctx_t *ctx = NULL;
+#ifdef DECODER_MAD
+	if (mime && !strcmp(mime, decoder_mad->mime))
+		ops = decoder_mad;
+#endif
+#ifdef DECODER_FLAC
+	if (mime && !strcmp(mime, decoder_flac->mime))
+		ops = decoder_flac;
+#endif
+	if (ops == NULL)
+		ops = DECODER;
 
-	const src_ops_t *src_default = NULL;
-	#if defined(SRC_FILE)
-	src_default = src_file;
-	#elif defined(SRC_UNIX)
-	src_default = src_unix;
-	#elif defined(SRC_CURL)
-	src_default = src_curl;
-	#endif
-
-	int i = 0;
-	src_ctx_t *src_ctx = NULL;
-	while (src_list[i] != NULL)
+	if (ops != NULL)
 	{
-		const char *protocol = src_list[i]->protocol;
-		int len = strlen(protocol);
-		while (protocol != NULL)
-		{
-			const char *next = strchr(protocol,'|');
-			if (next != NULL)
-				len = next - protocol;
-			if (!(strncmp(url, protocol, len)))
-			{
-				src_ctx = src_list[i]->init(player, url);
-				src_default = src_list[i];
-				break;
-			}
-			protocol = next;
-			if (protocol)
-			{
-				protocol++;
-				len = strlen(protocol);
-			}
-		}
-		if (src_ctx != NULL)
-			break;
-		i++;
+		ctx = ops->init(player);
 	}
-
-	if (src_ctx == NULL && src_default != NULL)
+	if (ctx != NULL)
 	{
-		src_ctx = src_default->init(player, url);
+		decoder = calloc(1, sizeof(*decoder));
+		decoder->ops = ops;
+		decoder->ctx = ctx;
 	}
-	if (src_ctx == NULL)
-	{
-		err("src not found %s", url);
-		return NULL;
-	}
-	src_t *src = calloc(1, sizeof(*src));
-	src->ops = src_default;
-	src->ctx = src_ctx;
-
-	src->audio[0] = decoder_build(player, mime);
-	return src;
+	return decoder;
 }

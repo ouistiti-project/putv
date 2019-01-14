@@ -40,10 +40,11 @@
 #include "player.h"
 #include "filter.h"
 typedef struct decoder_s decoder_t;
+typedef struct decoder_ops_s decoder_ops_t;
 typedef struct decoder_ctx_s decoder_ctx_t;
 struct decoder_ctx_s
 {
-	const decoder_t *ops;
+	const decoder_ops_t *ops;
 	struct mad_decoder decoder;
 	pthread_t thread;
 	jitter_t *in;
@@ -353,7 +354,7 @@ static void mad_destroy(decoder_ctx_t *ctx)
 	free(ctx);
 }
 
-const decoder_t *decoder_mad = &(decoder_t)
+const decoder_ops_t *decoder_mad = &(decoder_ops_t)
 {
 	.check = decoder_check,
 	.init = mad_init,
@@ -363,9 +364,3 @@ const decoder_t *decoder_mad = &(decoder_t)
 	.mime = "audio/mp3",
 };
 
-#ifndef DECODER_MAD
-const decoder_t *decoder_get(decoder_ctx_t *ctx)
-{
-	return ctx->ops;
-}
-#endif

@@ -144,10 +144,15 @@ output(const FLAC__StreamDecoder *decoder,
 	audio.nchannels = FLAC__stream_decoder_get_channels(decoder);
 	audio.nsamples = frame->header.blocksize;
 	audio.bitspersample = FLAC__stream_decoder_get_bits_per_sample(decoder);
+#ifdef FILTER_SCALING
+	audio.regain = ((sizeof(sample_t) * 8) - audio.bitspersample - 1);
+#else
+	audio.regain = 0;
+#endif
 	int i;
 	for (i = 0; i < audio.nchannels && i < MAXCHANNELS; i++)
-		audio.samples[i] = (signed int *)buffer[i];
-	decoder_dbg("decoder: audio frame %d Hz, %d channels, %d samples", audio.samplerate, audio.nchannels, audio.nsamples);
+		audio.samples[i] = (sample_t *)buffer[i];
+	decoder_dbg("decoder: audio frame %d Hz, %d channels, %d samples size %d bits", audio.samplerate, audio.nchannels, audio.nsamples, audio.bitspersample);
 
 	unsigned int nsamples;
 	if (audio.nchannels == 1)
@@ -181,19 +186,26 @@ output(const FLAC__StreamDecoder *decoder,
 		}
 		signed int sample;
 		sample = audio.samples[0][i];
-		
-		*(ctx->outbuffer + ctx->outbufferlen + 0) = (sample >> (audio.bitspersample - 32) ) & 0x00FF;;
-		*(ctx->outbuffer + ctx->outbufferlen + 1) = (sample >> (audio.bitspersample - 24) ) & 0x00FF;;
-		*(ctx->outbuffer + ctx->outbufferlen + 2) = (sample >> (audio.bitspersample - 16) ) & 0x00FF;
-		*(ctx->outbuffer + ctx->outbufferlen + 3) = (sample >> (audio.bitspersample - 8) ) & 0x00FF;
-		ctx->outbufferlen += 4;
+
+		int j;
+		if (audio.bitspersample == 16)
+			sample = sample << 16;
+		for (j = 0; (j * 8) < 32; j++)
+		{
+			*(ctx->outbuffer + ctx->outbufferlen + j) = (sample >> (j * 8) ) & 0x00FF;
+		}
+		ctx->outbufferlen += j;
 		if (audio.nchannels > 1)
+		{
 			sample = audio.samples[1][i];
-		*(ctx->outbuffer + ctx->outbufferlen + 0) = (sample >> (audio.bitspersample - 32) ) & 0x00FF;;
-		*(ctx->outbuffer + ctx->outbufferlen + 1) = (sample >> (audio.bitspersample - 24) ) & 0x00FF;;
-		*(ctx->outbuffer + ctx->outbufferlen + 2) = (sample >> (audio.bitspersample - 16) ) & 0x00FF;
-		*(ctx->outbuffer + ctx->outbufferlen + 3) = (sample >> (audio.bitspersample - 8) ) & 0x00FF;
-		ctx->outbufferlen += 4;
+			if (audio.bitspersample == 16)
+				sample = sample << 16;
+		}
+		for (j = 0; (j * 8) < 32; j++)
+		{
+			*(ctx->outbuffer + ctx->outbufferlen + j) = (sample >> (j * 8) ) & 0x00FF;
+		}
+		ctx->outbufferlen += j;
 		if (ctx->outbufferlen >= ctx->out->ctx->size)
 		{
 			ctx->out->ops->push(ctx->out->ctx, ctx->out->ctx->size, NULL);
@@ -260,7 +272,11 @@ static int decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 {
 	ctx->out = jitter;
 #ifdef FILTER
+#ifdef FILTER_SCALING
+	ctx->filter.ops = filter_pcm_scaling;
+#else
 	ctx->filter.ops = filter_pcm;
+#endif
 	ctx->filter.ctx = ctx->filter.ops->init(jitter->ctx->frequence, ctx->out->format);
 #endif
 	pthread_create(&ctx->thread, NULL, decoder_thread, ctx);

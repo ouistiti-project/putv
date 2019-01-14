@@ -16,10 +16,11 @@ typedef struct filter_audio_s filter_audio_t;
 struct filter_audio_s
 {
 	sample_t *samples[MAXCHANNELS];
-	int bitspersample;
 	int nsamples;
-	int nchannels;
 	int samplerate;
+	char bitspersample;
+	char nchannels;
+	char regain;
 };
 
 #ifndef FILTER_CTX
@@ -41,4 +42,5 @@ struct filter_s
 };
 
 extern const filter_ops_t *filter_pcm;
+extern const filter_ops_t *filter_pcm_scaling;
 #endif

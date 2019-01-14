@@ -120,12 +120,12 @@ enum mad_flow output(void *data,
 	audio.samplerate = pcm->samplerate;
 	if (ctx->out->ctx->frequence == 0)
 	{
-		decoder_dbg("decoder change samplerate to %u", pcm->samplerate);
+		decoder_dbg("decoder mad: change samplerate to %u", pcm->samplerate);
 		ctx->out->ctx->frequence = pcm->samplerate;
 	}
 	else if (ctx->out->ctx->frequence != pcm->samplerate)
 	{
-		err("decoder: samplerate %d not supported", ctx->out->ctx->frequence);
+		err("decoder mad: samplerate %d not supported", ctx->out->ctx->frequence);
 	}
 
 	audio.nchannels = pcm->channels;
@@ -135,7 +135,7 @@ enum mad_flow output(void *data,
 	int i;
 	for (i = 0; i < audio.nchannels && i < MAXCHANNELS; i++)
 		audio.samples[i] = pcm->samples[i];
-	decoder_dbg("decoder: audio frame %d Hz, %d channels, %d samples", audio.samplerate, audio.nchannels, audio.nsamples);
+	decoder_dbg("decoder mad: audio frame %d Hz, %d channels, %d samples", audio.samplerate, audio.nchannels, audio.nsamples);
 
 	unsigned int nsamples;
 	if (audio.nchannels == 1)
@@ -227,14 +227,14 @@ enum mad_flow error(void *data,
 		}
 		else
 #endif
-			dbg("decoding error 0x%04x (%s) at byte offset %p",
+			dbg("decoder mad: error 0x%04x (%s) at byte offset %p",
 				stream->error, mad_stream_errorstr(stream),
 				stream->this_frame );
 		return MAD_FLOW_CONTINUE;
 	}
 	else
 	{
-		err("decoding error 0x%04x (%s) at byte offset %p",
+		err("decoder mad: error 0x%04x (%s) at byte offset %p",
 			stream->error, mad_stream_errorstr(stream),
 			stream->this_frame );
 		return MAD_FLOW_BREAK;

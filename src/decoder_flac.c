@@ -108,6 +108,7 @@ input(const FLAC__StreamDecoder *decoder,
 	if (ctx->inbuffer == NULL)
 	{
 		*bytes = 0;
+		decoder_dbg("decoder flac: end of file");
 		return FLAC__STREAM_DECODER_READ_STATUS_END_OF_STREAM;
 	}
 	len = ctx->in->ops->length(ctx->in->ctx);
@@ -134,7 +135,7 @@ output(const FLAC__StreamDecoder *decoder,
 	audio.samplerate = FLAC__stream_decoder_get_sample_rate(decoder);
 	if (ctx->out->ctx->frequence == 0)
 	{
-		decoder_dbg("decoder change samplerate to %u", audio.samplerate);
+		decoder_dbg("decoder flac: change samplerate to %u", audio.samplerate);
 		ctx->out->ctx->frequence = audio.samplerate;
 	}
 	else if (ctx->out->ctx->frequence != audio.samplerate)

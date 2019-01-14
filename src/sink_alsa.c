@@ -156,7 +156,7 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 	ret = snd_pcm_hw_params_set_buffer_size_near(ctx->playback_handle, hw_params, &buffer_size);
 	if (ret < 0)
 	{
-		err("sink: channels");
+		err("sink: buffer_size");
 		goto error;
 	}
 

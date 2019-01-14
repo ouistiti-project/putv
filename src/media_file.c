@@ -174,6 +174,8 @@ static int media_next(media_ctx_t *ctx)
 	int ret = -1;
 	if (ctx->current != NULL)
 		ctx->current = ctx->current->next;
+	else
+		ctx->current = ctx->media;
 	if ((ctx->current == NULL) && (ctx->options & OPTION_LOOP))
 	{
 		dbg("media loop");
@@ -228,7 +230,6 @@ static media_ctx_t *media_init(const char *url,...)
 	{
 		ctx = calloc(1, sizeof(*ctx));
 		media_insert(ctx, url, NULL, utils_getmime(url));
-		ctx->current = ctx->media;
 	}
 	return ctx;
 }

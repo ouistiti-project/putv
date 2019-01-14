@@ -62,7 +62,7 @@ struct src_ctx_s
 
 static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 {
-	int ret;
+	int ret = 0;
 	if (player_waiton(ctx->ctx, STATE_PAUSE) < 0)
 	{
 		return 0;

@@ -38,7 +38,6 @@
 
 #include "player.h"
 #include "jitter.h"
-#include "filter.h"
 typedef struct src_ops_s src_ops_t;
 typedef struct src_ctx_s src_ctx_t;
 struct src_ctx_s

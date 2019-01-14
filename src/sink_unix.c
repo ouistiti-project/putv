@@ -41,7 +41,6 @@
 
 #include "player.h"
 #include "jitter.h"
-#include "filter.h"
 #include "unix_server.h"
 typedef struct sink_s sink_t;
 typedef struct sink_ctx_s sink_ctx_t;

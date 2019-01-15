@@ -321,7 +321,7 @@ static void jitter_pop(jitter_ctx_t *jitter, size_t len)
 
 	if (private->out->len > len)
 	{
-		dbg("buffer not empty %ld %ld", private->out->len, len);
+		dbg("buffer %s pop not empty %ld/%ld", jitter->name, len, private->out->len);
 	}
 
 	pthread_mutex_lock(&private->mutex);

@@ -47,8 +47,9 @@ struct sink_ctx_s
 	state_t state;
 	jitter_format_t format;
 	unsigned int samplerate;
-	int samplesize;
-	int nchannels;
+	int buffersize;
+	char samplesize;
+	char nchannels;
 };
 #define SINK_CTX
 #include "sink.h"
@@ -63,7 +64,8 @@ struct sink_ctx_s
 
 #define sink_dbg(...)
 
-#define LATENCE_MS 700
+#define LATENCE_MS 100
+#define NB_BUFFER 6
 
 static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate, unsigned int *size)
 {
@@ -140,24 +142,44 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 		warn("sink: alsa downgrade to 24bits over 32bits");
 	}
 	ctx->format = format;
-	ret = snd_pcm_hw_params_set_rate_near(ctx->playback_handle, hw_params, &rate, NULL);
+
+	unsigned int trate = rate;
+	if (rate == 0)
+		trate = 44100;
+	ret = snd_pcm_hw_params_set_rate_near(ctx->playback_handle, hw_params, &trate, NULL);
 	if (ret < 0)
 	{
 		err("sink: rate");
 		goto error;
 	}
+
 	ret = snd_pcm_hw_params_set_channels(ctx->playback_handle, hw_params, ctx->nchannels);
 	if (ret < 0)
 	{
 		err("sink: channels");
 		goto error;
 	}
-	snd_pcm_uframes_t buffer_size = *size;
-	ret = snd_pcm_hw_params_set_buffer_size_near(ctx->playback_handle, hw_params, &buffer_size);
-	if (ret < 0)
+
+	snd_pcm_uframes_t periodsize = 0;
+	snd_pcm_uframes_t buffersize = 0;
+	if (*size > 0)
 	{
-		err("sink: buffer_size");
-		goto error;
+		int dir = 0;
+		periodsize = *size;
+		buffersize = *size * NB_BUFFER;
+		ret = snd_pcm_hw_params_set_buffer_size_near(ctx->playback_handle, hw_params, &buffersize);
+		if (ret < 0)
+		{
+			err("sink: buffer_size");
+			goto error;
+		}
+
+		ret = snd_pcm_hw_params_set_period_size_near(ctx->playback_handle, hw_params, &periodsize, &dir);
+		if (ret < 0)
+		{
+			err("sink: period_size");
+			goto error;
+		}
 	}
 
 	ret = snd_pcm_hw_params(ctx->playback_handle, hw_params);
@@ -167,8 +189,7 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 		goto error;
 	}
 
-	snd_pcm_hw_params_get_buffer_size(hw_params, &buffer_size);
-	snd_pcm_uframes_t periodsize;
+	snd_pcm_hw_params_get_buffer_size(hw_params, &buffersize);
 	snd_pcm_hw_params_get_period_size(hw_params, &periodsize, 0);
 	dbg("sink alsa config :\n" \
 		"\tbuffer size %lu\n" \
@@ -176,12 +197,13 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 		"\tsample rate %d\n" \
 		"\tsample size %d\n" \
 		"\tnchannels %u",
-		buffer_size,
+		buffersize,
 		periodsize,
 		rate,
 		ctx->samplesize,
 		ctx->nchannels);
-	*size = periodsize * ctx->samplesize * ctx->nchannels;
+	ctx->buffersize = periodsize;
+	*size = periodsize;
 
 	ret = snd_pcm_prepare(ctx->playback_handle);
 	if (ret < 0) {
@@ -229,7 +251,7 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 			samplerate = atoi(++setting);
 	}
 
-	unsigned int size = LATENCE_MS * 1000000 / 44100;
+	unsigned int size = LATENCE_MS * 44100 * 4 * 2 / 1000;
 	if (_pcm_open(ctx, format, samplerate, &size) < 0)
 	{
 		err("sink: init error %s", strerror(errno));
@@ -237,11 +259,9 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 		return NULL;
 	}
 
-	if (ctx->samplerate < 441000 && DEFAULT_SAMPLERATE == 0)
-		size = 1152 * sizeof(signed int) * 2;
-	jitter_t *jitter = jitter_scattergather_init(jitter_name, 6, size);
+	jitter_t *jitter = jitter_scattergather_init(jitter_name, NB_BUFFER, size);
 	jitter->ctx->frequence = DEFAULT_SAMPLERATE;
-	jitter->ctx->thredhold = 2;
+	jitter->ctx->thredhold = 3;
 	jitter->format = ctx->format;
 
 	ctx->in = jitter;
@@ -262,7 +282,7 @@ static int _alsa_checksamplerate(sink_ctx_t *ctx)
 	if(ctx->in->ctx->frequence && (ctx->in->ctx->frequence != ctx->samplerate))
 	{
 		_pcm_close(ctx);
-		unsigned int size;
+		int size = ctx->buffersize;
 		_pcm_open(ctx, ctx->in->format, ctx->in->ctx->frequence, &size);
 	}
 	ctx->in->ctx->frequence = DEFAULT_SAMPLERATE;
@@ -311,6 +331,7 @@ static void *alsa_thread(void *arg)
 			_alsa_checksamplerate(ctx);
 			//snd_pcm_mmap_begin
 			ret = snd_pcm_writei(ctx->playback_handle, buff, length / divider);
+			sink_dbg("sink  alsa : write %d %d", ret * divider, length);
 			if (ret == -EPIPE)
 			{
 				warn("pcm recover");

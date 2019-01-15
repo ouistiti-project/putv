@@ -229,12 +229,12 @@ static const char *jitter_name = "alsa";
 static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 {
 	int samplerate = DEFAULT_SAMPLERATE;
-	int count = 2;
 	jitter_format_t format = SINK_ALSA_FORMAT;
 	sink_ctx_t *ctx = calloc(1, sizeof(*ctx));
 
 	ctx->ops = sink_alsa;
 	ctx->soundcard = strdup(soundcard);
+#ifdef SINK_ALSA_CONFIG
 	char *setting = strchr(ctx->soundcard, ':');
 	if (setting != NULL)
 	{
@@ -250,8 +250,9 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 		if (setting != NULL)
 			samplerate = atoi(++setting);
 	}
+#endif
 
-	unsigned int size = LATENCE_MS * 44100 * 4 * 2 / 1000;
+	unsigned int size = LATENCE_MS * samplerate * 4 * 2 / 1000;
 	if (_pcm_open(ctx, format, samplerate, &size) < 0)
 	{
 		err("sink: init error %s", strerror(errno));
@@ -260,7 +261,11 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 	}
 
 	jitter_t *jitter = jitter_scattergather_init(jitter_name, NB_BUFFER, size);
+#ifdef SAMPLERATE_AUTO
+	jitter->ctx->frequence = 0;
+#else
 	jitter->ctx->frequence = DEFAULT_SAMPLERATE;
+#endif
 	jitter->ctx->thredhold = 3;
 	jitter->format = ctx->format;
 
@@ -285,7 +290,11 @@ static int _alsa_checksamplerate(sink_ctx_t *ctx)
 		int size = ctx->buffersize;
 		_pcm_open(ctx, ctx->in->format, ctx->in->ctx->frequence, &size);
 	}
+#ifdef SAMPLERATE_AUTO
+	ctx->in->ctx->frequence = 0;
+#else
 	ctx->in->ctx->frequence = DEFAULT_SAMPLERATE;
+#endif
 	return ret;
 }
 static void *alsa_thread(void *arg)

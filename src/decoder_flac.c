@@ -146,11 +146,7 @@ output(const FLAC__StreamDecoder *decoder,
 	audio.nchannels = FLAC__stream_decoder_get_channels(decoder);
 	audio.nsamples = frame->header.blocksize;
 	audio.bitspersample = FLAC__stream_decoder_get_bits_per_sample(decoder);
-#ifdef FILTER_SCALING
-	audio.regain = ((sizeof(sample_t) * 8) - audio.bitspersample - 1);
-#else
 	audio.regain = 0;
-#endif
 	int i;
 	for (i = 0; i < audio.nchannels && i < MAXCHANNELS; i++)
 		audio.samples[i] = (sample_t *)buffer[i];
@@ -274,11 +270,7 @@ static int decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 {
 	ctx->out = jitter;
 #ifdef FILTER
-#ifdef FILTER_SCALING
-	ctx->filter.ops = filter_pcm_scaling;
-#else
 	ctx->filter.ops = filter_pcm;
-#endif
 	ctx->filter.ctx = ctx->filter.ops->init(jitter->ctx->frequence, ctx->out->format);
 #endif
 	pthread_create(&ctx->thread, NULL, decoder_thread, ctx);

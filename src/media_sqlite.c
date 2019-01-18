@@ -552,7 +552,7 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int mediaid)
 		char *insert = "insert into \"opus\" (\"titleid\",\"artistid\",\"albumid\",\"genreid\") values (@TITLEID,@ARTISTID,@ALBUMID,@GENREID)";
 		sqlite3_stmt *st_insert;
 		ret = sqlite3_prepare_v2(db, insert, -1, &st_insert, NULL);
-		SQLITE3_CHECK(ret, -1, select);
+		SQLITE3_CHECK(ret, -1, insert);
 
 		int index;
 
@@ -809,10 +809,16 @@ static int media_next(media_ctx_t *ctx)
 	int ret;
 	sqlite3_stmt *statement;
 	char *sql[] = {
-		"select \"id\" from \"playlist\" where id > @ID",
-		"select \"id\" from \"playlist\""
+		"select \"id\" from \"playlist\" where id > @ID limit 1",
+		"select \"id\" from \"playlist\" limit 1",
+		"select \"id\" from \"playlist\" order by random() limit 1",
 		};
-	if (ctx->mediaid != 0)
+	if (ctx->options & OPTION_RANDOM)
+	{
+		ret = sqlite3_prepare_v2(ctx->db, sql[2], -1, &statement, NULL);
+		SQLITE3_CHECK(ret, -1, sql[2]);
+	}
+	else if (ctx->mediaid != 0)
 	{
 		ret = sqlite3_prepare_v2(ctx->db, sql[0], -1, &statement, NULL);
 		SQLITE3_CHECK(ret, -1, sql[0]);

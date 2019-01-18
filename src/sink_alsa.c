@@ -64,7 +64,7 @@ struct sink_ctx_s
 
 #define sink_dbg(...)
 
-#define LATENCE_MS 100
+#define LATENCE_MS 50
 #define NB_BUFFER 6
 
 static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate, unsigned int *size)
@@ -266,7 +266,7 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 #else
 	jitter->ctx->frequence = DEFAULT_SAMPLERATE;
 #endif
-	jitter->ctx->thredhold = 3;
+	jitter->ctx->thredhold = 2;
 	jitter->format = ctx->format;
 
 	ctx->in = jitter;

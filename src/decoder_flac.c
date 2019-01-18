@@ -226,7 +226,6 @@ static void
 error(const FLAC__StreamDecoder *decoder,
 	FLAC__StreamDecoderErrorStatus status,
 	void *data)
-
 {
 }
 

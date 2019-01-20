@@ -344,12 +344,29 @@ static int method_change(json_t *json_params, json_t **result, void *userdata)
 		.result = json_object(),
 	};
 
-	int id = player_mediaid(ctx->player);
-	if (media->ops->find(media->ctx, id, _display, &display) == 1)
+	json_t *value;
+	if (json_is_object(json_params))
 	{
-		*result = display.result;
+		value = json_object_get(json_params, "id");
+		if (json_is_integer(value))
+		{
+			int id = json_integer_value(value);
+			if (media->ops->find(media->ctx, id, _display, &display) == 1)
+			{
+				*result = display.result;
+			}
+		}
+		value = json_object_get(json_params, "media");
+		if (json_is_string(value))
+		{
+			const char *media = json_string_value(value);
+			if (player_change(ctx->player, media, 0, 0) == 0)
+			{
+				*result = json_pack("{s:s}", "media", "changed");
+			}
+		}
 	}
-	else
+	if (*result == NULL);
 	{
 		*result = json_pack("{s:s}", "state", "stop");
 	}
@@ -366,7 +383,7 @@ static int method_options(json_t *json_params, json_t **result, void *userdata)
 	json_t *value;
 	if (json_is_object(json_params))
 	{
-		value = json_object_get(value, "loop");
+		value = json_object_get(json_params, "loop");
 		if (json_is_boolean(value))
 		{
 			int state = json_boolean_value(value);
@@ -374,7 +391,7 @@ static int method_options(json_t *json_params, json_t **result, void *userdata)
 			value = json_boolean(ret);
 			json_object_set(*result, "loop", value);
 		}
-		value = json_object_get(value, "random");
+		value = json_object_get(json_params, "random");
 		if (json_is_boolean(value))
 		{
 			int state = json_boolean_value(value);

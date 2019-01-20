@@ -37,10 +37,11 @@
 #include "player.h"
 #include "filter.h"
 typedef struct decoder_s decoder_t;
+typedef struct decoder_ops_s decoder_ops_t;
 typedef struct decoder_ctx_s decoder_ctx_t;
 struct decoder_ctx_s
 {
-	const decoder_t *ops;
+	const decoder_ops_t *ops;
 	FLAC__StreamDecoder *decoder;
 	int nchannels;
 	int samplerate;
@@ -107,6 +108,7 @@ input(const FLAC__StreamDecoder *decoder,
 	if (ctx->inbuffer == NULL)
 	{
 		*bytes = 0;
+		decoder_dbg("decoder flac: end of file");
 		return FLAC__STREAM_DECODER_READ_STATUS_END_OF_STREAM;
 	}
 	len = ctx->in->ops->length(ctx->in->ctx);
@@ -133,7 +135,7 @@ output(const FLAC__StreamDecoder *decoder,
 	audio.samplerate = FLAC__stream_decoder_get_sample_rate(decoder);
 	if (ctx->out->ctx->frequence == 0)
 	{
-		decoder_dbg("decoder change samplerate to %u", audio.samplerate);
+		decoder_dbg("decoder flac: change samplerate to %u", audio.samplerate);
 		ctx->out->ctx->frequence = audio.samplerate;
 	}
 	else if (ctx->out->ctx->frequence != audio.samplerate)
@@ -144,10 +146,11 @@ output(const FLAC__StreamDecoder *decoder,
 	audio.nchannels = FLAC__stream_decoder_get_channels(decoder);
 	audio.nsamples = frame->header.blocksize;
 	audio.bitspersample = FLAC__stream_decoder_get_bits_per_sample(decoder);
+	audio.regain = 0;
 	int i;
 	for (i = 0; i < audio.nchannels && i < MAXCHANNELS; i++)
-		audio.samples[i] = (signed int *)buffer[i];
-	decoder_dbg("decoder: audio frame %d Hz, %d channels, %d samples", audio.samplerate, audio.nchannels, audio.nsamples);
+		audio.samples[i] = (sample_t *)buffer[i];
+	decoder_dbg("decoder: audio frame %d Hz, %d channels, %d samples size %d bits", audio.samplerate, audio.nchannels, audio.nsamples, audio.bitspersample);
 
 	unsigned int nsamples;
 	if (audio.nchannels == 1)
@@ -181,19 +184,26 @@ output(const FLAC__StreamDecoder *decoder,
 		}
 		signed int sample;
 		sample = audio.samples[0][i];
-		
-		*(ctx->outbuffer + ctx->outbufferlen + 0) = (sample >> (audio.bitspersample - 32) ) & 0x00FF;;
-		*(ctx->outbuffer + ctx->outbufferlen + 1) = (sample >> (audio.bitspersample - 24) ) & 0x00FF;;
-		*(ctx->outbuffer + ctx->outbufferlen + 2) = (sample >> (audio.bitspersample - 16) ) & 0x00FF;
-		*(ctx->outbuffer + ctx->outbufferlen + 3) = (sample >> (audio.bitspersample - 8) ) & 0x00FF;
-		ctx->outbufferlen += 4;
+
+		int j;
+		if (audio.bitspersample == 16)
+			sample = sample << 16;
+		for (j = 0; (j * 8) < 32; j++)
+		{
+			*(ctx->outbuffer + ctx->outbufferlen + j) = (sample >> (j * 8) ) & 0x00FF;
+		}
+		ctx->outbufferlen += j;
 		if (audio.nchannels > 1)
+		{
 			sample = audio.samples[1][i];
-		*(ctx->outbuffer + ctx->outbufferlen + 0) = (sample >> (audio.bitspersample - 32) ) & 0x00FF;;
-		*(ctx->outbuffer + ctx->outbufferlen + 1) = (sample >> (audio.bitspersample - 24) ) & 0x00FF;;
-		*(ctx->outbuffer + ctx->outbufferlen + 2) = (sample >> (audio.bitspersample - 16) ) & 0x00FF;
-		*(ctx->outbuffer + ctx->outbufferlen + 3) = (sample >> (audio.bitspersample - 8) ) & 0x00FF;
-		ctx->outbufferlen += 4;
+			if (audio.bitspersample == 16)
+				sample = sample << 16;
+		}
+		for (j = 0; (j * 8) < 32; j++)
+		{
+			*(ctx->outbuffer + ctx->outbufferlen + j) = (sample >> (j * 8) ) & 0x00FF;
+		}
+		ctx->outbufferlen += j;
 		if (ctx->outbufferlen >= ctx->out->ctx->size)
 		{
 			ctx->out->ops->push(ctx->out->ctx, ctx->out->ctx->size, NULL);
@@ -216,7 +226,6 @@ static void
 error(const FLAC__StreamDecoder *decoder,
 	FLAC__StreamDecoderErrorStatus status,
 	void *data)
-
 {
 }
 
@@ -258,35 +267,10 @@ static int decoder_check(const char *path)
 
 static int decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 {
-	int samplesize = 4;
-	int nchannels = 2;
 	ctx->out = jitter;
-	switch (ctx->out->format)
-	{
-	case PCM_16bits_LE_mono:
-		samplesize = 2;
-		nchannels = 1;
-	break;
-	case PCM_16bits_LE_stereo:
-		samplesize = 2;
-		nchannels = 2;
-	break;
-	case PCM_24bits_LE_stereo:
-		samplesize = 3;
-		nchannels = 2;
-	break;
-	case PCM_32bits_BE_stereo:
-	case PCM_32bits_LE_stereo:
-		samplesize = 4;
-		nchannels = 2;
-	break;
-	default:
-		err("decoder out format not supported %d", ctx->out->format);
-		return -1;
-	}
 #ifdef FILTER
 	ctx->filter.ops = filter_pcm;
-	ctx->filter.ctx = ctx->filter.ops->init(jitter->ctx->frequence, samplesize, nchannels);
+	ctx->filter.ctx = ctx->filter.ops->init(jitter->ctx->frequence, ctx->out->format);
 #endif
 	pthread_create(&ctx->thread, NULL, decoder_thread, ctx);
 	return 0;
@@ -304,7 +288,7 @@ static void decoder_destroy(decoder_ctx_t *ctx)
 	free(ctx);
 }
 
-const decoder_t *decoder_flac = &(decoder_t)
+const decoder_ops_t *decoder_flac = &(decoder_ops_t)
 {
 	.check = decoder_check,
 	.init = decoder_init,
@@ -313,11 +297,3 @@ const decoder_t *decoder_flac = &(decoder_t)
 	.destroy = decoder_destroy,
 	.mime = "audio/flac",
 };
-
-#ifndef DECODER_GET
-#define DECODER_GET
-const decoder_t *decoder_get(decoder_ctx_t *ctx)
-{
-	return ctx->ops;
-}
-#endif

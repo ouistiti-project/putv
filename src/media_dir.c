@@ -555,7 +555,7 @@ static void *_check_dir(void *arg)
 }
 #endif
 
-static media_ctx_t *media_init(const char *url)
+static media_ctx_t *media_init(const char *url,...)
 {
 	media_ctx_t *ctx = NULL;
 	if (url)
@@ -563,6 +563,8 @@ static media_ctx_t *media_init(const char *url)
 		int ret;
 		struct stat pathstat;
 		const char *path = utils_getpath(url, "file://");
+		if (path == NULL)
+			return NULL;
 		if (path[0] == '~')
 		{
 			path += 2;

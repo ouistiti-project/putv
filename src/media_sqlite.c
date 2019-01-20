@@ -552,7 +552,7 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int mediaid)
 		char *insert = "insert into \"opus\" (\"titleid\",\"artistid\",\"albumid\",\"genreid\") values (@TITLEID,@ARTISTID,@ALBUMID,@GENREID)";
 		sqlite3_stmt *st_insert;
 		ret = sqlite3_prepare_v2(db, insert, -1, &st_insert, NULL);
-		SQLITE3_CHECK(ret, -1, select);
+		SQLITE3_CHECK(ret, -1, insert);
 
 		int index;
 
@@ -809,10 +809,16 @@ static int media_next(media_ctx_t *ctx)
 	int ret;
 	sqlite3_stmt *statement;
 	char *sql[] = {
-		"select \"id\" from \"playlist\" where id > @ID",
-		"select \"id\" from \"playlist\""
+		"select \"id\" from \"playlist\" where id > @ID limit 1",
+		"select \"id\" from \"playlist\" limit 1",
+		"select \"id\" from \"playlist\" order by random() limit 1",
 		};
-	if (ctx->mediaid != 0)
+	if (ctx->options & OPTION_RANDOM)
+	{
+		ret = sqlite3_prepare_v2(ctx->db, sql[2], -1, &statement, NULL);
+		SQLITE3_CHECK(ret, -1, sql[2]);
+	}
+	else if (ctx->mediaid != 0)
 	{
 		ret = sqlite3_prepare_v2(ctx->db, sql[0], -1, &statement, NULL);
 		SQLITE3_CHECK(ret, -1, sql[0]);
@@ -947,12 +953,14 @@ static int _media_initdb(sqlite3 *db, const char *query[])
 	return ret;
 }
 
-static media_ctx_t *media_init(const char *url)
+static media_ctx_t *media_init(const char *url, ...)
 {
 	media_ctx_t *ctx = NULL;
 	sqlite3 *db = NULL;
 	int ret = SQLITE_ERROR;
 
+	if (strstr(url, "db://") == NULL)
+		return NULL;
 	const char *dbpath = utils_getpath(url, "db://");
 	if (dbpath)
 	{
@@ -971,10 +979,10 @@ static media_ctx_t *media_init(const char *url)
 			ret = _media_initdb(db, query);
 #else
 			const char *query[] = {
-"create table media (id INTEGER PRIMARY KEY, url TEXT UNIQUE NOT NULL, mime TEXT, info BLOB, opusid INTEGER, FOREIGN KEY (opusid) REFERENCES opus(id) ON UPDATE SET NULL);",
-"create table opus (id INTEGER PRIMARY KEY,  titleid INTEGER UNIQUE NOT NULL, artistid INTEGER, otherid INTEGER, albumid INTEGER, genreid INTEGER, FOREIGN KEY (titleid) REFERENCES word(id), FOREIGN KEY (artistid) REFERENCES artist(id) ON UPDATE SET NULL, FOREIGN KEY (albumid) REFERENCES album(id) ON UPDATE SET NULL, FOREIGN KEY (genreid) REFERENCES word(id) ON UPDATE SET NULL);",
-"create table album (id INTEGER PRIMARY KEY, wordid INTEGER UNIQUE NOT NULL, artistid INTEGER, genreid INTEGER, FOREIGN KEY (wordid) REFERENCES word(id), FOREIGN KEY (artistid) REFERENCES artist(id) ON UPDATE SET NULL, FOREIGN KEY (genreid) REFERENCES word(id) ON UPDATE SET NULL);",
-"create table artist (id INTEGER PRIMARY KEY, wordid INTEGER UNIQUE NOT NULL, info BLOB, FOREIGN KEY (wordid) REFERENCES word(id));",
+"create table media (id INTEGER PRIMARY KEY, url TEXT UNIQUE NOT NULL, mime TEXT, info BLOB, opusid INTEGER, comment BLOB, FOREIGN KEY (opusid) REFERENCES opus(id) ON UPDATE SET NULL);",
+"create table opus (id INTEGER PRIMARY KEY,  titleid INTEGER UNIQUE NOT NULL, artistid INTEGER, otherid INTEGER, albumid INTEGER, genreid INTEGER, comment BLOB, FOREIGN KEY (titleid) REFERENCES word(id), FOREIGN KEY (artistid) REFERENCES artist(id) ON UPDATE SET NULL, FOREIGN KEY (albumid) REFERENCES album(id) ON UPDATE SET NULL, FOREIGN KEY (genreid) REFERENCES word(id) ON UPDATE SET NULL);",
+"create table album (id INTEGER PRIMARY KEY, wordid INTEGER UNIQUE NOT NULL, artistid INTEGER, genreid INTEGER, comment BLOB, FOREIGN KEY (wordid) REFERENCES word(id), FOREIGN KEY (artistid) REFERENCES artist(id) ON UPDATE SET NULL, FOREIGN KEY (genreid) REFERENCES word(id) ON UPDATE SET NULL);",
+"create table artist (id INTEGER PRIMARY KEY, wordid INTEGER UNIQUE NOT NULL, comment BLOB, FOREIGN KEY (wordid) REFERENCES word(id));",
 "create table genre (id INTEGER PRIMARY KEY, wordid INTEGER, FOREIGN KEY (wordid) REFERENCES word(id));",
 "create table playlist (id INTEGER, FOREIGN KEY (id) REFERENCES opus(id) ON UPDATE SET NULL);",
 "create table word (id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL);",

@@ -110,6 +110,11 @@ static int method_search(cmds_ctx_t *ctx, char *arg)
 	return media->ops->find(media->ctx, id, _print_entry, (void *)&id);
 }
 
+static int method_media(cmds_ctx_t *ctx, char *arg)
+{
+	return player_change(ctx->player, arg, 0, 0);
+}
+
 static int _import_entry(void *arg, int id, const char *url,
 		const char *info, const char *mime)
 {
@@ -262,6 +267,11 @@ static int cmds_line_cmd(cmds_ctx_t *ctx)
 				{
 					method = method_list;
 					i += 4;
+				}
+				if (!strncmp(buffer + i, "media",5))
+				{
+					method = method_media;
+					i += 5;
 				}
 				if (!strncmp(buffer + i, "import",6))
 				{

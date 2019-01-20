@@ -70,6 +70,8 @@ static int heartbeat_wait(heartbeat_ctx_t *ctx, void *arg)
 {
 	heartbeat_samples_t *beat = (heartbeat_samples_t *)arg;
 	clockid_t clockid = CLOCK_REALTIME;
+	if (ctx->samplerate == 0)
+		return -1;
 	unsigned long msec = beat->nsamples * 1000 / ctx->samplerate;
 	if (ctx->clock.tv_sec == 0 && ctx->clock.tv_nsec == 0)
 		clock_gettime(clockid, &ctx->clock);

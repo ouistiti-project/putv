@@ -38,13 +38,12 @@
 
 #include "player.h"
 #include "jitter.h"
-#include "filter.h"
-typedef struct src_s src_t;
+typedef struct src_ops_s src_ops_t;
 typedef struct src_ctx_s src_ctx_t;
 struct src_ctx_s
 {
 	player_ctx_t *player;
-	const src_t *ops;
+	const src_ops_t *ops;
 	int handle;
 	state_t state;
 	pthread_t thread;
@@ -166,17 +165,10 @@ static void src_destroy(src_ctx_t *ctx)
 	free(ctx);
 }
 
-const src_t *src_unix = &(src_t)
+const src_ops_t *src_unix = &(src_ops_t)
 {
+	.protocol = "unix://",
 	.init = src_init,
 	.run = src_run,
 	.destroy = src_destroy,
 };
-
-#ifndef SRC_GET
-#define SRC_GET
-const src_t *src_get(src_ctx_t *ctx)
-{
-	return ctx->ops;
-}
-#endif

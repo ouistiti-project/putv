@@ -175,7 +175,11 @@ static unsigned char *jitter_pull(jitter_ctx_t *jitter)
 		_jitter_init(jitter);
 	while (private->in->state != SCATTER_FREE)
 	{
-		jitter_dbg("jitter %s pull block on %p %d", jitter->name, private->in, private->in->state);
+		/**
+		 * The scatter gather is full and we has to wait that the consumer
+		 * free some buffer.
+		 */
+		jitter_dbg("jitter %s pull block on %p %d", jitter->name, private->in, private->state);
 		pthread_cond_wait(&private->condpush, &private->mutex);
 	}
 	private->in->state = SCATTER_PULL;
@@ -191,6 +195,10 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 	jitter_dbg("jitter %s push %p", jitter->name, private->in);
 	if (private->in->state != SCATTER_PULL)
 	{
+		/**
+		 * this situation should be exist. It may arrive
+		 * if the push is called twice on the same buffer.
+		 */
 		pthread_cond_broadcast(&private->condpeer);
 		return;
 	}
@@ -198,6 +206,9 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 	{
 		/**
 		 * TODO check the ring buffer push 0 kills the jitter
+		 */
+		/**
+		 * the producer push empty buffer to end the stream
 		 */
 		dbg("jitter sg %s push 0", jitter->name);
 		pthread_mutex_lock(&private->mutex);
@@ -214,6 +225,11 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 		private->level++;
 		private->in = private->in->next;
 		pthread_mutex_unlock(&private->mutex);
+		/**
+		 * The standard case uses a thread to consume the buffers.
+		 * But here the consumer is set durring the initalization
+		 * and it is called by the same thread that the producer.
+		 */
 		if (jitter->consume != NULL)
 		{
 			private->out->state = SCATTER_POP;
@@ -240,15 +256,27 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 			else
 				return;
 		}
+		/**
+		 * End of the consumer. The rest is the normal case of the push
+		 * function.
+		 */
 	}
 
 	if (private->state == JITTER_RUNNING)
 	{
+		/**
+		 * The buffer is running and the input
+		 * has to send an event to the consumer
+		 * that a new buffer is ready */
 		pthread_cond_broadcast(&private->condpeer);
 	}
 	else if (private->state == JITTER_FILLING &&
 			private->level == jitter->thredhold)
 	{
+		/**
+		 * The scatter gather is filling and reaches the thredhold.
+		 * The sg may run and send event to the next buffer.
+		 */
 		private->state = JITTER_RUNNING;
 	}
 }
@@ -265,6 +293,11 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter)
 	{
 		if ((private->in == private->out) && (jitter->produce != NULL))
 		{
+			/**
+			 * In standard case a thread produce buffer and another one
+			 * consume buffer. In this case the producer runs inside
+			 * the consumer thread.
+			 */
 			int len = 0;
 			do
 			{
@@ -286,21 +319,39 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter)
 				dbg("produce nothing");
 				return NULL;
 			}
+			/**
+			 * The end of the producer and returns to the standard case.
+			 */
 		}
 		else if (private->state == JITTER_COMPLETE)
+		{
+			/**
+			 * The consumer find the empty buffer to stop the stream
+			 */
+			jitter_dbg("jitter %s peer empty on %p", jitter->name, private->out);
 			return NULL;
+		}
 	}
 	pthread_mutex_lock(&private->mutex);
 	while ((private->state == JITTER_FILLING) &&
 			(private->out->state != SCATTER_READY))
 	{
-		jitter_dbg("jitter %s peer block on %p", jitter->name, private->out);
+		/**
+		 * The scatter gather is empty and the producer fills.
+		 * The consumer is waiting that the thredhold is reached.
+		 */
+		jitter_dbg("jitter %s peer block on %p %d %d", jitter->name, private->out, private->state, private->out->state);
 		pthread_cond_wait(&private->condpeer, &private->mutex);
 	}
 	private->out->state = SCATTER_POP;
 	pthread_mutex_unlock(&private->mutex);
 	if (private->out->beat && jitter->heart != NULL)
 	{
+		/**
+		 * The heartbeat is set by the producer.
+		 * The scatter gather releases the buffer to the consumer
+		 * when the heart beats
+		 */
 		jitter->heart(jitter->heart_ctx, private->out->beat);
 	}
 	return private->out->data;
@@ -310,10 +361,14 @@ static void jitter_pop(jitter_ctx_t *jitter, size_t len)
 {
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
 
-	jitter_dbg("jitter %s pop", jitter->name);
+	jitter_dbg("jitter %s pop %p %d", jitter->name, private->out, private->state);
 	if ((private->state == JITTER_STOP) ||
 		(private->out->state != SCATTER_POP))
 	{
+		/**
+		 * This case should never become, except if the pop function
+		 * is called twice.
+		 */
 		private->out->state = SCATTER_FREE;
 		pthread_cond_broadcast(&private->condpush);
 		return;
@@ -321,7 +376,7 @@ static void jitter_pop(jitter_ctx_t *jitter, size_t len)
 
 	if (private->out->len > len)
 	{
-		dbg("buffer not empty %ld %ld", private->out->len, len);
+		dbg("buffer %s pop not empty %ld/%ld", jitter->name, len, private->out->len);
 	}
 
 	pthread_mutex_lock(&private->mutex);
@@ -331,19 +386,45 @@ static void jitter_pop(jitter_ctx_t *jitter, size_t len)
 	pthread_mutex_unlock(&private->mutex);
 	if (private->state == JITTER_RUNNING)
 	{
+		/**
+		 * The producer requests more buffer to the producer.
+		 */
 		pthread_cond_broadcast(&private->condpush);
 	}
-	if (private->level == 0 &&
-		jitter->thredhold > 0)
+	if (private->level == 0 && jitter->thredhold > 0)
+	{
+		/**
+		 * if the jitter is flushing, the input is in stand by.
+		 * When the output completes to empty the buffer, it should
+		 * wait new data from the input. Then it should send
+		 * event to the input.
+		 */
+		if (private->state == JITTER_FLUSH)
+		{
+			pthread_cond_broadcast(&private->condpush);
+		}
+		/**
+		 * The producer empties the jitter. It requests to the producer
+		 * to fill buffers ans to reach the thredhold.
+		 */
 		private->state = JITTER_FILLING;
+	}
 }
 
+/**
+ * This function may be called by the producer.
+ * It stops the buffer filling and waits that the producer uses all buffers.
+ * When the jitter is empty, the producer may continue to fill the buffers.
+ */
 static void jitter_flush(jitter_ctx_t *jitter)
 {
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
+	jitter_dbg("jitter %s flush on %p %d %d", jitter->name, private->in, private->in->state, private->out->state);
 	if (private->in->state != SCATTER_FREE)
 		private->in->state = SCATTER_FREE;
 	private->state = JITTER_FLUSH;
+	pthread_cond_broadcast(&private->condpush);
+	pthread_cond_broadcast(&private->condpeer);
 }
 
 static size_t jitter_length(jitter_ctx_t *jitter)
@@ -354,6 +435,10 @@ static size_t jitter_length(jitter_ctx_t *jitter)
 	return -1;
 }
 
+/**
+ * This function may be called by any thread to empty the stream and
+ * leave the producer and the consumer to start from the beginning.
+ */
 static void jitter_reset(jitter_ctx_t *jitter)
 {
 	jitter_private_t *private = (jitter_private_t *)jitter->private;

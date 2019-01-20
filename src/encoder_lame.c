@@ -46,7 +46,7 @@ struct encoder_ctx_s
 {
 	const encoder_t *ops;
 	lame_global_flags *encoder;
-	unsigned short samplerate;
+	unsigned int samplerate;
 	unsigned char nchannels;
 	unsigned char samplesize;
 	int samplesframe;

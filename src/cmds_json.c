@@ -61,6 +61,7 @@ static struct jsonrpc_method_entry_t method_table[];
 static const char const *str_stop = "stop";
 static const char const *str_play = "play";
 static const char const *str_pause = "pause";
+static const char const *str_next = "next";
 
 static int _print_entry(void *arg, const char *url,
 		const char *info, const char *mime)
@@ -258,12 +259,21 @@ static int method_play(json_t *json_params, json_t **result, void *userdata)
 		player_state(ctx->player, STATE_PLAY);
 	else
 		player_state(ctx->player, STATE_STOP);
-	if (player_state(ctx->player, STATE_UNKNOWN) == STATE_PLAY)
-		*result = json_pack("{s:s,s:s}", "status", "DONE", "message", "media append");
-	else
-		*result = jsonrpc_error_object(-12345,
-					"play error",
-					json_string("empty playlist"));
+	switch (player_state(ctx->player, STATE_UNKNOWN))
+	{
+	case STATE_STOP:
+		*result = json_pack("{ss}", "state", str_stop);
+	return -1;
+	case STATE_PLAY:
+		*result = json_pack("{ss}", "state", str_play);
+	return 0;
+	case STATE_PAUSE:
+		*result = json_pack("{ss}", "state", str_pause);
+	return -1;
+	default:
+		*result = jsonrpc_error_object_predefined(JSONRPC_INVALID_PARAMS, json_string("player state error"));
+	return -1;
+	}
 	return 0;
 }
 
@@ -272,22 +282,71 @@ static int method_pause(json_t *json_params, json_t **result, void *userdata)
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 
 	if (player_state(ctx->player, 0) == STATE_PLAY)
-		player_state(ctx->player, STATE_PAUSE);
+	{
+		switch (player_state(ctx->player, STATE_PAUSE))
+		{
+		case STATE_STOP:
+			*result = json_pack("{ss}", "state", str_stop);
+		return -1;
+		case STATE_PLAY:
+			*result = json_pack("{ss}", "state", str_play);
+		return -1;
+		case STATE_PAUSE:
+			*result = json_pack("{ss}", "state", str_pause);
+		return 0;
+		default:
+		*result = jsonrpc_error_object_predefined(JSONRPC_INVALID_PARAMS, json_string("player state error"));
+		return -1;
+		}
+	}
 	return 0;
 }
 
 static int method_stop(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
-	player_state(ctx->player, STATE_STOP);
+	switch (player_state(ctx->player, STATE_STOP))
+	{
+	case STATE_STOP:
+		*result = json_pack("{ss}", "state", str_stop);
 	return 0;
+	case STATE_PLAY:
+		*result = json_pack("{ss}", "state", str_play);
+	return -1;
+	case STATE_PAUSE:
+		*result = json_pack("{ss}", "state", str_pause);
+	return -1;
+	default:
+		*result = jsonrpc_error_object_predefined(JSONRPC_INVALID_PARAMS, json_string("player state error"));
+	return -1;
+	}
 }
 
 static int method_next(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 	media_t *media = player_media(ctx->player);
-	media->ops->next(media->ctx);
+	int mediaid = media->ops->next(media->ctx);
+	const char *state = NULL;
+	switch (player_state(ctx->player, STATE_UNKNOWN))
+	{
+	case STATE_STOP:
+		state = str_stop;
+		*result = json_pack("{siss}", "id", mediaid, "state", state);
+	break;
+	case STATE_PLAY:
+	case STATE_CHANGE:
+		state = str_play;
+		*result = json_pack("{siss}", "id", mediaid, "state", state);
+	break;
+	case STATE_PAUSE:
+		state = str_pause;
+		*result = json_pack("{siss}", "id", mediaid, "state", state);
+	break;
+	default:
+		*result = jsonrpc_error_object_predefined(JSONRPC_INVALID_PARAMS, json_string("player state error"));
+	break;
+	}
 	return 0;
 }
 
@@ -305,6 +364,8 @@ static int _display(void *arg, int id, const char *url, const char *info, const 
 	json_t *result = display->result;
 	json_t *object;
 
+	if (result == NULL)
+		display->result = json_array();
 	if (json_is_object(result))
 		object = result;
 	else if (json_is_array(result))
@@ -332,7 +393,7 @@ static int _display(void *arg, int id, const char *url, const char *info, const 
 
 	if (json_is_array(result))
 		json_array_append_new(result, object);
-	return 0;
+	return 1;
 }
 
 static int method_change(json_t *json_params, json_t **result, void *userdata)
@@ -362,13 +423,35 @@ static int method_change(json_t *json_params, json_t **result, void *userdata)
 			const char *media = json_string_value(value);
 			if (player_change(ctx->player, media, 0, 0) == 0)
 			{
-				*result = json_pack("{s:s}", "media", "changed");
+				*result = json_pack("{s:s,s:s}", "media", "changed", "state", str_stop);
 			}
 		}
 	}
 	if (*result == NULL);
 	{
-		*result = json_pack("{s:s}", "state", "stop");
+		*result = json_pack("{s:s}", "state", str_stop);
+	}
+	return 0;
+}
+
+static int method_onchange(json_t *json_params, json_t **result, void *userdata)
+{
+	int ret;
+	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
+	media_t *media = player_media(ctx->player);
+	_display_ctx_t display = {
+		.ctx = ctx,
+		.result = json_object(),
+	};
+	int id = player_mediaid(ctx->player);
+	ret = media->ops->find(media->ctx, id, _display, &display);
+	if (ret == 1)
+	{
+		*result = display.result;
+	}
+	if (*result == NULL)
+	{
+		*result = json_pack("{s:s}", "state", str_stop);
 	}
 	return 0;
 }
@@ -412,21 +495,26 @@ static struct jsonrpc_method_entry_t method_table[] = {
 	{ 'r', "list", method_list, "o" },
 	{ 'r', "append", method_append, "[]" },
 	{ 'r', "remove", method_remove, "[]" },
-	{ 'n', "change", method_change, "o" },
+	{ 'n', "onchange", method_onchange, "o" },
 	{ 'r', "options", method_options, "o" },
 	{ 0, NULL },
 };
 
-static void jsonrpc_onchange(void * userctx, player_ctx_t *ctx, state_t state)
+static void jsonrpc_onchange(void * userctx, player_ctx_t *player, state_t state)
 {
 	thread_info_t *info = (thread_info_t *)userctx;
+	cmds_ctx_t *ctx = info->userctx;
 
-	char* notification = jsonrpc_request("change", sizeof("change"), method_table, (void *)ctx, NULL);
-	int length = strlen(notification);
-	int sock = info->sock;
-	if (send(sock, notification, length, MSG_DONTWAIT | MSG_NOSIGNAL) < 0)
+	char* notification = jsonrpc_request("onchange", sizeof("onchange"), method_table, (void *)ctx, NULL);
+	if (notification)
 	{
-		//TODO remove notification from player
+		int length = strlen(notification);
+		int sock = info->sock;
+		if (send(sock, notification, length, MSG_DONTWAIT | MSG_NOSIGNAL) < 0)
+		{
+			err("cmd: json event error on send");
+			//TODO remove notification from player
+		}
 	}
 }
 
@@ -450,6 +538,7 @@ static int jsonrpc_command(thread_info_t *info)
 	cmds_ctx_t *ctx = info->userctx;
 	ctx->info = info;
 	player_onchange(ctx->player, jsonrpc_onchange, (void *)info);
+	jsonrpc_onchange(info, ctx->player, player_state(ctx->player, STATE_UNKNOWN));
 
 	while (sock > 0)
 	{

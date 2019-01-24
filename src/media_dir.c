@@ -104,7 +104,6 @@ struct media_dirlist_s
 static int media_count(media_ctx_t *ctx);
 static int media_insert(media_ctx_t *ctx, const char *path, const char *info, const char *mime);
 static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data);
-static int media_current(media_ctx_t *ctx, media_parse_t cb, void *data);
 static int media_play(media_ctx_t *ctx, media_parse_t play, void *data);
 static int media_next(media_ctx_t *ctx);
 static media_dirlist_t *media_random(media_ctx_t *ctx, int enable);
@@ -374,7 +373,7 @@ static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *arg)
 	media_dirlist_t *dir = NULL;
 	_find_mediaid_t mdata = {id, cb, arg};
 	ret = _find(ctx, 0, &dir, &mediaid, _find_mediaid, &mdata);
-	return ret;
+	return ret? 0:1;
 }
 
 static int media_list(media_ctx_t *ctx, media_parse_t cb, void *arg)

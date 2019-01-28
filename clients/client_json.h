@@ -35,10 +35,16 @@ struct client_data_s
 {
 	int sock;
 	client_event_t *events;
+	unsigned long int pid;
 };
 
 int client_unix(const char *socketpath, client_data_t *data);
 int client_eventlistener(client_data_t *data, const char *name, client_event_prototype_t proto, void *protodata);
 int client_loop(client_data_t *data);
+
+int client_next(client_data_t *data);
+int client_play(client_data_t *data);
+int client_pause(client_data_t *data);
+int client_stop(client_data_t *data);
 
 #endif

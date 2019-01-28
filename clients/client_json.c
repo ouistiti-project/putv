@@ -53,6 +53,7 @@ struct client_event_s
 	client_event_prototype_t proto;
 	void *data;
 	client_event_t *next;
+	int pid;
 };
 
 static int method_subscribe(json_t *json_params, json_t **result, void *userdata)
@@ -65,6 +66,8 @@ static int answer_subscribe(json_t *json_params, json_t **result, void *userdata
 {
 	int state = -1;
 	json_unpack(json_params, "{sb}", "subscribed", &state);
+	client_data_t *data = userdata;
+	data->pid = 0;
 	return !state;
 }
 
@@ -79,12 +82,17 @@ static int answer_next(json_t *json_params, json_t **result, void *userdata)
 	const char *state;
 	int id;
 	json_unpack(json_params, "{si,ss}", "id", &id, "state", &state);
+	client_data_t *data = userdata;
+	data->pid = 0;
+	dbg("next on : %d", id);
 	return 0;
 }
 
 static int method_state(json_t *json_params, json_t **result, void *userdata)
 {
 	*result = json_null();
+	client_data_t *data = userdata;
+	data->pid = 0;
 	return 0;
 }
 
@@ -92,6 +100,9 @@ static int answer_state(json_t *json_params, json_t **result, void *userdata)
 {
 	const char *state;
 	json_unpack(json_params, "{ss}", "state", &state);
+	client_data_t *data = userdata;
+	data->pid = 0;
+	dbg("new state : %s", state);
 	return 0;
 }
 
@@ -146,6 +157,46 @@ int client_unix(const char *socketpath, client_data_t *data)
 	return sock;
 }
 
+int client_next(client_data_t *data)
+{
+	if (data->pid != 0)
+		return -1;
+	int ret;
+	char *buffer = jsonrpc_request("next", 4, table, (char*)data, &data->pid);
+	ret = send(data->sock, buffer, strlen(buffer) + 1, MSG_NOSIGNAL);
+	return 0;
+}
+
+int client_play(client_data_t *data)
+{
+	if (data->pid != 0)
+		return -1;
+	int ret;
+	char *buffer = jsonrpc_request("play", 4, table, (char*)data, &data->pid);
+	ret = send(data->sock, buffer, strlen(buffer) + 1, MSG_NOSIGNAL);
+	return 0;
+}
+
+int client_pause(client_data_t *data)
+{
+	if (data->pid != 0)
+		return -1;
+	int ret;
+	char *buffer = jsonrpc_request("pause", 5, table, (char*)data, &data->pid);
+	ret = send(data->sock, buffer, strlen(buffer) + 1, MSG_NOSIGNAL);
+	return 0;
+}
+
+int client_stop(client_data_t *data)
+{
+	if (data->pid != 0)
+		return -1;
+	int ret;
+	char *buffer = jsonrpc_request("stop", 4, table, (char*)data, &data->pid);
+	ret = send(data->sock, buffer, strlen(buffer) + 1, MSG_NOSIGNAL);
+	return 0;
+}
+
 int client_eventlistener(client_data_t *data, const char *name, client_event_prototype_t proto, void *protodata)
 {
 	client_event_t *event = calloc(1, sizeof(*event));
@@ -156,6 +207,17 @@ int client_eventlistener(client_data_t *data, const char *name, client_event_pro
 	data->events = event;
 	return 0;
 }
+
+#ifdef USE_LARGEPACKET
+static size_t recv_cb(void *buffer, size_t len, void *arg)
+{
+	client_data_t *data = (client_data_t *)arg;
+	int ret = recv(data->sock, buffer, len, MSG_NOSIGNAL);
+	if (ret >= 0)
+		((char*)buffer)[ret] = 0;
+	return ret;
+}
+#endif
 
 int client_loop(client_data_t *data)
 {
@@ -176,12 +238,21 @@ int client_loop(client_data_t *data)
 		ret = select(maxfd + 1, &rfds, NULL, NULL, NULL);
 		if (ret > 0 && FD_ISSET(data->sock, &rfds))
 		{
+#ifdef USE_LARGEPACKET
+			json_error_t error;
+			json_t *response = json_load_callback(recv_cb, (void *)data, JSON_DISABLE_EOF_CHECK, &error);
+			if (response != NULL)
+				jsonrpc_jresponse(response, table, data);
+			else
+				err("receive mal formated json %s", error.text);
+#else
 			int len;
 			ret = ioctl(data->sock, FIONREAD, &len);
 			char *buffer = malloc(len);
 			ret = recv(data->sock, buffer, len, MSG_NOSIGNAL);
 			if (ret > 0)
 				jsonrpc_handler(buffer, len, table, data);
+#endif
 			if (ret == 0)
 				run = 0;
 		}

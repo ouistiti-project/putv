@@ -42,6 +42,7 @@ struct cmds_ctx_s
 	player_ctx_t *player;
 	const char *socketpath;
 	pthread_t thread;
+	pthread_mutex_t mutex;
 	thread_info_t *info;
 };
 #define CMDS_CTX
@@ -385,7 +386,6 @@ static int _display(void *arg, int id, const char *url, const char *info, const 
 	default:
 		json_state = json_string(str_stop);
 	}
-
 	json_object_set(object, "state", json_state);
 	_print_entry(object, url, info, mime);
 	json_t *index = json_integer(id);
@@ -404,7 +404,6 @@ static int method_change(json_t *json_params, json_t **result, void *userdata)
 		.ctx = ctx,
 		.result = json_object(),
 	};
-
 	json_t *value;
 	if (json_is_object(json_params))
 	{
@@ -500,11 +499,32 @@ static struct jsonrpc_method_entry_t method_table[] = {
 	{ 0, NULL },
 };
 
+#ifdef USE_LARGEPACKET
+static int _cmds_send(const char *buff, size_t size, void *userctx)
+{
+	thread_info_t *info = (thread_info_t *)userctx;
+	cmds_ctx_t *ctx = info->userctx;
+	int sock = info->sock;
+	int ret;
+	ret = send(sock, buff, size, MSG_NOSIGNAL);
+	return (ret > 0)?0:-1;
+}
+#endif
+
 static void jsonrpc_onchange(void * userctx, player_ctx_t *player, state_t state)
 {
 	thread_info_t *info = (thread_info_t *)userctx;
 	cmds_ctx_t *ctx = info->userctx;
 
+	pthread_mutex_lock(&ctx->mutex);
+#ifdef USE_LARGEPACKET
+	json_t *notification = jsonrpc_jrequest("onchange", method_table, (void *)ctx, NULL);
+	if (notification)
+	{
+		json_dump_callback(notification, _cmds_send, info, 0);
+		send(info->sock, "\r\n", 2, MSG_DONTWAIT | MSG_NOSIGNAL);
+	}
+#else
 	char* notification = jsonrpc_request("onchange", sizeof("onchange"), method_table, (void *)ctx, NULL);
 	if (notification)
 	{
@@ -516,19 +536,8 @@ static void jsonrpc_onchange(void * userctx, player_ctx_t *player, state_t state
 			//TODO remove notification from player
 		}
 	}
-}
-
-struct _cmds_send_s
-{
-	int sock;
-};
-static int _cmds_send(const char *buff, size_t size, void *arg)
-{
-	struct _cmds_send_s *data = (struct _cmds_send_s *)arg;
-	int sock = data->sock;
-	int ret;
-	ret = send(sock, buff, size, MSG_DONTWAIT | MSG_NOSIGNAL);
-	return (ret == size)?0:-1;
+#endif
+	pthread_mutex_unlock(&ctx->mutex);
 }
 
 static int jsonrpc_command(thread_info_t *info)
@@ -537,6 +546,7 @@ static int jsonrpc_command(thread_info_t *info)
 	int sock = info->sock;
 	cmds_ctx_t *ctx = info->userctx;
 	ctx->info = info;
+
 	player_onchange(ctx->player, jsonrpc_onchange, (void *)info);
 	jsonrpc_onchange(info, ctx->player, player_state(ctx->player, STATE_UNKNOWN));
 
@@ -559,14 +569,24 @@ static int jsonrpc_command(thread_info_t *info)
 			if (ret > 0)
 			{
 				json_error_t error;
-				json_t *request = json_loadb(buffer, ret, 0, &error);
+				json_t *request = json_loads(buffer, 0, &error);
 				if (request != NULL)
 				{
 					json_t *response = jsonrpc_jresponse(request, method_table, ctx);
 					if (response != NULL)
 					{
-						struct _cmds_send_s data = {sock = sock};
-						json_dump_callback(response, _cmds_send, &data, JSON_INDENT(2));
+#ifdef USE_LARGEPACKET
+						pthread_mutex_lock(&ctx->mutex);
+						json_dump_callback(response, _cmds_send, info, 0);
+						ret = send(sock, "\r\n", 2, MSG_DONTWAIT | MSG_NOSIGNAL);
+						pthread_mutex_unlock(&ctx->mutex);
+#else
+						pthread_mutex_lock(&ctx->mutex);
+						char *buff = json_dumps(response, JSON_INDENT(2));
+						ret = send(sock, buff, strlen(buff) + 1, MSG_NOSIGNAL);
+						ret = send(sock, "\r\n", 2, MSG_DONTWAIT, MSG_NOSIGNAL);
+						pthread_mutex_unlock(&ctx->mutex);
+#endif
 						json_decref(response);
 					}
 					json_decref(request);
@@ -596,6 +616,7 @@ static cmds_ctx_t *cmds_json_init(player_ctx_t *player, void *arg)
 	ctx = calloc(1, sizeof(*ctx));
 	ctx->player = player;
 	ctx->socketpath = (const char *)arg;
+	pthread_mutex_init(&ctx->mutex, NULL);
 	return ctx;
 }
 
@@ -619,6 +640,7 @@ static void cmds_json_destroy(cmds_ctx_t *ctx)
 	unixserver_remove(ctx->info);
 	ctx->info = NULL;
 	pthread_join(ctx->thread, NULL);
+	pthread_mutex_destroy(&ctx->mutex);
 	free(ctx);
 }
 

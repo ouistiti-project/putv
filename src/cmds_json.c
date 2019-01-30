@@ -493,8 +493,137 @@ static int method_options(json_t *json_params, json_t **result, void *userdata)
 	return 0;
 }
 
+static int method_capabilities(json_t *json_params, json_t **result, void *userdata)
+{
+	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
+	int ret;
+	media_t *media = player_media(ctx->player);
+	json_t *value;
+	json_t *params;
+
+	*result = json_object();
+	json_t *events;
+	events = json_array();
+
+	json_t *event;
+	event = json_object();
+	value = json_string("onchange");
+	json_object_set(event, "method", value);
+	params = json_object();
+	json_object_set(event, "params", params);
+	json_array_append(events, event);
+	json_object_set(*result, "events", events);
+
+	json_t *actions;
+	actions = json_array();
+
+	json_t *action;
+	action = json_object();
+	value = json_string("play");
+	json_object_set(action, "method", value);
+	params = json_object();
+	json_object_set(action, "params", params);
+	json_array_append(actions, action);
+	action = json_object();
+	value = json_string("pause");
+	json_object_set(action, "method", value);
+	params = json_object();
+	json_object_set(action, "params", params);
+	json_array_append(actions, action);
+	action = json_object();
+	value = json_string("stop");
+	json_object_set(action, "method", value);
+	params = json_object();
+	json_object_set(action, "params", params);
+	json_array_append(actions, action);
+	action = json_object();
+	value = json_string("next");
+	json_object_set(action, "method", value);
+	params = json_object();
+	json_object_set(action, "params", params);
+	json_array_append(actions, action);
+	action = json_object();
+	value = json_string("status");
+	json_object_set(action, "method", value);
+	params = json_object();
+	json_object_set(action, "params", params);
+	json_array_append(actions, action);
+	value = json_string("list");
+	json_object_set(action, "method", value);
+	params = json_object();
+	json_object_set(action, "params", params);
+	json_array_append(actions, action);
+	json_object_set(*result, "actions", actions);
+
+	json_t *input;
+	input = json_object();
+	json_t *codec;
+	codec = json_array();
+#ifdef DECODER_MAD
+	value = json_string(decoder_mad->mime);
+	json_array_append(codec, value);
+#endif
+#ifdef DECODER_FLAC
+	value = json_string(decoder_flac->mime);
+	json_array_append(codec, value);
+#endif
+	json_object_set(input, "codec", codec);
+	json_t *aprotocol;
+	aprotocol = json_array();
+	const char *protocol;
+	char* off;
+#ifdef SRC_DIR
+	protocol = src_dir->protocol;
+	while ((off = strchr(protocol, ',')) > 0)
+	{
+		value = json_stringn(protocol, off - protocol);
+		protocol = off + 1;
+		json_array_append(aprotocol, value);
+	}
+	value = json_string(protocol);
+	json_array_append(aprotocol, value);
+#endif
+#ifdef SRC_FILE
+	protocol = src_file->protocol;
+	while ((off = strchr(protocol, ',')) > 0)
+	{
+		value = json_stringn(protocol, off - protocol);
+		protocol = off + 1;
+		json_array_append(aprotocol, value);
+	}
+	value = json_string(protocol);
+	json_array_append(aprotocol, value);
+#endif
+#ifdef SRC_CURL
+	protocol = src_curl->protocol;
+	while ((off = strchr(protocol, ',')) > 0)
+	{
+		value = json_stringn(protocol, off - protocol);
+		protocol = off + 1;
+		json_array_append(aprotocol, value);
+	}
+	value = json_string(protocol);
+	json_array_append(aprotocol, value);
+#endif
+#ifdef SRC_UNIX
+	protocol = src_unix->protocol;
+	while ((off = strchr(protocol, ',')) > 0)
+	{
+		value = json_stringn(protocol, off - protocol);
+		protocol = off + 1;
+		json_array_append(aprotocol, value);
+	}
+	value = json_string(protocol);
+	json_array_append(aprotocol, value);
+#endif
+	json_object_set(input, "protocol", aprotocol);
+	json_object_set(*result, "input", input);
+	return 0;
+}
+
 
 static struct jsonrpc_method_entry_t method_table[] = {
+	{ 'r', "capabilities", method_capabilities, "o" },
 	{ 'r', "play", method_play, "" },
 	{ 'r', "pause", method_pause, "" },
 	{ 'r', "stop", method_stop, "" },

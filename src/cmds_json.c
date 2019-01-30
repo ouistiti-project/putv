@@ -458,6 +458,11 @@ static int method_onchange(json_t *json_params, json_t **result, void *userdata)
 	return 0;
 }
 
+static int method_status(json_t *json_params, json_t **result, void *userdata)
+{
+	return method_onchange(json_params, result, userdata);
+}
+
 static int method_options(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
@@ -497,6 +502,7 @@ static struct jsonrpc_method_entry_t method_table[] = {
 	{ 'r', "list", method_list, "o" },
 	{ 'r', "append", method_append, "[]" },
 	{ 'r', "remove", method_remove, "[]" },
+	{ 'r', "status", method_status, "" },
 	{ 'n', "onchange", method_onchange, "o" },
 	{ 'r', "options", method_options, "o" },
 	{ 0, NULL },

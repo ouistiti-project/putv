@@ -386,20 +386,12 @@ static int media_list(media_ctx_t *ctx, media_parse_t cb, void *arg)
 	return ret;
 }
 
-static int media_play(media_ctx_t *ctx, media_parse_t cb, void *data)
+static int media_play(media_ctx_t *ctx, media_parse_t cb, void *arg)
 {
 	int ret = -1;
-	media_dirlist_t *it = ctx->current;
-	if (it != NULL && it->nitems > 0 && it->items[it->index]->d_type != DT_DIR)
-	{
-		char *path = malloc(PROTOCOLNAME_LENGTH+strlen(it->path) + 1 + strlen(it->items[it->index]->d_name) + 1);
-		if (path)
-		{
-			sprintf(path,PROTOCOLNAME"%s/%s", it->path, it->items[it->index]->d_name);
-			ret = cb(data, ctx->mediaid, path, NULL, utils_getmime(path));
-			free(path);
-		}
-	}
+	ret = media_find(ctx, ctx->mediaid, cb, arg);
+	if (ret == 0)
+		ctx->mediaid = -1;
 	return ctx->mediaid;
 }
 
@@ -415,7 +407,7 @@ static int media_next(media_ctx_t *ctx)
 		if (ctx->mediaid >= ctx->count)
 			ctx->mediaid = 0;
 		ctx->mediaid--;
-		warn("next media %d", ctx->mediaid + 1);
+		warn("next media %d", ctx->mediaid);
 		ctx->firstmediaid = -1;
 	}
 	else

@@ -38,6 +38,10 @@ struct client_data_s
 	unsigned long int pid;
 	client_event_prototype_t proto;
 	void *data;
+	enum
+	{
+		OPTION_ASYNC = 0x01,
+	} options;
 	pthread_cond_t cond;
 	pthread_mutex_t mutex;
 };

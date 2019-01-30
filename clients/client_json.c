@@ -74,7 +74,8 @@ static int answer_subscribe(json_t *json_params, json_t **result, void *userdata
 	data->proto = NULL;
 	data->data = NULL;
 	pthread_mutex_unlock(&data->mutex);
-	pthread_cond_signal(&data->cond);
+	if ((data->options & OPTION_ASYNC) == 0)
+		pthread_cond_signal(&data->cond);
 	return !state;
 }
 
@@ -172,6 +173,8 @@ int client_cmd(client_data_t *data, char * cmd)
 	char *buffer = jsonrpc_request(cmd, strlen(cmd), table, (char*)data, &data->pid);
 	int pid = data->pid;
 	ret = send(data->sock, buffer, strlen(buffer) + 1, MSG_NOSIGNAL);
+	if (data->options & OPTION_ASYNC)
+		return ret;
 	while (data->pid == pid)
 	{
 		pthread_cond_wait(&data->cond, &data->mutex);

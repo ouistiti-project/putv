@@ -253,7 +253,7 @@ int client_eventlistener(client_data_t *data, const char *name, client_event_pro
 	return 0;
 }
 
-#ifdef USE_LARGEPACKET
+#ifdef JSONRPC_LARGEPACKET
 static size_t recv_cb(void *buffer, size_t len, void *arg)
 {
 	client_data_t *data = (client_data_t *)arg;
@@ -283,7 +283,7 @@ int client_loop(client_data_t *data)
 		ret = select(maxfd + 1, &rfds, NULL, NULL, NULL);
 		if (ret > 0 && FD_ISSET(data->sock, &rfds))
 		{
-#ifdef USE_LARGEPACKET
+#ifdef JSONRPC_LARGEPACKET
 			json_error_t error;
 			json_t *response = json_load_callback(recv_cb, (void *)data, JSON_DISABLE_EOF_CHECK, &error);
 			if (response != NULL)

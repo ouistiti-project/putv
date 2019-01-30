@@ -637,7 +637,7 @@ static struct jsonrpc_method_entry_t method_table[] = {
 	{ 0, NULL },
 };
 
-#ifdef USE_LARGEPACKET
+#ifdef JSONRPC_LARGEPACKET
 static int _cmds_send(const char *buff, size_t size, void *userctx)
 {
 	thread_info_t *info = (thread_info_t *)userctx;
@@ -655,7 +655,7 @@ static void jsonrpc_onchange(void * userctx, player_ctx_t *player, state_t state
 	cmds_ctx_t *ctx = info->userctx;
 
 	pthread_mutex_lock(&ctx->mutex);
-#ifdef USE_LARGEPACKET
+#ifdef JSONRPC_LARGEPACKET
 	json_t *notification = jsonrpc_jrequest("onchange", method_table, (void *)ctx, NULL);
 	if (notification)
 	{
@@ -713,7 +713,7 @@ static int jsonrpc_command(thread_info_t *info)
 					json_t *response = jsonrpc_jresponse(request, method_table, ctx);
 					if (response != NULL)
 					{
-#ifdef USE_LARGEPACKET
+#ifdef JSONRPC_LARGEPACKET
 						pthread_mutex_lock(&ctx->mutex);
 						json_dump_callback(response, _cmds_send, info, 0);
 						ret = send(sock, "\r\n", 2, MSG_DONTWAIT | MSG_NOSIGNAL);

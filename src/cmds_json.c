@@ -48,6 +48,8 @@ struct cmds_ctx_s
 #define CMDS_CTX
 #include "cmds.h"
 #include "media.h"
+#include "decoder.h"
+#include "src.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -71,6 +73,15 @@ static int _print_entry(void *arg, const char *url,
 		return -1;
 
 	json_t *object = (json_t*)arg;
+
+	json_t *json_info;
+	if (info != NULL)
+	{
+		json_error_t error;
+		json_info = json_loads(info, 0, &error);
+		json_object_set(object, "info", json_info);
+	}
+
 	json_t *json_sources = json_array();
 	int i;
 	for (i = 0; i < 1; i++)
@@ -86,16 +97,8 @@ static int _print_entry(void *arg, const char *url,
 		}
 		json_array_append_new(json_sources, json_source);
 	}
-
-	json_t *json_info;
-	if (info != NULL)
-	{
-		json_error_t error;
-		json_info = json_loads(info, 0, &error);
-		json_object_set(object, "info", json_info);
-	}
-
 	json_object_set(object, "sources", json_sources);
+
 	return 0;
 }
 
@@ -327,22 +330,22 @@ static int method_next(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 	media_t *media = player_media(ctx->player);
-	int mediaid = media->ops->next(media->ctx);
+	player_next(ctx->player);
 	const char *state = NULL;
 	switch (player_state(ctx->player, STATE_UNKNOWN))
 	{
 	case STATE_STOP:
 		state = str_stop;
-		*result = json_pack("{siss}", "id", mediaid, "state", state);
+		*result = json_pack("{ss}", "state", state);
 	break;
 	case STATE_PLAY:
 	case STATE_CHANGE:
 		state = str_play;
-		*result = json_pack("{siss}", "id", mediaid, "state", state);
+		*result = json_pack("{ss}", "state", state);
 	break;
 	case STATE_PAUSE:
 		state = str_pause;
-		*result = json_pack("{siss}", "id", mediaid, "state", state);
+		*result = json_pack("{ss}", "state", state);
 	break;
 	default:
 		*result = jsonrpc_error_object_predefined(JSONRPC_INVALID_PARAMS, json_string("player state error"));
@@ -584,7 +587,7 @@ static int jsonrpc_command(thread_info_t *info)
 						pthread_mutex_lock(&ctx->mutex);
 						char *buff = json_dumps(response, JSON_INDENT(2));
 						ret = send(sock, buff, strlen(buff) + 1, MSG_NOSIGNAL);
-						ret = send(sock, "\r\n", 2, MSG_DONTWAIT, MSG_NOSIGNAL);
+						ret = send(sock, "\r\n", 2, MSG_DONTWAIT | MSG_NOSIGNAL);
 						pthread_mutex_unlock(&ctx->mutex);
 #endif
 						json_decref(response);

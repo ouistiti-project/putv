@@ -34,6 +34,7 @@
 # include <sys/ioctl.h>
 
 #include <jansson.h>
+#include <pthread.h>
 
 #include "jsonrpc.h"
 #include "client_json.h"
@@ -53,7 +54,6 @@ struct client_event_s
 	client_event_prototype_t proto;
 	void *data;
 	client_event_t *next;
-	int pid;
 };
 
 static int method_subscribe(json_t *json_params, json_t **result, void *userdata)
@@ -67,8 +67,28 @@ static int answer_subscribe(json_t *json_params, json_t **result, void *userdata
 	int state = -1;
 	json_unpack(json_params, "{sb}", "subscribed", &state);
 	client_data_t *data = userdata;
+	pthread_mutex_lock(&data->mutex);
 	data->pid = 0;
+	if (data->proto)
+		data->proto(data->data, json_params);
+	data->proto = NULL;
+	data->data = NULL;
+	pthread_mutex_unlock(&data->mutex);
+	pthread_cond_signal(&data->cond);
 	return !state;
+}
+
+static int answer_proto(client_data_t * data, json_t *json_params)
+{
+	pthread_mutex_lock(&data->mutex);
+	data->pid = 0;
+	if (data->proto)
+		data->proto(data->data, json_params);
+	data->proto = NULL;
+	data->data = NULL;
+	pthread_mutex_unlock(&data->mutex);
+	pthread_cond_signal(&data->cond);
+	return 0;
 }
 
 static int method_next(json_t *json_params, json_t **result, void *userdata)
@@ -77,32 +97,17 @@ static int method_next(json_t *json_params, json_t **result, void *userdata)
 	return 0;
 }
 
-static int answer_next(json_t *json_params, json_t **result, void *userdata)
-{
-	const char *state;
-	int id;
-	json_unpack(json_params, "{si,ss}", "id", &id, "state", &state);
-	client_data_t *data = userdata;
-	data->pid = 0;
-	dbg("next on : %d", id);
-	return 0;
-}
-
 static int method_state(json_t *json_params, json_t **result, void *userdata)
 {
 	*result = json_null();
 	client_data_t *data = userdata;
-	data->pid = 0;
 	return 0;
 }
 
 static int answer_state(json_t *json_params, json_t **result, void *userdata)
 {
-	const char *state;
-	json_unpack(json_params, "{ss}", "state", &state);
 	client_data_t *data = userdata;
-	data->pid = 0;
-	dbg("new state : %s", state);
+	answer_proto(data, json_params);
 	return 0;
 }
 
@@ -128,13 +133,15 @@ struct jsonrpc_method_entry_t table[] =
 	{'r',"subscribe", method_subscribe, "o", 0, NULL},
 	{'a',"subscribe", answer_subscribe, "o", 0, NULL},
 	{'r',"next", method_next, "", 0, NULL},
-	{'a',"next", answer_next, "o", 0, NULL},
+	{'a',"next", answer_state, "o", 0, NULL},
 	{'r',"play", method_state, "", 0, NULL},
 	{'a',"play", answer_state, "o", 0, NULL},
 	{'r',"pause", method_state, "", 0, NULL},
 	{'a',"pause", answer_state, "o", 0, NULL},
 	{'r',"stop", method_state, "", 0, NULL},
 	{'a',"stop", answer_state, "o", 0, NULL},
+	{'r',"status", method_state, "", 0, NULL},
+	{'a',"status", answer_state, "o", 0, NULL},
 	{'n',"onchange", notification_onchange, "o", 0, NULL},
 	{0, NULL},
 };
@@ -152,48 +159,83 @@ int client_unix(const char *socketpath, client_data_t *data)
 		if (ret != 0)
 			sock = 0;
 		data->sock = sock;
+		pthread_cond_init(&data->cond, NULL);
+		pthread_mutex_init(&data->mutex, NULL);
 	}
 
 	return sock;
 }
 
-int client_next(client_data_t *data)
+int client_cmd(client_data_t *data, char * cmd)
+{
+	int ret;
+	char *buffer = jsonrpc_request(cmd, strlen(cmd), table, (char*)data, &data->pid);
+	int pid = data->pid;
+	ret = send(data->sock, buffer, strlen(buffer) + 1, MSG_NOSIGNAL);
+	while (data->pid == pid)
+	{
+		pthread_cond_wait(&data->cond, &data->mutex);
+	}
+	return ret;
+}
+
+int client_next(client_data_t *data, client_event_prototype_t proto, void *protodata)
 {
 	if (data->pid != 0)
 		return -1;
-	int ret;
-	char *buffer = jsonrpc_request("next", 4, table, (char*)data, &data->pid);
-	ret = send(data->sock, buffer, strlen(buffer) + 1, MSG_NOSIGNAL);
+	pthread_mutex_lock(&data->mutex);
+	data->proto = proto;
+	data->data = protodata;
+	client_cmd(data, "next");
+	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
 
-int client_play(client_data_t *data)
+int client_play(client_data_t *data, client_event_prototype_t proto, void *protodata)
 {
 	if (data->pid != 0)
 		return -1;
-	int ret;
-	char *buffer = jsonrpc_request("play", 4, table, (char*)data, &data->pid);
-	ret = send(data->sock, buffer, strlen(buffer) + 1, MSG_NOSIGNAL);
+	pthread_mutex_lock(&data->mutex);
+	data->proto = proto;
+	data->data = protodata;
+	client_cmd(data, "play");
+	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
 
-int client_pause(client_data_t *data)
+int client_pause(client_data_t *data, client_event_prototype_t proto, void *protodata)
 {
 	if (data->pid != 0)
 		return -1;
-	int ret;
-	char *buffer = jsonrpc_request("pause", 5, table, (char*)data, &data->pid);
-	ret = send(data->sock, buffer, strlen(buffer) + 1, MSG_NOSIGNAL);
+	pthread_mutex_lock(&data->mutex);
+	data->proto = proto;
+	data->data = protodata;
+	client_cmd(data, "pause");
+	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
 
-int client_stop(client_data_t *data)
+int client_stop(client_data_t *data, client_event_prototype_t proto, void *protodata)
 {
 	if (data->pid != 0)
 		return -1;
-	int ret;
-	char *buffer = jsonrpc_request("stop", 4, table, (char*)data, &data->pid);
-	ret = send(data->sock, buffer, strlen(buffer) + 1, MSG_NOSIGNAL);
+	pthread_mutex_lock(&data->mutex);
+	data->proto = proto;
+	data->data = protodata;
+	client_cmd(data, "stop");
+	pthread_mutex_unlock(&data->mutex);
+	return 0;
+}
+
+int client_status(client_data_t *data, client_event_prototype_t proto, void *protodata)
+{
+	if (data->pid != 0)
+		return -1;
+	pthread_mutex_lock(&data->mutex);
+	data->proto = proto;
+	data->data = protodata;
+	client_cmd(data, "status");
+	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
 
@@ -248,10 +290,13 @@ int client_loop(client_data_t *data)
 #else
 			int len;
 			ret = ioctl(data->sock, FIONREAD, &len);
-			char *buffer = malloc(len);
+			char *buffer = malloc(len + 1);
 			ret = recv(data->sock, buffer, len, MSG_NOSIGNAL);
+			dbg("recv %s", buffer);
+			buffer[ret] = 0;
 			if (ret > 0)
-				jsonrpc_handler(buffer, len, table, data);
+				jsonrpc_handler(buffer, strlen(buffer), table, data);
+			dbg("recv %d", ret);
 #endif
 			if (ret == 0)
 				run = 0;
@@ -259,5 +304,7 @@ int client_loop(client_data_t *data)
 		if (ret < 0)
 			run = 0;
 	}
+	pthread_cond_destroy(&data->cond);
+	pthread_mutex_destroy(&data->mutex);
 	return 0;
 }

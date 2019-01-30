@@ -71,6 +71,13 @@ struct input_ctx_s
 	char *socketpath;
 	client_data_t *client;
 	char run;
+	enum
+	{
+		STATE_UNKNOWN,
+		STATE_PLAY,
+		STATE_PAUSE,
+		STATE_STOP,
+	} state;
 };
 
 #ifdef USE_LIBINPUT
@@ -89,6 +96,22 @@ const static struct libinput_interface interface = {
 };
 #endif
 
+int input_checkstate(void *data, json_t *params)
+{
+	input_ctx_t *ctx = (input_ctx_t *)data;
+	const char *state;
+	json_unpack(params, "{ss}", "state", &state);
+	if (!strcmp(state, "play"))
+		ctx->state = STATE_PLAY;
+	else if (!strcmp(state, "pause"))
+		ctx->state = STATE_PAUSE;
+	else if (!strcmp(state, "stop"))
+		ctx->state = STATE_STOP;
+	else
+		ctx->state = STATE_UNKNOWN;
+	return 0;
+}
+
 int input_parseevent(input_ctx_t *ctx, const struct input_event *event)
 {
 	if (event->type != EV_KEY)
@@ -98,25 +121,26 @@ int input_parseevent(input_ctx_t *ctx, const struct input_event *event)
 	switch (event->code)
 	{
 	case KEY_PLAYPAUSE:
+		if (ctx->state == STATE_PLAY)
+			client_pause(ctx->client, input_checkstate, ctx);
+		else
+			client_play(ctx->client, input_checkstate, ctx);
 	break;
-	case KEY_P:
 	case KEY_PLAYCD:
 	case KEY_PLAY:
-		client_play(ctx->client);
+		client_play(ctx->client, input_checkstate, ctx);
 	break;
 	case KEY_PAUSECD:
 	case KEY_PAUSE:
-		client_pause(ctx->client);
+		client_pause(ctx->client, input_checkstate, ctx);
 	break;
-	case KEY_S:
 	case KEY_STOPCD:
 	case KEY_STOP:
-		client_stop(ctx->client);
+		client_stop(ctx->client, input_checkstate, ctx);
 	break;
-	case KEY_N:
 	case KEY_NEXTSONG:
 	case KEY_NEXT:
-		client_next(ctx->client);
+		client_next(ctx->client, input_checkstate, ctx);
 	break;
 	case KEY_R:
 	break;

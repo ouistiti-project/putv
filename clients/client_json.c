@@ -292,11 +292,9 @@ int client_loop(client_data_t *data)
 			ret = ioctl(data->sock, FIONREAD, &len);
 			char *buffer = malloc(len + 1);
 			ret = recv(data->sock, buffer, len, MSG_NOSIGNAL);
-			dbg("recv %s", buffer);
 			buffer[ret] = 0;
 			if (ret > 0)
 				jsonrpc_handler(buffer, strlen(buffer), table, data);
-			dbg("recv %d", ret);
 #endif
 			if (ret == 0)
 				run = 0;

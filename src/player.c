@@ -112,7 +112,10 @@ int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop
 void player_next(player_ctx_t *ctx)
 {
 	if (ctx->media != NULL)
+	{
 		ctx->media->ops->next(ctx->media->ctx);
+		player_state(ctx, STATE_CHANGE);
+	}
 }
 
 media_t *player_media(player_ctx_t *ctx)
@@ -195,7 +198,7 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 	player_ctx_t *player = data->ctx;
 	src_t *src = NULL;
 
-	dbg("player: prepare %s", url);
+	dbg("player: prepare %d %s", id, url);
 	src = src_build(player, url, mime);
 	if (src != NULL)
 	{
@@ -207,6 +210,7 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 	}
 	else
 	{
+		dbg("player: src not found for %s", url);
 		data->dec = NULL;
 	}
 	return -1;

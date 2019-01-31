@@ -389,6 +389,8 @@ static int media_list(media_ctx_t *ctx, media_parse_t cb, void *arg)
 static int media_play(media_ctx_t *ctx, media_parse_t cb, void *arg)
 {
 	int ret = -1;
+	if (ctx->mediaid < 0)
+		ctx->mediaid = 0;
 	ret = media_find(ctx, ctx->mediaid, cb, arg);
 	if (ret == 0)
 		ctx->mediaid = -1;

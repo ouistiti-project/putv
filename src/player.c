@@ -267,8 +267,17 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 				ctx->current->src->ops->run(ctx->current->src->ctx, ctx->current->decoder->ops->jitter(ctx->current->decoder->ctx));
 				ctx->media->ops->next(ctx->media->ctx);
 			}
-			else
+			else {
+				if (player.dec != NULL)
+				{
+					ctx->current = player.dec;
+					ctx->current->decoder->ops->destroy(ctx->current->decoder->ctx);
+					ctx->current->src->ops->destroy(ctx->current->src->ctx);
+					free(ctx->current);
+					ctx->current = NULL;
+				}
 				player_state(ctx, STATE_STOP);
+			}
 			player_event_t *it = ctx->events;
 			while (it != NULL)
 			{

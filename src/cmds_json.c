@@ -667,6 +667,7 @@ static void jsonrpc_onchange(void * userctx, player_ctx_t *player, state_t state
 	{
 		json_dump_callback(notification, _cmds_send, info, JSONRPC_DEBUG_FORMAT);
 		send(info->sock, "\r\n", 2, MSG_DONTWAIT | MSG_NOSIGNAL);
+		json_decref(notification);
 	}
 #else
 	char* notification = jsonrpc_request("onchange", sizeof("onchange"), method_table, (void *)ctx, NULL);

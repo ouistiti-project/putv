@@ -294,6 +294,10 @@ static void *mad_thread(void *arg)
 static int mad_run(decoder_ctx_t *ctx, jitter_t *jitter)
 {
 	ctx->out = jitter;
+	/**
+	 * Initialization of the filter here.
+	 * Because we need the jitter out.
+	 */
 #ifdef FILTER
 #ifdef FILTER_SCALING
 	ctx->filter.ops = filter_pcm_scaling;
@@ -348,7 +352,8 @@ static void mad_destroy(decoder_ctx_t *ctx)
 	/* release the decoder */
 	mad_decoder_finish(&ctx->decoder);
 #ifdef FILTER
-	ctx->filter.ops->destroy(ctx->filter.ctx);
+	if (ctx->filter.ops && ctx->filter.ctx)
+		ctx->filter.ops->destroy(ctx->filter.ctx);
 #endif
 	JITTER_destroy(ctx->in);
 	free(ctx);

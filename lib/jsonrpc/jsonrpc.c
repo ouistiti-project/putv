@@ -452,7 +452,7 @@ char *jsonrpc_request(const char *method, int methodlen,
 
 	json_t *request = jsonrpc_jrequest( method, method_table, userdata, pid);
 	if (request)
-		output = json_dumps(request, JSON_INDENT(2));
+		output = json_dumps(request, 0);
 
 	json_decref(request);
 	return output;

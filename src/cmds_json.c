@@ -59,6 +59,12 @@ struct cmds_ctx_s
 #define dbg(...)
 #endif
 
+#ifdef DEBUG
+#define JSONRPC_DEBUG_FORMAT JSON_INDENT(2)
+#else
+#define JSONRPC_DEBUG_FORMAT 0
+#endif
+
 static struct jsonrpc_method_entry_t method_table[];
 
 static const char const *str_stop = "stop";
@@ -659,7 +665,7 @@ static void jsonrpc_onchange(void * userctx, player_ctx_t *player, state_t state
 	json_t *notification = jsonrpc_jrequest("onchange", method_table, (void *)ctx, NULL);
 	if (notification)
 	{
-		json_dump_callback(notification, _cmds_send, info, 0);
+		json_dump_callback(notification, _cmds_send, info, JSONRPC_DEBUG_FORMAT);
 		send(info->sock, "\r\n", 2, MSG_DONTWAIT | MSG_NOSIGNAL);
 	}
 #else
@@ -715,12 +721,12 @@ static int jsonrpc_command(thread_info_t *info)
 					{
 #ifdef JSONRPC_LARGEPACKET
 						pthread_mutex_lock(&ctx->mutex);
-						json_dump_callback(response, _cmds_send, info, 0);
+						json_dump_callback(response, _cmds_send, info, JSONRPC_DEBUG_FORMAT);
 						ret = send(sock, "\r\n", 2, MSG_DONTWAIT | MSG_NOSIGNAL);
 						pthread_mutex_unlock(&ctx->mutex);
 #else
 						pthread_mutex_lock(&ctx->mutex);
-						char *buff = json_dumps(response, JSON_INDENT(2));
+						char *buff = json_dumps(response, JSONRPC_DEBUG_FORMAT );
 						ret = send(sock, buff, strlen(buff) + 1, MSG_NOSIGNAL);
 						ret = send(sock, "\r\n", 2, MSG_DONTWAIT | MSG_NOSIGNAL);
 						pthread_mutex_unlock(&ctx->mutex);

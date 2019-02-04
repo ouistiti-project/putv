@@ -34,7 +34,8 @@ void player_destroy(player_ctx_t *ctx);
 int player_waiton(player_ctx_t *ctx, int state);
 state_t player_state(player_ctx_t *ctx, state_t state);
 void player_next(player_ctx_t *ctx);
-void player_onchange(player_ctx_t *ctx, player_event_cb_t callback, void *cbctx);
+void player_removeevent(player_ctx_t *ctx, int id);
+int player_onchange(player_ctx_t *ctx, player_event_cb_t callback, void *cbctx);
 int player_mediaid(player_ctx_t *ctx);
 
 #endif

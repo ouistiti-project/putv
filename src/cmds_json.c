@@ -692,7 +692,8 @@ static int jsonrpc_command(thread_info_t *info)
 	cmds_ctx_t *ctx = info->userctx;
 	ctx->info = info;
 
-	player_onchange(ctx->player, jsonrpc_onchange, (void *)info);
+	warn("json socket connection");
+	int onchangeid = player_onchange(ctx->player, jsonrpc_onchange, (void *)info);
 	jsonrpc_onchange(info, ctx->player, player_state(ctx->player, STATE_UNKNOWN));
 
 	while (sock > 0)
@@ -739,6 +740,7 @@ static int jsonrpc_command(thread_info_t *info)
 			}
 			if (ret == 0)
 			{
+				warn("json socket closed");
 				unixserver_remove(info);
 				sock = 0;
 			}
@@ -752,6 +754,7 @@ static int jsonrpc_command(thread_info_t *info)
 			}
 		}
 	}
+	player_removeevent(ctx->player, onchangeid);
 	return ret;
 }
 

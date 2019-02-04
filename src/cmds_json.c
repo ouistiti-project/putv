@@ -268,17 +268,21 @@ static int method_play(json_t *json_params, json_t **result, void *userdata)
 	if (media->ops->count(media->ctx) > 0)
 		player_state(ctx->player, STATE_PLAY);
 	else
+	{
 		player_state(ctx->player, STATE_STOP);
+		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{ss,ss}", "state", str_stop, "message", "no item found"));
+		return -1;
+	}
 	switch (player_state(ctx->player, STATE_UNKNOWN))
 	{
 	case STATE_STOP:
-		*result = json_pack("{ss}", "state", str_stop);
+		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{ss}", "state", str_stop));
 	return -1;
 	case STATE_PLAY:
 		*result = json_pack("{ss}", "state", str_play);
 	return 0;
 	case STATE_PAUSE:
-		*result = json_pack("{ss}", "state", str_pause);
+		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{ss}", "state", str_pause));
 	return -1;
 	default:
 		*result = jsonrpc_error_object_predefined(JSONRPC_INVALID_PARAMS, json_string("player state error"));
@@ -291,23 +295,20 @@ static int method_pause(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 
-	if (player_state(ctx->player, 0) == STATE_PLAY)
+	switch (player_state(ctx->player, STATE_PAUSE))
 	{
-		switch (player_state(ctx->player, STATE_PAUSE))
-		{
-		case STATE_STOP:
-			*result = json_pack("{ss}", "state", str_stop);
-		return -1;
-		case STATE_PLAY:
-			*result = json_pack("{ss}", "state", str_play);
-		return -1;
-		case STATE_PAUSE:
-			*result = json_pack("{ss}", "state", str_pause);
-		return 0;
-		default:
+	case STATE_STOP:
+		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{ss}", "state", str_stop));
+	return -1;
+	case STATE_PLAY:
+		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{ss}", "state", str_play));
+	return -1;
+	case STATE_PAUSE:
+		*result = json_pack("{ss}", "state", str_pause);
+	return 0;
+	default:
 		*result = jsonrpc_error_object_predefined(JSONRPC_INVALID_PARAMS, json_string("player state error"));
-		return -1;
-		}
+	return -1;
 	}
 	return 0;
 }
@@ -321,10 +322,10 @@ static int method_stop(json_t *json_params, json_t **result, void *userdata)
 		*result = json_pack("{ss}", "state", str_stop);
 	return 0;
 	case STATE_PLAY:
-		*result = json_pack("{ss}", "state", str_play);
+		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{ss}", "state", str_play));
 	return -1;
 	case STATE_PAUSE:
-		*result = json_pack("{ss}", "state", str_pause);
+		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{ss}", "state", str_pause));
 	return -1;
 	default:
 		*result = jsonrpc_error_object_predefined(JSONRPC_INVALID_PARAMS, json_string("player state error"));

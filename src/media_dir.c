@@ -104,7 +104,6 @@ struct media_dirlist_s
 static int media_count(media_ctx_t *ctx);
 static int media_insert(media_ctx_t *ctx, const char *path, const char *info, const char *mime);
 static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data);
-static int media_current(media_ctx_t *ctx, media_parse_t cb, void *data);
 static int media_play(media_ctx_t *ctx, media_parse_t play, void *data);
 static int media_next(media_ctx_t *ctx);
 static media_dirlist_t *media_random(media_ctx_t *ctx, int enable);
@@ -374,7 +373,7 @@ static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *arg)
 	media_dirlist_t *dir = NULL;
 	_find_mediaid_t mdata = {id, cb, arg};
 	ret = _find(ctx, 0, &dir, &mediaid, _find_mediaid, &mdata);
-	return ret;
+	return ret? 0:1;
 }
 
 static int media_list(media_ctx_t *ctx, media_parse_t cb, void *arg)
@@ -387,20 +386,14 @@ static int media_list(media_ctx_t *ctx, media_parse_t cb, void *arg)
 	return ret;
 }
 
-static int media_play(media_ctx_t *ctx, media_parse_t cb, void *data)
+static int media_play(media_ctx_t *ctx, media_parse_t cb, void *arg)
 {
 	int ret = -1;
-	media_dirlist_t *it = ctx->current;
-	if (it != NULL && it->nitems > 0 && it->items[it->index]->d_type != DT_DIR)
-	{
-		char *path = malloc(PROTOCOLNAME_LENGTH+strlen(it->path) + 1 + strlen(it->items[it->index]->d_name) + 1);
-		if (path)
-		{
-			sprintf(path,PROTOCOLNAME"%s/%s", it->path, it->items[it->index]->d_name);
-			ret = cb(data, ctx->mediaid, path, NULL, utils_getmime(path));
-			free(path);
-		}
-	}
+	if (ctx->mediaid < 0)
+		ctx->mediaid = 0;
+	ret = media_find(ctx, ctx->mediaid, cb, arg);
+	if (ret == 0)
+		ctx->mediaid = -1;
 	return ctx->mediaid;
 }
 
@@ -416,7 +409,7 @@ static int media_next(media_ctx_t *ctx)
 		if (ctx->mediaid >= ctx->count)
 			ctx->mediaid = 0;
 		ctx->mediaid--;
-		warn("next media %d", ctx->mediaid + 1);
+		warn("next media %d", ctx->mediaid);
 		ctx->firstmediaid = -1;
 	}
 	else

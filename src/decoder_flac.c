@@ -269,6 +269,10 @@ static int decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 {
 	ctx->out = jitter;
 #ifdef FILTER
+	/**
+	 * Initialization of the filter here.
+	 * Because we need the jitter out.
+	 */
 	ctx->filter.ops = filter_pcm;
 	ctx->filter.ctx = ctx->filter.ops->init(jitter->ctx->frequence, ctx->out->format);
 #endif
@@ -282,7 +286,8 @@ static void decoder_destroy(decoder_ctx_t *ctx)
 	/* release the decoder */
 	FLAC__stream_decoder_delete(ctx->decoder);
 #ifdef FILTER
-	ctx->filter.ops->destroy(ctx->filter.ctx);
+	if (ctx->filter.ops && ctx->filter.ctx)
+		ctx->filter.ops->destroy(ctx->filter.ctx);
 #endif
 	jitter_ringbuffer_destroy(ctx->in);
 	free(ctx);

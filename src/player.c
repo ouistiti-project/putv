@@ -61,6 +61,7 @@ struct player_decoder_s
 typedef struct player_event_s player_event_t;
 struct player_event_s
 {
+	int id;
 	player_event_type_t type;
 	player_event_cb_t cb;
 	void *ctx;
@@ -112,7 +113,10 @@ int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop
 void player_next(player_ctx_t *ctx)
 {
 	if (ctx->media != NULL)
+	{
 		ctx->media->ops->next(ctx->media->ctx);
+		player_state(ctx, STATE_CHANGE);
+	}
 }
 
 media_t *player_media(player_ctx_t *ctx)
@@ -129,14 +133,41 @@ void player_destroy(player_ctx_t *ctx)
 	free(ctx);
 }
 
-void player_onchange(player_ctx_t *ctx, player_event_cb_t callback, void *cbctx)
+void player_removeevent(player_ctx_t *ctx, int id)
+{
+	player_event_t *event = ctx->events;
+	if (event->id == id)
+	{
+		ctx->events = event->next;
+		free(event);
+		return;
+	}
+	while (event != NULL)
+	{
+		player_event_t *next = event->next;
+		if (next != NULL && next->id == id)
+		{
+			event->next = next->next;
+			free(next);
+			return;
+		}
+		event = event->next;
+	}
+}
+
+int player_onchange(player_ctx_t *ctx, player_event_cb_t callback, void *cbctx)
 {
 	player_event_t *event = calloc(1, sizeof(*event));
+	if (ctx->events != NULL)
+		event->id = ctx->events->id + 1;
+	else
+		event->id = 0;
 	event->cb = callback;
 	event->ctx = cbctx;
 	event->type = EVENT_ONCHANGE;
 	event->next = ctx->events;
-	ctx->events = event; 
+	ctx->events = event;
+	return event->id;
 }
 
 state_t player_state(player_ctx_t *ctx, state_t state)
@@ -195,7 +226,7 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 	player_ctx_t *player = data->ctx;
 	src_t *src = NULL;
 
-	dbg("player: prepare %s", url);
+	dbg("player: prepare %d %s", id, url);
 	src = src_build(player, url, mime);
 	if (src != NULL)
 	{
@@ -207,6 +238,7 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 	}
 	else
 	{
+		dbg("player: src not found for %s", url);
 		data->dec = NULL;
 	}
 	return -1;
@@ -263,8 +295,17 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 				ctx->current->src->ops->run(ctx->current->src->ctx, ctx->current->decoder->ops->jitter(ctx->current->decoder->ctx));
 				ctx->media->ops->next(ctx->media->ctx);
 			}
-			else
+			else {
+				if (player.dec != NULL)
+				{
+					ctx->current = player.dec;
+					ctx->current->decoder->ops->destroy(ctx->current->decoder->ctx);
+					ctx->current->src->ops->destroy(ctx->current->src->ctx);
+					free(ctx->current);
+					ctx->current = NULL;
+				}
 				player_state(ctx, STATE_STOP);
+			}
 			player_event_t *it = ctx->events;
 			while (it != NULL)
 			{

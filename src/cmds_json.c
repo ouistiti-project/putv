@@ -36,6 +36,7 @@
 #include "unix_server.h"
 #include "player.h"
 #include "jsonrpc.h"
+#define DATA_LENGTH 1500
 typedef struct cmds_ctx_s cmds_ctx_t;
 struct cmds_ctx_s
 {
@@ -44,6 +45,11 @@ struct cmds_ctx_s
 	pthread_t thread;
 	pthread_mutex_t mutex;
 	thread_info_t *info;
+	struct
+	{
+		char data[DATA_LENGTH];
+		int length;
+	} buff_snd;
 };
 #define CMDS_CTX
 #include "cmds.h"
@@ -650,15 +656,17 @@ static int _cmds_send(const char *buff, size_t size, void *userctx)
 	thread_info_t *info = (thread_info_t *)userctx;
 	cmds_ctx_t *ctx = info->userctx;
 	int sock = info->sock;
-	int ret;
-#if 0
-	char *string = malloc(size + 1);
-	memcpy(string, buff, size);
-	string[size] = 0;
-	warn("send %d: %s", size, string);
-	free(string);
-#endif
-	ret = send(sock, buff, size, MSG_NOSIGNAL);
+	int ret = size;
+
+	if (ctx->buff_snd.length + size + 1 > sizeof(ctx->buff_snd.data))
+	{
+		warn("send %d: %s", ctx->buff_snd.length, ctx->buff_snd.data);
+		ret = send(sock, ctx->buff_snd.data, ctx->buff_snd.length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
+		ctx->buff_snd.length = 0;
+	}
+	memcpy(ctx->buff_snd.data + ctx->buff_snd.length, buff, size);
+	ctx->buff_snd.length += size;
+	ctx->buff_snd.data[ctx->buff_snd.length] = 0;
 	return (ret > 0)?0:-1;
 }
 #endif
@@ -674,7 +682,9 @@ static void jsonrpc_onchange(void * userctx, player_ctx_t *player, state_t state
 	if (notification)
 	{
 		json_dump_callback(notification, _cmds_send, info, JSONRPC_DEBUG_FORMAT);
-		send(info->sock, "", 1, MSG_DONTWAIT | MSG_NOSIGNAL);
+		int sock = info->sock;
+		send(sock, ctx->buff_snd.data, ctx->buff_snd.length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
+		ctx->buff_snd.length = 0;
 		json_decref(notification);
 	}
 #else
@@ -727,23 +737,27 @@ static int jsonrpc_command(thread_info_t *info)
 				if (request != NULL)
 				{
 					json_t *response = jsonrpc_jresponse(request, method_table, ctx);
+					/**
+					 * The json callback may send an event before the answer.
+					 * Use lock before jresonse may generate double lock
+					 */
+					pthread_mutex_lock(&ctx->mutex);
 					if (response != NULL)
 					{
 #ifdef JSONRPC_LARGEPACKET
-						pthread_mutex_lock(&ctx->mutex);
 						json_dump_callback(response, _cmds_send, info, JSONRPC_DEBUG_FORMAT);
-						send(sock, "", 1, MSG_DONTWAIT | MSG_NOSIGNAL);
-						pthread_mutex_unlock(&ctx->mutex);
+						if (ctx->buff_snd.length > 0)
+							send(sock, ctx->buff_snd.data, ctx->buff_snd.length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
+						ctx->buff_snd.length = 0;
 #else
-						pthread_mutex_lock(&ctx->mutex);
 						char *buff = json_dumps(response, JSONRPC_DEBUG_FORMAT );
 						ret = send(sock, buff, strlen(buff), MSG_NOSIGNAL);
 						ret = send(sock, "", 1, MSG_DONTWAIT | MSG_NOSIGNAL);
-						pthread_mutex_unlock(&ctx->mutex);
 #endif
 						json_decref(response);
 					}
 					json_decref(request);
+					pthread_mutex_unlock(&ctx->mutex);
 				}
 			}
 			if (ret == 0)

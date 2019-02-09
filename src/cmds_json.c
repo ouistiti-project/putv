@@ -161,9 +161,12 @@ static int method_list(json_t *json_params, json_t **result, void *userdata)
 	entry_t entry;
 	entry.list = json_array();
 
-	json_t *maxitems = json_object_get(json_params, "maxitems");
-	if (maxitems)
-		entry.max = (json_integer_value(maxitems) < nbitems)?json_integer_value(maxitems):nbitems;
+	json_t *maxitems_js = json_object_get(json_params, "maxitems");
+	if (maxitems_js)
+	{
+		int maxitems = json_integer_value(maxitems_js);
+		entry.max = (maxitems < nbitems)?maxitems:nbitems;
+	}
 	else
 		entry.max = nbitems;
 
@@ -479,7 +482,7 @@ static int method_status(json_t *json_params, json_t **result, void *userdata)
 static int method_options(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
-	int ret;
+	int ret = -1;
 	media_t *media = player_media(ctx->player);
 
 	*result = json_object();
@@ -490,7 +493,11 @@ static int method_options(json_t *json_params, json_t **result, void *userdata)
 		if (json_is_boolean(value))
 		{
 			int state = json_boolean_value(value);
-			ret = media->ops->options(media->ctx, MEDIA_LOOP, state);
+			if (media->ops->loop)
+			{
+				media->ops->loop(media->ctx, state);
+				ret = 0;
+			}
 			value = json_boolean(ret);
 			json_object_set(*result, "loop", value);
 		}
@@ -498,7 +505,11 @@ static int method_options(json_t *json_params, json_t **result, void *userdata)
 		if (json_is_boolean(value))
 		{
 			int state = json_boolean_value(value);
-			ret = media->ops->options(media->ctx, MEDIA_RANDOM, state);
+			if (media->ops->random)
+			{
+				media->ops->random(media->ctx, state);
+				ret = 0;
+			}
 			value = json_boolean(ret);
 			json_object_set(*result, "random", value);
 		}
@@ -534,36 +545,41 @@ static int method_capabilities(json_t *json_params, json_t **result, void *userd
 	action = json_object();
 	value = json_string("play");
 	json_object_set(action, "method", value);
-	params = json_object();
+	params = json_null();
 	json_object_set(action, "params", params);
 	json_array_append(actions, action);
 	action = json_object();
 	value = json_string("pause");
 	json_object_set(action, "method", value);
-	params = json_object();
+	params = json_null();
 	json_object_set(action, "params", params);
 	json_array_append(actions, action);
 	action = json_object();
 	value = json_string("stop");
 	json_object_set(action, "method", value);
-	params = json_object();
+	params = json_null();
 	json_object_set(action, "params", params);
 	json_array_append(actions, action);
 	action = json_object();
 	value = json_string("next");
 	json_object_set(action, "method", value);
-	params = json_object();
+	params = json_null();
 	json_object_set(action, "params", params);
 	json_array_append(actions, action);
 	action = json_object();
 	value = json_string("status");
 	json_object_set(action, "method", value);
-	params = json_object();
+	params = json_null();
 	json_object_set(action, "params", params);
 	json_array_append(actions, action);
+	action = json_object();
 	value = json_string("list");
 	json_object_set(action, "method", value);
-	params = json_object();
+	params = json_array();
+	value = json_string("maxitems");
+	json_array_append(params, value);
+	value = json_string("first");
+	json_array_append(params, value);
 	json_object_set(action, "params", params);
 	json_array_append(actions, action);
 	json_object_set(*result, "actions", actions);

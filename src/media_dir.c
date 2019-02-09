@@ -106,7 +106,8 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data);
 static int media_play(media_ctx_t *ctx, media_parse_t play, void *data);
 static int media_next(media_ctx_t *ctx);
-static media_dirlist_t *media_random(media_ctx_t *ctx, int enable);
+static void media_random(media_ctx_t *ctx, int enable);
+static void media_loop(media_ctx_t *ctx, int enable);
 static int media_end(media_ctx_t *ctx);
 
 /**
@@ -467,32 +468,14 @@ static void media_loop(media_ctx_t *ctx, int enable)
 		ctx->options &= ~OPTION_LOOP;
 }
 
-static media_dirlist_t *media_random(media_ctx_t *ctx, int enable)
+static void media_random(media_ctx_t *ctx, int enable)
 {
-	media_dirlist_t *dir = NULL;
 	if (enable)
 	{
 		ctx->options |= OPTION_RANDOM;
 	}
 	else
 		ctx->options &= ~OPTION_RANDOM;
-	return dir;
-}
-
-static int media_options(media_ctx_t *ctx, media_options_t option, int enable)
-{
-	int ret = 0;
-	if (option == MEDIA_LOOP)
-	{
-		media_loop(ctx, enable);
-		ret = (ctx->options & OPTION_LOOP) == OPTION_LOOP;
-	}
-	else if (option == MEDIA_RANDOM)
-	{
-		media_random(ctx, enable);
-		ret = (ctx->options & OPTION_RANDOM) == OPTION_RANDOM;
-	}
-	return ret;
 }
 
 #ifdef USE_INOTIFY
@@ -621,5 +604,6 @@ const media_ops_t *media_dir = &(const media_ops_t)
 	.insert = media_insert,
 	.count = media_count,
 	.end = media_end,
-	.options = media_options,
+	.random = media_random,
+	.loop = media_loop,
 };

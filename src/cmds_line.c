@@ -170,8 +170,9 @@ static int method_loop(cmds_ctx_t *ctx, char *arg)
 	int enable = 1;
 	media_t *media = player_media(ctx->player);
 	if (arg != NULL)
-		atoi(arg);
-	enable = media->ops->options(media->ctx, MEDIA_LOOP, enable);
+		enable = atoi(arg);
+	if (media->ops->loop)
+		media->ops->loop(media->ctx, enable);
 	return enable;
 }
 

@@ -95,14 +95,14 @@ int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop
 	{
 		ctx->nextmedia = media;
 		ctx->state != STATE_STOP;
-		if (loop)
+		if (loop && media->ops->loop)
 		{
-			media->ops->options(media->ctx, MEDIA_LOOP, 1);
+			media->ops->loop(media->ctx, 1);
 		}
 
-		if (random)
+		if (random && media->ops->random)
 		{
-			media->ops->options(media->ctx, MEDIA_RANDOM, 1);
+			media->ops->random(media->ctx, 1);
 		}
 		if (ctx->media == NULL)
 			ctx->media = media;
@@ -272,7 +272,8 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 		}
 		if (ctx->media == NULL)
 			break;
-		ctx->media->ops->next(ctx->media->ctx);
+		if (ctx->media->ops->next)
+			ctx->media->ops->next(ctx->media->ctx);
 
 		do
 		{
@@ -293,7 +294,10 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 				ctx->state = STATE_PLAY;
 				ctx->current->decoder->ops->run(ctx->current->decoder->ctx, encoder_jitter);
 				ctx->current->src->ops->run(ctx->current->src->ctx, ctx->current->decoder->ops->jitter(ctx->current->decoder->ctx));
-				ctx->media->ops->next(ctx->media->ctx);
+				if (ctx->media->ops->next)
+					ctx->media->ops->next(ctx->media->ctx);
+				else if (ctx->media->ops->end)
+					ctx->media->ops->end(ctx->media->ctx);
 			}
 			else {
 				if (player.dec != NULL)

@@ -60,12 +60,16 @@ typedef int (*method_t)(cmds_ctx_t *ctx, char *arg);
 static int method_append(cmds_ctx_t *ctx, char *arg)
 {
 	media_t *media = player_media(ctx->player);
+	if (media->ops->insert == NULL)
+		return -1;
 	return media->ops->insert(media->ctx, arg, NULL, NULL);
 }
 
 static int method_remove(cmds_ctx_t *ctx, char *arg)
 {
 	media_t *media = player_media(ctx->player);
+	if (media->ops->remove == NULL)
+		return -1;
 	if (arg != NULL)
 	{
 		int id = atoi(arg);
@@ -93,6 +97,8 @@ static int method_list(cmds_ctx_t *ctx, char *arg)
 {
 	int value = 0;
 	media_t *media = player_media(ctx->player);
+	if (media->ops->list == NULL)
+		return -1;
 	return media->ops->list(media->ctx, _print_entry, (void *)&value);
 }
 
@@ -133,6 +139,8 @@ static int method_import(cmds_ctx_t *ctx, char *arg)
 	if (S_ISDIR(_stat.st_mode))
 	{
 		media_ctx_t *media_ctx = media_dir->init(arg);
+		if (media->ops->insert == NULL)
+			return -1;
 		media_dir->list(media_ctx, _import_entry, (void *)ctx);
 		media_dir->destroy(media_ctx);
 	}

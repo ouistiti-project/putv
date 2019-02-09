@@ -152,11 +152,16 @@ static int method_list(json_t *json_params, json_t **result, void *userdata)
 {
 	int ret;
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
-
 	media_t *media = player_media(ctx->player);
 	int count = media->ops->count(media->ctx);
 	int nbitems = MAX_ITEMS;
 	nbitems = (count < nbitems)? count:nbitems;
+
+	if (media->ops->list == NULL)
+	{
+		*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
+		return -1;
+	}
 
 	entry_t entry;
 	entry.list = json_array();
@@ -188,6 +193,12 @@ static int method_remove(json_t *json_params, json_t **result, void *userdata)
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 	media_t *media = player_media(ctx->player);
 	int ret;
+
+	if (media->ops->remove == NULL)
+	{
+		*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
+		return -1;
+	}
 
 	if (json_is_array(json_params))
 	{
@@ -236,6 +247,12 @@ static int method_append(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 	media_t *media = player_media(ctx->player);
+
+	if (media->ops->insert == NULL)
+	{
+		*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
+		return -1;
+	}
 
 	if (json_is_array(json_params)) {
 		int ret;
@@ -485,8 +502,9 @@ static int method_options(json_t *json_params, json_t **result, void *userdata)
 	int ret = -1;
 	media_t *media = player_media(ctx->player);
 
-	*result = json_object();
-	json_t *value;
+	json_t *value = NULL;
+	json_t *loop_value = NULL;
+	json_t *random_value = NULL;
 	if (json_is_object(json_params))
 	{
 		value = json_object_get(json_params, "loop");
@@ -498,8 +516,13 @@ static int method_options(json_t *json_params, json_t **result, void *userdata)
 				media->ops->loop(media->ctx, state);
 				ret = 0;
 			}
-			value = json_boolean(ret);
-			json_object_set(*result, "loop", value);
+			else
+			{
+				*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
+				return -1;
+			}
+
+			loop_value = json_boolean(state);
 		}
 		value = json_object_get(json_params, "random");
 		if (json_is_boolean(value))
@@ -510,9 +533,19 @@ static int method_options(json_t *json_params, json_t **result, void *userdata)
 				media->ops->random(media->ctx, state);
 				ret = 0;
 			}
-			value = json_boolean(ret);
-			json_object_set(*result, "random", value);
+			else
+			{
+				*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
+				return -1;
+			}
+
+			random_value = json_boolean(state);
 		}
+		*result = json_object();
+		if (loop_value != NULL)
+			json_object_set(*result, "loop", loop_value);
+		if (random_value != NULL)
+			json_object_set(*result, "random", random_value);
 	}
 	return 0;
 }

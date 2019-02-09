@@ -89,7 +89,10 @@ static src_ctx_t *src_init(player_ctx_t *ctx, const char *url)
 	{
 		if (strstr(url, "://") != NULL)
 		{
-			path = strstr(url, "file://") + 7;
+			path = strstr(url, "file://");
+			if (path == NULL)
+				return NULL;
+			path += 7;
 		}
 		else
 		{

@@ -120,32 +120,32 @@ typedef struct entry_s
 	json_t *list;
 	int max;
 	int first;
-	int index;
+	int count;
 } entry_t;
 
 static int _append_entry(void *arg, int id, const char *url,
 		const char *info, const char *mime)
 {
+	int ret = 0;
 	entry_t *entry = (entry_t*)arg;
 
-	entry->index++;
-	if ((entry->index > entry->first) && (entry->index <= (entry->first + entry->max)))
+	if ((id >= entry->first) && entry->max)
 	{
 		json_t *object = json_object();
-		if (_print_entry(object, url, info, mime) == 0)
+		if (id >= 0 &&_print_entry(object, url, info, mime) == 0)
 		{
 			json_t *index = json_integer(id);
 			json_object_set(object, "id", index);
 			json_array_append_new(entry->list, object);
+			entry->max--;
+			entry->count++;
+			if (entry->max == 0)
+				ret = -1;
 		}
 		else
 			json_decref(object);
 	}
-	if (entry->index > (entry->first + entry->max))
-	{
-		return -1;
-	}
-	return 0;
+	return ret;
 }
 
 static int method_list(json_t *json_params, json_t **result, void *userdata)
@@ -181,9 +181,9 @@ static int method_list(json_t *json_params, json_t **result, void *userdata)
 	else
 		entry.first = 0;
 
-	entry.index = 0;
+	entry.count = 0;
 	media->ops->list(media->ctx, _append_entry, (void *)&entry);
-	*result = json_pack("{s:i,s:i,s:o}", "count", count, "nbitems", nbitems, "playlist", entry.list);
+	*result = json_pack("{s:i,s:i,s:o}", "count", count, "nbitems", entry.count, "playlist", entry.list);
 
 	return 0;
 }

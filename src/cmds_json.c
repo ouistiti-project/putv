@@ -575,6 +575,20 @@ static int method_capabilities(json_t *json_params, json_t **result, void *userd
 	actions = json_array();
 
 	json_t *action;
+
+	action = json_object();
+	value = json_string("change");
+	json_object_set(action, "method", value);
+	params = json_array();
+	value = json_string("id");
+	json_array_append(params, value);
+	value = json_string("media");
+	json_array_append(params, value);
+	value = json_string("name");
+	json_array_append(params, value);
+	json_object_set(action, "params", params);
+	json_array_append(actions, action);
+
 	action = json_object();
 	value = json_string("play");
 	json_object_set(action, "method", value);
@@ -593,28 +607,88 @@ static int method_capabilities(json_t *json_params, json_t **result, void *userd
 	params = json_null();
 	json_object_set(action, "params", params);
 	json_array_append(actions, action);
-	action = json_object();
-	value = json_string("next");
-	json_object_set(action, "method", value);
-	params = json_null();
-	json_object_set(action, "params", params);
-	json_array_append(actions, action);
+	if (media->ops->next != NULL)
+	{
+		action = json_object();
+		value = json_string("next");
+		json_object_set(action, "method", value);
+		params = json_null();
+		json_object_set(action, "params", params);
+		json_array_append(actions, action);
+	}
 	action = json_object();
 	value = json_string("status");
 	json_object_set(action, "method", value);
 	params = json_null();
 	json_object_set(action, "params", params);
 	json_array_append(actions, action);
-	action = json_object();
-	value = json_string("list");
-	json_object_set(action, "method", value);
-	params = json_array();
-	value = json_string("maxitems");
-	json_array_append(params, value);
-	value = json_string("first");
-	json_array_append(params, value);
-	json_object_set(action, "params", params);
-	json_array_append(actions, action);
+	if (media->ops->list != NULL)
+	{
+		action = json_object();
+		value = json_string("list");
+		json_object_set(action, "method", value);
+		params = json_array();
+		value = json_string("maxitems");
+		json_array_append(params, value);
+		value = json_string("first");
+		json_array_append(params, value);
+		json_object_set(action, "params", params);
+		json_array_append(actions, action);
+	}
+	if (media->ops->insert != NULL)
+	{
+		action = json_object();
+		value = json_string("append");
+		json_object_set(action, "method", value);
+		params = json_array();
+		value = json_string("url");
+		json_array_append(params, value);
+		value = json_string("id");
+		json_array_append(params, value);
+		json_object_set(action, "params", params);
+		json_array_append(actions, action);
+	}
+	if (media->ops->remove != NULL)
+	{
+		action = json_object();
+		value = json_string("remove");
+		json_object_set(action, "method", value);
+		params = json_array();
+		value = json_string("id");
+		json_array_append(params, value);
+		json_object_set(action, "params", params);
+		json_array_append(actions, action);
+	}
+	action = NULL;
+	if (media->ops->random != NULL)
+	{
+		if (action == NULL)
+		{
+			action = json_object();
+			value = json_string("options");
+			json_object_set(action, "method", value);
+			params = json_array();
+		}
+		value = json_string("random");
+		json_array_append(params, value);
+	}
+	if (media->ops->loop != NULL)
+	{
+		if (action == NULL)
+		{
+			action = json_object();
+			value = json_string("options");
+			json_object_set(action, "method", value);
+			params = json_array();
+		}
+		value = json_string("loop");
+		json_array_append(params, value);
+	}
+	if (action != NULL)
+	{
+		json_object_set(action, "params", params);
+		json_array_append(actions, action);
+	}
 	json_object_set(*result, "actions", actions);
 
 	json_t *input;
@@ -694,6 +768,7 @@ static struct jsonrpc_method_entry_t method_table[] = {
 	{ 'r', "append", method_append, "[]" },
 	{ 'r', "remove", method_remove, "[]" },
 	{ 'r', "status", method_status, "" },
+	{ 'r', "change", method_change, "[]" },
 	{ 'n', "onchange", method_onchange, "o" },
 	{ 'r', "options", method_options, "o" },
 	{ 0, NULL },

@@ -729,14 +729,14 @@ static int _media_execute(media_ctx_t *ctx, sqlite3_stmt *statement, media_parse
 		type = sqlite3_column_type(statement, index);
 		if (type == SQLITE_INTEGER)
 			id = sqlite3_column_int(statement, index);
+
 		if (id != -1)
 		{
 			info = opus_get(ctx, id);
 		}
 #endif
-
 		dbg("media: %d %s", id, url);
-		if (cb != NULL)
+		if (cb != NULL && id > -1)
 		{
 			int ret;
 			ret = cb(data, id, url, (const char *)info, mime);
@@ -744,7 +744,7 @@ static int _media_execute(media_ctx_t *ctx, sqlite3_stmt *statement, media_parse
 				break;
 		}
 #ifdef MEDIA_SQLITE_EXT
-		if (id != -1)
+		if (info != NULL)
 		{
 			free(info);
 		}
@@ -784,9 +784,9 @@ static int media_list(media_ctx_t *ctx, media_parse_t cb, void *data)
 	int count = 0;
 	sqlite3_stmt *statement;
 #ifndef MEDIA_SQLITE_EXT
-	char *sql = "select \"url\", \"mime\", \"id\", \"info\" from \"media\" ";
+	char *sql = "select \"url\", \"mime\", \"id\", \"info\" from \"media\" order by id ";
 #else
-	char *sql = "select \"url\", \"mime\", \"opusid\" from \"media\"";
+	char *sql = "select \"url\", \"mime\", \"opusid\" from \"media\" order by opusid";
 #endif
 	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
 	SQLITE3_CHECK(ret, -1, sql);

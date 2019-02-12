@@ -36,7 +36,7 @@
 #include "unix_server.h"
 #include "player.h"
 #include "jsonrpc.h"
-#define DATA_LENGTH 1500
+#define DATA_LENGTH 1200
 typedef struct cmds_ctx_s cmds_ctx_t;
 struct cmds_ctx_s
 {
@@ -479,14 +479,16 @@ static int method_onchange(json_t *json_params, json_t **result, void *userdata)
 		.result = json_object(),
 	};
 	int id = player_mediaid(ctx->player);
+	int count = media->ops->count(media->ctx);
 	ret = media->ops->find(media->ctx, id, _display, &display);
 	if (ret == 1)
 	{
 		*result = display.result;
+		json_object_set(*result, "count", json_integer(count));
 	}
 	if (*result == NULL)
 	{
-		*result = json_pack("{s:s}", "state", str_stop);
+		*result = json_pack("{s:s,s:i}", "state", str_stop, "count", count);
 	}
 	return 0;
 }
@@ -784,8 +786,8 @@ static int _cmds_send(const char *buff, size_t size, void *userctx)
 
 	if (ctx->buff_snd.length + size + 1 > sizeof(ctx->buff_snd.data))
 	{
-		warn("send %d: %s", ctx->buff_snd.length, ctx->buff_snd.data);
 		ret = send(sock, ctx->buff_snd.data, ctx->buff_snd.length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
+		dbg("send %d/%d: %s", ret, ctx->buff_snd.length + 1, ctx->buff_snd.data);
 		ctx->buff_snd.length = 0;
 	}
 	memcpy(ctx->buff_snd.data + ctx->buff_snd.length, buff, size);
@@ -807,7 +809,8 @@ static void jsonrpc_onchange(void * userctx, player_ctx_t *player, state_t state
 	{
 		json_dump_callback(notification, _cmds_send, info, JSONRPC_DEBUG_FORMAT);
 		int sock = info->sock;
-		send(sock, ctx->buff_snd.data, ctx->buff_snd.length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
+		int ret = send(sock, ctx->buff_snd.data, ctx->buff_snd.length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
+		dbg("send %d/%d: %s", ret, ctx->buff_snd.length + 1, ctx->buff_snd.data);
 		ctx->buff_snd.length = 0;
 		json_decref(notification);
 	}
@@ -871,7 +874,10 @@ static int jsonrpc_command(thread_info_t *info)
 #ifdef JSONRPC_LARGEPACKET
 						json_dump_callback(response, _cmds_send, info, JSONRPC_DEBUG_FORMAT);
 						if (ctx->buff_snd.length > 0)
-							send(sock, ctx->buff_snd.data, ctx->buff_snd.length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
+						{
+							int ret = send(sock, ctx->buff_snd.data, ctx->buff_snd.length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
+							dbg("send %d/%d: %s", ret, ctx->buff_snd.length + 1, ctx->buff_snd.data);
+						}
 						ctx->buff_snd.length = 0;
 #else
 						char *buff = json_dumps(response, JSONRPC_DEBUG_FORMAT );

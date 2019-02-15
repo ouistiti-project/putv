@@ -185,6 +185,17 @@ static int method_loop(cmds_ctx_t *ctx, char *arg)
 	return enable;
 }
 
+static int method_random(cmds_ctx_t *ctx, char *arg)
+{
+	int enable = 1;
+	media_t *media = player_media(ctx->player);
+	if (arg != NULL)
+		enable = atoi(arg);
+	if (media->ops->random)
+		media->ops->random(media->ctx, enable);
+	return enable;
+}
+
 static int _display(void *arg, int id, const char *url, const char *info, const char *mime)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t*)arg;
@@ -322,6 +333,11 @@ static int cmds_line_cmd(cmds_ctx_t *ctx)
 				{
 					method = method_loop;
 					i += 4;
+				}
+				if (!strncmp(buffer + i, "random",6))
+				{
+					method = method_random;
+					i += 6;
 				}
 				if (!strncmp(buffer + i, "quit",4))
 				{

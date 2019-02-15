@@ -59,6 +59,8 @@ struct media_ctx_s
 #define dbg(...)
 #endif
 
+#define media_dbg(...)
+
 #ifdef DEBUG
 #define SQLITE3_CHECK(ret, value, sql) \
 		if (ret != SQLITE_OK) {\
@@ -735,7 +737,7 @@ static int _media_execute(media_ctx_t *ctx, sqlite3_stmt *statement, media_parse
 			info = opus_get(ctx, id);
 		}
 #endif
-		dbg("media: %d %s", id, url);
+		media_dbg("media: %d %s", id, url);
 		if (cb != NULL && id > -1)
 		{
 			int ret;
@@ -927,7 +929,7 @@ static int _media_initdb(sqlite3 *db, const char *query[])
 	{
 		if (ret != SQLITE_OK)
 		{
-			err("media prepare error %d", ret);
+			err("media prepare error %d query[%d]", ret, i);
 			break;
 		}
 		ret = sqlite3_exec(db, query[i], NULL, NULL, &error);

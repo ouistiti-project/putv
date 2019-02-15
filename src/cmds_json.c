@@ -65,6 +65,8 @@ struct cmds_ctx_s
 #define dbg(...)
 #endif
 
+#define cmds_dbg(...)
+
 #ifdef DEBUG
 #define JSONRPC_DEBUG_FORMAT JSON_INDENT(2)
 #else
@@ -787,7 +789,7 @@ static int _cmds_send(const char *buff, size_t size, void *userctx)
 	if (ctx->buff_snd.length + size + 1 > sizeof(ctx->buff_snd.data))
 	{
 		ret = send(sock, ctx->buff_snd.data, ctx->buff_snd.length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
-		dbg("send %d/%d: %s", ret, ctx->buff_snd.length + 1, ctx->buff_snd.data);
+		cmds_dbg("send %d/%d: %s", ret, ctx->buff_snd.length + 1, ctx->buff_snd.data);
 		ctx->buff_snd.length = 0;
 	}
 	memcpy(ctx->buff_snd.data + ctx->buff_snd.length, buff, size);
@@ -810,7 +812,7 @@ static void jsonrpc_onchange(void * userctx, player_ctx_t *player, state_t state
 		json_dump_callback(notification, _cmds_send, info, JSONRPC_DEBUG_FORMAT);
 		int sock = info->sock;
 		int ret = send(sock, ctx->buff_snd.data, ctx->buff_snd.length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
-		dbg("send %d/%d: %s", ret, ctx->buff_snd.length + 1, ctx->buff_snd.data);
+		cmds_dbg("send %d/%d: %s", ret, ctx->buff_snd.length + 1, ctx->buff_snd.data);
 		ctx->buff_snd.length = 0;
 		json_decref(notification);
 	}
@@ -857,6 +859,7 @@ static int jsonrpc_command(thread_info_t *info)
 		{
 			char buffer[1500];
 			ret = recv(sock, buffer, 1500, MSG_NOSIGNAL);
+			cmds_dbg("recv %d: %s", ret, buffer);
 			if (ret > 0)
 			{
 				json_error_t error;
@@ -876,7 +879,7 @@ static int jsonrpc_command(thread_info_t *info)
 						if (ctx->buff_snd.length > 0)
 						{
 							int ret = send(sock, ctx->buff_snd.data, ctx->buff_snd.length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
-							dbg("send %d/%d: %s", ret, ctx->buff_snd.length + 1, ctx->buff_snd.data);
+							cmds_dbg("send %d/%d: %s", ret, ctx->buff_snd.length + 1, ctx->buff_snd.data);
 						}
 						ctx->buff_snd.length = 0;
 #else

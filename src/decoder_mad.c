@@ -227,7 +227,7 @@ enum mad_flow error(void *data,
 		}
 		else
 #endif
-			dbg("decoder mad: error 0x%04x (%s) at byte offset %p",
+			decoder_dbg("decoder mad: error 0x%04x (%s) at byte offset %p",
 				stream->error, mad_stream_errorstr(stream),
 				stream->this_frame );
 		return MAD_FLOW_CONTINUE;

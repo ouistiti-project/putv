@@ -482,15 +482,20 @@ static int method_onchange(json_t *json_params, json_t **result, void *userdata)
 	};
 	int id = player_mediaid(ctx->player);
 	int count = media->ops->count(media->ctx);
+	const char *mediapath = media_path();
 	ret = media->ops->find(media->ctx, id, _display, &display);
 	if (ret == 1)
 	{
 		*result = display.result;
 		json_object_set(*result, "count", json_integer(count));
+		json_object_set(*result, "media", json_string(mediapath));
 	}
 	if (*result == NULL)
 	{
-		*result = json_pack("{s:s,s:i}", "state", str_stop, "count", count);
+		*result = json_pack("{s:s,s:i,s:s}",
+				"state", str_stop,
+				"count", count,
+				"media", mediapath);
 	}
 	return 0;
 }
@@ -772,7 +777,7 @@ static struct jsonrpc_method_entry_t method_table[] = {
 	{ 'r', "append", method_append, "[]" },
 	{ 'r', "remove", method_remove, "[]" },
 	{ 'r', "status", method_status, "" },
-	{ 'r', "change", method_change, "[]" },
+	{ 'r', "change", method_change, "o" },
 	{ 'n', "onchange", method_onchange, "o" },
 	{ 'r', "options", method_options, "o" },
 	{ 0, NULL },

@@ -178,7 +178,12 @@ static int media_play(media_ctx_t *ctx, media_parse_t cb, void *data)
 	else
 		ctx->current = ctx->media;
 
-	ret = cb(data, ctx->current->id, ctx->current->url, ctx->current->info, ctx->current->mime);
+	/**
+	 * We have to accept that ctx_>current->next == NULL
+	 * otherwise we manage the loop.
+	 */
+	if (ctx->current != NULL)
+		ret = cb(data, ctx->current->id, ctx->current->url, ctx->current->info, ctx->current->mime);
 	if (ret > -1)
 		ret = ctx->current->id;
 	return ret;

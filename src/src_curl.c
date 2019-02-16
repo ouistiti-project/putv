@@ -165,7 +165,7 @@ static void src_destroy(src_ctx_t *ctx)
 
 const src_ops_t *src_curl = &(src_ops_t)
 {
-	.protocol = "http://|file://",
+	.protocol = "http://|https://|file://",
 	.init = src_init,
 	.run = src_run,
 	.destroy = src_destroy,

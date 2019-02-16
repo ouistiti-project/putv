@@ -112,11 +112,12 @@ int main(int argc, char **argv)
 	int mode = 0;
 	const char *name = basename(argv[0]);
 	const char *user = NULL;
+	const char *pidfile = NULL;
 	
 	int opt;
 	do
 	{
-		opt = getopt(argc, argv, "R:m:o:u:hDVxalr");
+		opt = getopt(argc, argv, "R:m:o:u:p:hDVxalr");
 		switch (opt)
 		{
 			case 'R':
@@ -130,6 +131,9 @@ int main(int argc, char **argv)
 			break;
 			case 'u':
 				user = optarg;
+			break;
+			case 'p':
+				pidfile = optarg;
 			break;
 			case 'h':
 				return -1;
@@ -152,8 +156,15 @@ int main(int argc, char **argv)
 		}
 	} while(opt != -1);
 
-	if ((mode & DAEMONIZE) && fork() != 0)
+	pid_t pid = 0;
+	if ((mode & DAEMONIZE) && ((pid = fork()) != 0))
 	{
+		if (pidfile != NULL)
+		{
+			FILE *file = fopen(pidfile, "w");
+			fprintf(file, "%d\n", pid);
+			fclose(file);
+		}
 		return 0;
 	}
 

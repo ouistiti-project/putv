@@ -3,6 +3,8 @@
 
 #define RANDOM_DEVICE "/dev/hwrng"
 
+typedef struct player_ctx_s player_ctx_t;
+
 extern const char const *mime_octetstream;
 
 const char *utils_getmime(const char *path);
@@ -18,7 +20,7 @@ struct media_ops_s
 	/**
 	 * mandatory
 	 */
-	media_ctx_t *(*init)(const char *url, ...);
+	media_ctx_t *(*init)(player_ctx_t *player, const char *url, ...);
 	/**
 	 * mandatory
 	 */
@@ -73,7 +75,7 @@ struct media_s
 	media_ctx_t *ctx;
 };
 
-media_t *media_build(const char *path);
+media_t *media_build(player_ctx_t *player, const char *path);
 const char *media_path();
 
 extern const media_ops_t *media_sqlite;

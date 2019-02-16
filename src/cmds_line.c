@@ -141,7 +141,7 @@ static int method_import(cmds_ctx_t *ctx, char *arg)
 #ifdef MEDIA_IMPORT
 	if (S_ISDIR(_stat.st_mode))
 	{
-		media_ctx_t *media_ctx = media_dir->init(arg);
+		media_ctx_t *media_ctx = media_dir->init(ctx->player, arg);
 		media_dir->list(media_ctx, _import_entry, (void *)ctx);
 		media_dir->destroy(media_ctx);
 	}

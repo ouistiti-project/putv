@@ -1084,7 +1084,7 @@ static int _media_initdb(sqlite3 *db, const char *query[])
 	return ret;
 }
 
-static media_ctx_t *media_init(const char *url, ...)
+static media_ctx_t *media_init(player_ctx_t *player, const char *url, ...)
 {
 	media_ctx_t *ctx = NULL;
 	sqlite3 *db = NULL;

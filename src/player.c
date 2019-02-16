@@ -90,7 +90,7 @@ player_ctx_t *player_init()
 
 int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop)
 {
-	media_t *media = media_build(mediapath);
+	media_t *media = media_build(ctx, mediapath);
 	if (media)
 	{
 		ctx->nextmedia = media;

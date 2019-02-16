@@ -210,7 +210,7 @@ static void media_random(media_ctx_t *ctx, int enable)
 {
 }
 
-static media_ctx_t *media_init(const char *url,...)
+static media_ctx_t *media_init(player_ctx_t *player, const char *url,...)
 {
 	media_ctx_t *ctx = NULL;
 	if (url)

@@ -71,6 +71,7 @@ const char *utils_getpath(const char *url, const char *proto)
 	return path;
 }
 
+static const char *current_path;
 media_t *media_build(const char *url)
 {
 	const media_ops_t *const media_list[] = {
@@ -103,6 +104,12 @@ media_t *media_build(const char *url)
 	media_t *media = calloc(1, sizeof(*media));
 	media->ops = media_list[i];
 	media->ctx = media_ctx;
+	current_path = url;
 
 	return media;
+}
+
+const char *media_path()
+{
+	return current_path;
 }

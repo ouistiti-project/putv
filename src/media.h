@@ -73,7 +73,8 @@ struct media_s
 	media_ctx_t *ctx;
 };
 
-media_t *media_build(const char *url);
+media_t *media_build(const char *path);
+const char *media_path();
 
 extern const media_ops_t *media_sqlite;
 extern const media_ops_t *media_file;

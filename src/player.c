@@ -253,14 +253,6 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 	};
 	while (ctx->state != STATE_ERROR)
 	{
-		pthread_mutex_lock(&ctx->mutex);
-		while (ctx->state == STATE_STOP)
-		{
-			dbg("player: stop");
-			encoder_jitter->ops->reset(encoder_jitter->ctx);
-			pthread_cond_wait(&ctx->cond, &ctx->mutex);
-		}
-		pthread_mutex_unlock(&ctx->mutex);
 		if (ctx->media != ctx->nextmedia)
 		{
 			if (ctx->media)
@@ -269,9 +261,18 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 				free(ctx->media);
 			}
 			ctx->media = ctx->nextmedia;
+			ctx->state = STATE_CHANGE;
 		}
 		if (ctx->media == NULL)
 			break;
+		pthread_mutex_lock(&ctx->mutex);
+		while (ctx->state == STATE_STOP)
+		{
+			dbg("player: stop");
+			encoder_jitter->ops->reset(encoder_jitter->ctx);
+			pthread_cond_wait(&ctx->cond, &ctx->mutex);
+		}
+		pthread_mutex_unlock(&ctx->mutex);
 		if (ctx->media->ops->next)
 			ctx->media->ops->next(ctx->media->ctx);
 

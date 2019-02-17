@@ -95,6 +95,7 @@ int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop
 	{
 		ctx->nextmedia = media;
 		ctx->state = STATE_STOP;
+		pthread_cond_broadcast(&ctx->cond);
 		if (loop && media->ops->loop)
 		{
 			media->ops->loop(media->ctx, 1);
@@ -253,25 +254,28 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 	};
 	while (ctx->state != STATE_ERROR)
 	{
-		if (ctx->media != ctx->nextmedia)
-		{
-			if (ctx->media)
-			{
-				ctx->media->ops->destroy(ctx->media->ctx);
-				free(ctx->media);
-			}
-			ctx->media = ctx->nextmedia;
-			ctx->state = STATE_CHANGE;
-		}
-		if (ctx->media == NULL)
-			break;
 		pthread_mutex_lock(&ctx->mutex);
 		while (ctx->state == STATE_STOP)
 		{
-			dbg("player: stop");
-			encoder_jitter->ops->reset(encoder_jitter->ctx);
-			pthread_cond_wait(&ctx->cond, &ctx->mutex);
+			if (ctx->media != ctx->nextmedia)
+			{
+				if (ctx->media)
+				{
+					ctx->media->ops->destroy(ctx->media->ctx);
+					free(ctx->media);
+				}
+				ctx->media = ctx->nextmedia;
+				ctx->state = STATE_CHANGE;
+			}
+			else
+			{
+				dbg("player: stop");
+				encoder_jitter->ops->reset(encoder_jitter->ctx);
+				pthread_cond_wait(&ctx->cond, &ctx->mutex);
+			}
 		}
+		if (ctx->media == NULL)
+			break;
 		pthread_mutex_unlock(&ctx->mutex);
 		if (ctx->media->ops->next)
 			ctx->media->ops->next(ctx->media->ctx);

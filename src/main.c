@@ -218,13 +218,6 @@ int main(int argc, char **argv)
 			err("the directory %s is not available", root);
 		}
 	}
-	if (ret == 0 && S_ISDIR(rootstat.st_mode))
-	{
-		chmod(root, 0770);
-		chown(root, pw_uid, pw_gid);
-	}
-	else
-		ret = -1;
 
 	cmds_t cmds[3];
 	int nbcmds = 0;

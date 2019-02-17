@@ -11,9 +11,15 @@ typedef struct sink_s sink_t;
 struct sink_s
 {
 	sink_ctx_t *(*init)(player_ctx_t *, const char *soundcard);
-	jitter_t *(*jitter)(sink_ctx_t *decoder);
+	jitter_t *(*jitter)(sink_ctx_t *);
 	int (*run)(sink_ctx_t *);
 	void (*destroy)(sink_ctx_t *);
+
+	/**
+	 * control API
+	 */
+	void (*setvolume)(sink_ctx_t *ctx, unsigned int volume);
+	unsigned int (*getvolume)(sink_ctx_t *ctx);
 };
 
 const sink_t *sink_get(sink_ctx_t *ctx);

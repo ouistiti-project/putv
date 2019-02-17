@@ -67,6 +67,56 @@ struct sink_ctx_s
 #define LATENCE_MS 50
 #define NB_BUFFER 6
 
+void _mixer_setvolume(sink_ctx_t *ctx, unsigned int volume)
+{
+    long min, max;
+    snd_mixer_t *handle;
+    snd_mixer_selem_id_t *sid;
+    const char *selem_name = "Master";
+
+    snd_mixer_open(&handle, 0);
+    snd_mixer_attach(handle, ctx->soundcard);
+    snd_mixer_selem_register(handle, NULL, NULL);
+    snd_mixer_load(handle);
+
+    snd_mixer_selem_id_alloca(&sid);
+    snd_mixer_selem_id_set_index(sid, 0);
+    snd_mixer_selem_id_set_name(sid, selem_name);
+    snd_mixer_elem_t* elem = snd_mixer_find_selem(handle, sid);
+
+    snd_mixer_selem_get_playback_volume_range(elem, &min, &max);
+	if (volume > 100)
+		volume == 100;
+    snd_mixer_selem_set_playback_volume_all(elem, volume * max / 100);
+
+    snd_mixer_close(handle);
+}
+
+unsigned int _mixer_getvolume(sink_ctx_t *ctx)
+{
+	long volume;
+    long min, max;
+    snd_mixer_t *handle;
+    snd_mixer_selem_id_t *sid;
+    const char *selem_name = "Master";
+
+    snd_mixer_open(&handle, 0);
+    snd_mixer_attach(handle, ctx->soundcard);
+    snd_mixer_selem_register(handle, NULL, NULL);
+    snd_mixer_load(handle);
+
+    snd_mixer_selem_id_alloca(&sid);
+    snd_mixer_selem_id_set_index(sid, 0);
+    snd_mixer_selem_id_set_name(sid, selem_name);
+    snd_mixer_elem_t* elem = snd_mixer_find_selem(handle, sid);
+
+    snd_mixer_selem_get_playback_volume_range(elem, &min, &max);
+    snd_mixer_selem_get_playback_volume(elem, 0, &volume);
+
+    snd_mixer_close(handle);
+    return (unsigned int) volume * 100 / max;
+}
+
 static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate, unsigned int *size)
 {
 	int ret;
@@ -297,6 +347,7 @@ static int _alsa_checksamplerate(sink_ctx_t *ctx)
 #endif
 	return ret;
 }
+
 static void *alsa_thread(void *arg)
 {
 	int ret;
@@ -384,6 +435,8 @@ const sink_t *sink_alsa = &(sink_t)
 	.jitter = alsa_jitter,
 	.run = alsa_run,
 	.destroy = alsa_destroy,
+	.getvolume = _mixer_getvolume,
+	.setvolume = _mixer_setvolume,
 };
 
 #ifndef SINK_GET

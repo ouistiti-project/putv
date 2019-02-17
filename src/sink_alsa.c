@@ -370,7 +370,8 @@ static int alsa_run(sink_ctx_t *ctx)
 
 static void alsa_destroy(sink_ctx_t *ctx)
 {
-	pthread_join(ctx->thread, NULL);
+	if (ctx->thread)
+		pthread_join(ctx->thread, NULL);
 	_pcm_close(ctx);
 	jitter_scattergather_destroy(ctx->in);
 	free(ctx->soundcard);

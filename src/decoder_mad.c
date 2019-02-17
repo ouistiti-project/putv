@@ -348,7 +348,8 @@ static int decoder_check(const char *path)
 
 static void mad_destroy(decoder_ctx_t *ctx)
 {
-	pthread_join(ctx->thread, NULL);
+	if (ctx->thread > 0)
+		pthread_join(ctx->thread, NULL);
 	/* release the decoder */
 	mad_decoder_finish(&ctx->decoder);
 #ifdef FILTER

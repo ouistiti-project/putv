@@ -154,7 +154,8 @@ static int src_run(src_ctx_t *ctx, jitter_t *out)
 
 static void src_destroy(src_ctx_t *ctx)
 {
-	pthread_join(ctx->thread, NULL);
+	if (ctx->thread)
+		pthread_join(ctx->thread, NULL);
 #ifdef CURL_DUMP
 	if (ctx->dumpfd > 0)
 		close(ctx->dumpfd);

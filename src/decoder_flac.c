@@ -282,7 +282,8 @@ static int decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 
 static void decoder_destroy(decoder_ctx_t *ctx)
 {
-	pthread_join(ctx->thread, NULL);
+	if (ctx->thread > 0)
+		pthread_join(ctx->thread, NULL);
 	/* release the decoder */
 	FLAC__stream_decoder_delete(ctx->decoder);
 #ifdef FILTER

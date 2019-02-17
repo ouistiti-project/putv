@@ -291,8 +291,10 @@ static int sink_run(sink_ctx_t *ctx)
 
 static void sink_destroy(sink_ctx_t *ctx)
 {
-	pthread_join(ctx->thread2, NULL);
-	pthread_join(ctx->thread, NULL);
+	if (ctx->thread2)
+		pthread_join(ctx->thread2, NULL);
+	if (ctx->thread)
+		pthread_join(ctx->thread, NULL);
 	jitter_scattergather_destroy(ctx->in);
 	free(ctx->out);
 	free(ctx);

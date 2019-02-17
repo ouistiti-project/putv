@@ -57,6 +57,7 @@ typedef struct media_dirlist_s media_dirlist_t;
 struct media_ctx_s
 {
 	const char *url;
+	player_ctx_t *player;
 	int mediaid;
 	int firstmediaid;
 	int count;
@@ -517,6 +518,11 @@ static void *_check_dir(void *arg)
 					_find_mediaid_t data = {ctx->mediaid, NULL, NULL};
 					ctx->mediaid = -1;
 					_find(ctx, 0, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
+					if (ctx->mediaid == -1)
+					{
+						media_end(ctx);
+						player_state(ctx->player, STATE_STOP);
+					}
 				}
 #if 0
 				else if (event->mask & IN_MODIFY)
@@ -551,6 +557,7 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url,...)
 			return NULL;
 
 		ctx = calloc(1, sizeof(*ctx));
+		ctx->player = player;
 		ctx->url = url;
 		ctx->mediaid = -1;
 		ctx->firstmediaid = 0;

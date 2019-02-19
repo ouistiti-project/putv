@@ -230,20 +230,20 @@ int main(int argc, char **argv)
 	if (!(mode & DAEMONIZE))
 	{
 		cmds[nbcmds].ops = cmds_line;
-		cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, NULL);
+		cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, &sink, NULL);
 		nbcmds++;
 	}
 #endif
 #ifdef CMDINPUT
 	cmds[nbcmds].ops = cmds_input;
-	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, CMDINPUT_PATH);
+	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, &sink, CMDINPUT_PATH);
 	nbcmds++;
 #endif
 #ifdef JSONRPC
 	char socketpath[256];
 	snprintf(socketpath, sizeof(socketpath) - 1, "%s/%s", root, name);
 	cmds[nbcmds].ops = cmds_json;
-	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, (void *)socketpath);
+	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, &sink, (void *)socketpath);
 	nbcmds++;
 #endif
 

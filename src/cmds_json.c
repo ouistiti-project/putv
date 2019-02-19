@@ -41,6 +41,7 @@ typedef struct cmds_ctx_s cmds_ctx_t;
 struct cmds_ctx_s
 {
 	player_ctx_t *player;
+	sink_t *sink;
 	const char *socketpath;
 	pthread_t thread;
 	pthread_mutex_t mutex;
@@ -918,11 +919,12 @@ static int jsonrpc_command(thread_info_t *info)
 	return ret;
 }
 
-static cmds_ctx_t *cmds_json_init(player_ctx_t *player, void *arg)
+static cmds_ctx_t *cmds_json_init(player_ctx_t *player, sink_t *sink, void *arg)
 {
 	cmds_ctx_t *ctx = NULL;
 	ctx = calloc(1, sizeof(*ctx));
 	ctx->player = player;
+	ctx->sink = sink;
 	ctx->socketpath = (const char *)arg;
 	pthread_mutex_init(&ctx->mutex, NULL);
 	return ctx;

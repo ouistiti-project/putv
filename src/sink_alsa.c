@@ -429,7 +429,7 @@ static void alsa_destroy(sink_ctx_t *ctx)
 	free(ctx);
 }
 
-const sink_t *sink_alsa = &(sink_t)
+const sink_ops_t *sink_alsa = &(sink_ops_t)
 {
 	.init = alsa_init,
 	.jitter = alsa_jitter,
@@ -439,10 +439,3 @@ const sink_t *sink_alsa = &(sink_t)
 	.setvolume = _mixer_setvolume,
 };
 
-#ifndef SINK_GET
-#define SINK_GET
-const sink_t *sink_get(sink_ctx_t *ctx)
-{
-	return ctx->ops;
-}
-#endif

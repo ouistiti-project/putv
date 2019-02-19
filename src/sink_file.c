@@ -118,18 +118,10 @@ static void sink_destroy(sink_ctx_t *sink)
 	free(sink);
 }
 
-const sink_t *sink_file = &(sink_t)
+const sink_ops_t *sink_file = &(sink_ops_t)
 {
 	.init = sink_init,
 	.jitter = sink_jitter,
 	.run = sink_run,
 	.destroy = sink_destroy,
 };
-
-#ifndef SINK_GET
-#define SINK_GET
-const sink_t *sink_get(sink_ctx_t *ctx)
-{
-	return ctx->ops;
-}
-#endif

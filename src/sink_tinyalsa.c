@@ -149,18 +149,10 @@ static void alsa_destroy(sink_ctx_t *ctx)
 	free(ctx);
 }
 
-const sink_t *sink_tinyalsa = &(sink_t)
+const sink_ops_t *sink_tinyalsa = &(sink_ops_t)
 {
 	.init = alsa_init,
 	.jitter = alsa_jitter,
 	.run = alsa_run,
 	.destroy = alsa_destroy,
 };
-
-#ifndef SINK_GET
-#define SINK_GET
-const sink_t *sink_get(sink_ctx_t *ctx)
-{
-	return ctx->ops;
-}
-#endif

@@ -219,6 +219,11 @@ int main(int argc, char **argv)
 		}
 	}
 
+	sink_t sink;
+
+	sink.ops = SINK;
+	sink.ctx = sink.ops->init(player, outarg);
+
 	cmds_t cmds[3];
 	int nbcmds = 0;
 #ifdef CMDLINE
@@ -250,14 +255,9 @@ int main(int argc, char **argv)
 	for (i = 0; i < nbcmds; i++)
 		cmds[i].ops->run(cmds[i].ctx);
 
-	const sink_t *sink;
-	sink_ctx_t *sink_ctx;
+	sink.ops->run(sink.ctx);
 	jitter_t *sink_jitter = NULL;
-
-	sink = SINK;
-	sink_ctx = sink->init(player, outarg);
-	sink->run(sink_ctx);
-	sink_jitter = sink->jitter(sink_ctx);
+	sink_jitter = sink.ops->jitter(sink.ctx);
 
 #ifdef USE_REALTIME
 	struct sched_param params;
@@ -267,7 +267,7 @@ int main(int argc, char **argv)
 
 	run_player(player, sink_jitter);
 
-	sink->destroy(sink_ctx);
+	sink.ops->destroy(sink.ctx);
 	player_destroy(player);
 
 	for (i = 0; i < nbcmds; i++)

@@ -57,6 +57,7 @@ struct cmds_ctx_s
 #include "media.h"
 #include "decoder.h"
 #include "src.h"
+#include "sink.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -488,15 +489,22 @@ static int method_onchange(json_t *json_params, json_t **result, void *userdata)
 	if (ret == 1)
 	{
 		*result = display.result;
-		json_object_set(*result, "count", json_integer(count));
-		json_object_set(*result, "media", json_string(mediapath));
+	}
+	else
+	{
+		json_decref(display.result);
 	}
 	if (*result == NULL)
 	{
-		*result = json_pack("{s:s,s:i,s:s}",
-				"state", str_stop,
-				"count", count,
-				"media", mediapath);
+		*result = json_pack("{s:s}",
+				"state", str_stop);
+	}
+	json_object_set(*result, "count", json_integer(count));
+	json_object_set(*result, "media", json_string(mediapath));
+	if (ctx->sink->ops->getvolume != NULL)
+	{
+		unsigned int volume = ctx->sink->ops->getvolume(ctx->sink->ctx);
+		json_object_set(*result, "volume", json_integer(volume));
 	}
 	return 0;
 }
@@ -556,6 +564,56 @@ static int method_options(json_t *json_params, json_t **result, void *userdata)
 			json_object_set(*result, "loop", loop_value);
 		if (random_value != NULL)
 			json_object_set(*result, "random", random_value);
+	}
+	return 0;
+}
+
+static int method_volume(json_t *json_params, json_t **result, void *userdata)
+{
+	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
+	int ret = -1;
+
+	if (ctx->sink->ops->getvolume == NULL)
+	{
+		*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
+		return -1;
+	}
+	json_t *value = NULL;
+	if (json_is_object(json_params))
+	{
+		value = json_object_get(json_params, "level");
+		if (json_is_integer(value))
+		{
+			if (ctx->sink->ops->setvolume == NULL)
+			{
+				*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
+				return -1;
+			}
+			int volume = json_boolean_value(value);
+			if (volume > 100)
+				volume = 100;
+			if (volume < 0)
+				volume = 0;
+			ctx->sink->ops->setvolume(ctx->sink->ctx, volume);
+		}
+		int volume = ctx->sink->ops->getvolume(ctx->sink->ctx);
+		value = json_object_get(json_params, "step");
+		if (json_is_integer(value))
+		{
+			if (ctx->sink->ops->setvolume == NULL)
+			{
+				*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
+				return -1;
+			}
+			volume += json_integer_value(value);
+			if (volume > 100)
+				volume = 100;
+			if (volume < 0)
+				volume = 0;
+			ctx->sink->ops->setvolume(ctx->sink->ctx, volume);
+		}
+		*result = json_object();
+		json_object_set(*result, "level", json_integer(volume));
 	}
 	return 0;
 }
@@ -699,6 +757,19 @@ static int method_capabilities(json_t *json_params, json_t **result, void *userd
 		json_object_set(action, "params", params);
 		json_array_append(actions, action);
 	}
+	if (ctx->sink->ops->getvolume != NULL)
+	{
+		action = json_object();
+		value = json_string("volume");
+		json_object_set(action, "method", value);
+		params = json_array();
+		value = json_string("level");
+		json_array_append(params, value);
+		value = json_string("step");
+		json_array_append(params, value);
+		json_object_set(action, "params", params);
+		json_array_append(actions, action);
+	}
 	json_object_set(*result, "actions", actions);
 
 	json_t *input;
@@ -781,6 +852,7 @@ static struct jsonrpc_method_entry_t method_table[] = {
 	{ 'r', "change", method_change, "o" },
 	{ 'n', "onchange", method_onchange, "o" },
 	{ 'r', "options", method_options, "o" },
+	{ 'r', "volume", method_volume, "o" },
 	{ 0, NULL },
 };
 
@@ -794,8 +866,8 @@ static int _cmds_send(const char *buff, size_t size, void *userctx)
 
 	if (ctx->buff_snd.length + size + 1 > sizeof(ctx->buff_snd.data))
 	{
-		ret = send(sock, ctx->buff_snd.data, ctx->buff_snd.length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
-		cmds_dbg("send %d/%d: %s", ret, ctx->buff_snd.length + 1, ctx->buff_snd.data);
+		ret = send(sock, ctx->buff_snd.data, ctx->buff_snd.length, MSG_DONTWAIT | MSG_NOSIGNAL);
+		cmds_dbg("send %d/%d: %s", ret, ctx->buff_snd.length, ctx->buff_snd.data);
 		ctx->buff_snd.length = 0;
 	}
 	memcpy(ctx->buff_snd.data + ctx->buff_snd.length, buff, size);

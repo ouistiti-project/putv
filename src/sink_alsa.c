@@ -282,7 +282,6 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 	jitter_format_t format = SINK_ALSA_FORMAT;
 	sink_ctx_t *ctx = calloc(1, sizeof(*ctx));
 
-	ctx->ops = sink_alsa;
 	ctx->soundcard = strdup(soundcard);
 #ifdef SINK_ALSA_CONFIG
 	char *setting = strchr(ctx->soundcard, ':');
@@ -435,7 +434,16 @@ const sink_ops_t *sink_alsa = &(sink_ops_t)
 	.jitter = alsa_jitter,
 	.run = alsa_run,
 	.destroy = alsa_destroy,
-	.getvolume = _mixer_getvolume,
-	.setvolume = _mixer_setvolume,
 };
 
+static sink_t _sink = {0};
+sink_t *sink_build(player_ctx_t *player, const char *arg)
+{
+	const sink_ops_t *sinkops = NULL;
+	sinkops = sink_alsa;
+	_sink.ctx = sinkops->init(player, arg);
+	if (_sink.ctx == NULL)
+		return NULL;
+	_sink.ops = sinkops;
+	return &_sink;
+}

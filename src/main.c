@@ -219,10 +219,7 @@ int main(int argc, char **argv)
 		}
 	}
 
-	sink_t sink;
-
-	sink.ops = SINK;
-	sink.ctx = sink.ops->init(player, outarg);
+	sink_t *sink = sink_build(player, outarg);;
 
 	cmds_t cmds[3];
 	int nbcmds = 0;
@@ -230,20 +227,20 @@ int main(int argc, char **argv)
 	if (!(mode & DAEMONIZE))
 	{
 		cmds[nbcmds].ops = cmds_line;
-		cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, &sink, NULL);
+		cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, sink, NULL);
 		nbcmds++;
 	}
 #endif
 #ifdef CMDINPUT
 	cmds[nbcmds].ops = cmds_input;
-	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, &sink, CMDINPUT_PATH);
+	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, sink, CMDINPUT_PATH);
 	nbcmds++;
 #endif
 #ifdef JSONRPC
 	char socketpath[256];
 	snprintf(socketpath, sizeof(socketpath) - 1, "%s/%s", root, name);
 	cmds[nbcmds].ops = cmds_json;
-	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, &sink, (void *)socketpath);
+	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, sink, (void *)socketpath);
 	nbcmds++;
 #endif
 
@@ -255,9 +252,9 @@ int main(int argc, char **argv)
 	for (i = 0; i < nbcmds; i++)
 		cmds[i].ops->run(cmds[i].ctx);
 
-	sink.ops->run(sink.ctx);
+	sink->ops->run(sink->ctx);
 	jitter_t *sink_jitter = NULL;
-	sink_jitter = sink.ops->jitter(sink.ctx);
+	sink_jitter = sink->ops->jitter(sink->ctx);
 
 #ifdef USE_REALTIME
 	struct sched_param params;
@@ -267,7 +264,7 @@ int main(int argc, char **argv)
 
 	run_player(player, sink_jitter);
 
-	sink.ops->destroy(sink.ctx);
+	sink->ops->destroy(sink->ctx);
 	player_destroy(player);
 
 	for (i = 0; i < nbcmds; i++)

@@ -29,8 +29,5 @@ struct sink_s
 	sink_ctx_t *ctx;
 };
 
-extern const sink_ops_t *sink_alsa;
-extern const sink_ops_t *sink_tinyalsa;
-extern const sink_ops_t *sink_file;
-extern const sink_ops_t *sink_unix;
+sink_t *sink_build(player_ctx_t *, const char *arg);
 #endif

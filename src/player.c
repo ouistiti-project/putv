@@ -71,6 +71,7 @@ struct player_event_s
 
 struct player_ctx_s
 {
+	const char *filtername;
 	filter_t *filter;
 	media_t *media;
 	media_t *nextmedia;
@@ -81,12 +82,13 @@ struct player_ctx_s
 	pthread_mutex_t mutex;
 };
 
-player_ctx_t *player_init()
+player_ctx_t *player_init(const char *filtername)
 {
 	player_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	pthread_mutex_init(&ctx->mutex, NULL);
 	pthread_cond_init(&ctx->cond, NULL);
 	ctx->state = STATE_STOP;
+	ctx->filtername = filtername;
 	return ctx;
 }
 
@@ -257,7 +259,7 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 		.dec = NULL,
 	};
 
-	ctx->filter = filter_build("pcm_stereo", encoder_jitter->format);
+	ctx->filter = filter_build(ctx->filtername, encoder_jitter->format);
 
 	while (ctx->state != STATE_ERROR)
 	{

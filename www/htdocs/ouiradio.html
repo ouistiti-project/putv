@@ -1,0 +1,418 @@
+<html>
+	<head>
+		<title>Ouistiti: Radio</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+		<!--
+		<link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet" type="text/css">
+		<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+		<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+		-->
+		<link type="text/css" rel="stylesheet" href="/css/bootstrap.min.css">
+		<script type="text/javascript" src="/js/jquery.min.js"></script>
+		<script type="text/javascript" src="/js/bootstrap.min.js"></script>
+		<script type="text/javascript" src="/js/jsonrpc.js"></script>
+		<script type="text/javascript" src="/ouiradio.js"></script>
+		<script type="text/javascript">
+var player;
+initIHM = function()
+{
+	$('.action-btn').addClass('hidden');
+	$('#PlayList').addClass('hidden');
+	$('#volume').slideUp( 300 );
+}
+playerstate = function(result)
+{
+	player.state = result.state;
+	if (result.state == "play")
+		$('#playpause').find('.glyphicon').removeClass('glyphicon-play').addClass('glyphicon-pause');
+	else
+	{
+		$('#playpause').find('.glyphicon').removeClass('glyphicon-pause').addClass('glyphicon-play');
+		$('#info').addClass('hidden');
+	}
+};
+
+playerlist = function(result)
+{
+	var table = result.playlist;
+	var firstid = 0;
+	if (typeof(table) == "object")
+	{
+		var deletemenu = "<a href='#' class='button remove'><span class='glyphicon glyphicon-trash'></span></a>";
+		var playlist = $('#PlayList');
+		var options = $(playlist).data('options');
+		if (typeof(options) == "string" && options != "")
+			options = JSON.parse(options);
+		$(playlist).html('');
+		firstid = table[0].id;
+		var i;
+		for (i = 0; i < table.length; i++)
+		{
+			var elem = $(playlist).find('#item-'+table[i].id);
+			if (elem.length == 0)
+			{
+				var info = table[i].info;
+				if (info != undefined)
+				{
+					//var escapingname = encodeURIComponent(info.Title);
+					var escapingname = info.Title;
+					if (escapingname == undefined)
+						escapingname = "unknown";
+
+					elem = $("<a class='list-group-item' href='#' data-type='"+table[i].sources[0].mime+"' id='item-"+table[i].id+"' data-id='"+table[i].id+"' data-href=\""+escapingname+"\" ></a>");
+					$(elem).html("<span class='title'>"+escapingname+"</span> - <span class='artist'>"+info.Artist+"</span>");
+					var j;
+					for (j in options)
+					{
+						if (options[i] == "remove")
+							$(elem).append(deletemenu);
+					}
+					$(playlist).append(elem);
+				}
+			}
+			if (table[i].id == player.currentid)
+				$(elem).addClass("active");
+		}
+	}
+	if (result.count != undefined)
+	{
+		if (firstid > 5)
+		{
+			$('#PagerList').find('.previous')
+				.removeClass('disabled')
+				.data('firstid',firstid );
+		}
+		else
+		{
+			$('#PagerList').find('.previous')
+				.addClass('disabled')
+				.data('firstid',firstid);
+		}
+		if (firstid < result.count -5)
+		{
+			$('#PagerList').find('.next')
+				.removeClass('disabled')
+				.data('firstid',firstid );
+		}
+		else
+		{
+			$('#PagerList').find('.next')
+				.addClass('disabled')
+				.data('firstid',firstid);
+		}
+	}
+};
+
+$(document).ready(function()
+{
+	$('#media').addClass('hidden');
+	initIHM();
+	player = new JsonRPC(configs.player);
+	player.onopen = function ()
+	{
+		player.send('capabilities', null);
+	};
+	player.onchange = function(result)
+	{
+		if (result.state != undefined)
+		{
+			playerstate(result);
+		}
+		if (result.info != undefined)
+		{
+			$('#PlayList').find('.active').removeClass('active');
+			$('#info').removeClass('hidden');
+			player.currentid = result.id;
+			for (info in result.info)
+			{
+				var elem = $("#"+info);
+				if (elem != undefined)
+				{
+					$(elem).text(result.info[info]);
+				}
+			}
+		}
+		if (result.id != undefined && result.id > -1)
+		{
+			var firstid = result.id - (result.id % 5);
+			console.log("firstid "+firstid);
+			player.send("list", {maxitems:5, first:firstid});
+		}
+		if (result.volume != undefined)
+		{
+			$('#volume').data('level',result.volume);
+		}
+	};
+	player.options = function(result)
+		{
+			$('#random').removeClass('btn-primary');
+			if (result.random == true)
+				$('#random').addClass('btn-primary');
+			$('#repeat').removeClass('btn-primary');
+			if (result.loop == true)
+				$('#repeat').addClass('btn-primary');
+		};
+	player.volume = function(result)
+		{
+			$('#volumebar').data('level',result.level);
+			$('#volumebar').attr('aria-valuenow',result.level).css('width', result.level+"%");
+			if ($('#volume').css('display') == 'none')
+				$('#volume').fadeIn( 400 ).delay( 1200 ).slideUp( 300 );
+		};
+	player.capabilities = function(result)
+	{
+		initIHM();
+		var event;
+		for (event in result.events)
+		{
+			switch (result.events[event].method)
+			{
+			case "onchange":
+				// is too late to set player.onchange here
+			break;
+			}
+		}
+		var action;
+		for (action in result.actions)
+		{
+			switch (result.actions[action].method)
+			{
+			case "pause":
+				$('#playpause').removeClass('hidden');
+				player.play = playerstate
+				player.pause = playerstate;
+			break;
+			case "stop":
+				$('#stop').removeClass('hidden');
+				player.stop = playerstate;
+			break;
+			case "next":
+				$('#next').removeClass('hidden');
+				player.next = playerstate;
+			break;
+			case "status":
+				player.status = playerstate;
+			break;
+			case "options":
+				for (param in result.actions[action].params)
+				{
+					if (result.actions[action].params[param] == "random");
+					{
+						$('#random').removeClass('hidden')
+							.on("click", function()
+								{
+									if ($('#random').hasClass('btn-primary'))
+										player.send("options", {random:false});
+									else
+										player.send("options", {random:true});
+								});
+					}
+					if (result.actions[action].params[param] == "loop");
+					{
+						$('#repeat').removeClass('hidden')
+							.on("click", function()
+								{
+									if ($('#repeat').hasClass('btn-primary'))
+										player.send("options", {loop:false});
+									else
+										player.send("options", {loop:true});
+								});
+					}
+				}
+			break;
+			case "list":
+				$('#PlayList').removeClass('hidden');
+				player.list = playerlist;
+			break;
+			case "volume":
+				$('#volume_down').removeClass('hidden');
+				$('#volume_up').removeClass('hidden');
+			break;
+			}
+		}
+	};
+	$('#playpause').on('click', function (event)
+		{
+			if (player.state == "play")
+				player.send("pause", null);
+			else
+				player.send("play", null);
+		});
+	$('#next').on('click', function (event)
+		{
+			player.send("next", null);
+		});
+	$('#test').on('click', function (event)
+		{
+			player.send('capabilities', null);
+		});
+	$('#PagerList').find('.next')
+		.addClass('disabled')
+		.on("click", function(evt)
+			{
+				player.send("list", {maxitems:5, first:$(this).data('firstid') + 5});
+			});
+	$('#PagerList').find('.previous')
+		.addClass('disabled')
+		.on("click", function(evt)
+			{
+				player.send("list", {maxitems:5, first:$(this).data('firstid') - 5});
+			});
+	$('#volume_down').on("click", function(evt)
+		{
+			player.send("volume", {step:-5});
+		});
+	$('#volume_up').on("click", function(evt)
+		{
+			player.send("volume", {step:5});
+		});
+	if (configs.media != undefined)
+	{
+		var i;
+		for (i in configs.media)
+		{
+			var media = configs.media[i];
+			var options = "";
+			if (media.options != undefined && media.options.length > 0)
+			{
+				options = media.options;
+			}
+			var entry = $("<li class='media'><a href='#' class='select' data-media='"+media.media+"' data-options='"+JSON.stringify(options)+"'>"+media.name+"</a></li>");
+			$(entry).find('a.select').on("click", function (evt)
+				{
+					$('#PlayList').data('options',$(evt.target).data('options'));
+					$('.media').removeClass('active');
+					$(evt.target).parent('li').addClass('active');
+					var media = $(evt.target).data('media');
+					player.send('change', {media:media});
+				});
+			$('#media').removeClass('hidden').append(entry);
+		}
+	}
+	player.connect();
+});
+		</script>
+	</head>
+	<body style="padding-top: 70px;">
+		<nav class="navbar navbar-default navbar-fixed-top">
+			<div class="container-fluid">
+				<div class="navbar-header">
+					<button type="button" class="collapsed navbar-toggle" data-toggle="collapse" data-target="#bs-navbar-collapse-1" aria-expanded="false">
+						<span class="sr-only">Toggle navigation</span>
+						<span class="glyphicon glyphicon-menu-hamburger" aria-hidden="true"></span>
+					</button>
+<!--
+					<div class="collapse navbar-collapse" id="bs-navbar-collapse-1">
+					</div>
+-->
+					<a href="#" class="navbar-brand hidden-xs">Ouistiti</a>
+				</div>
+					<ul class="nav navbar-nav collapse navbar-collapse" id="bs-navbar-collapse-1">
+						<li class="dropdown"> <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Media<span class="caret"></span></a>
+							<ul class="dropdown-menu" id='media'>
+							</ul>
+						</li>
+					</ul>
+				<div class="nav navbar-form navbar-header">
+					<div class="input-group">
+						<div class="input-group-btn">
+							<button type="button" class="action-btn btn btn-lg btn-default" id='stop' aria-expanded="false">
+								<span class="sr-only">Play</span>
+								<span class="glyphicon glyphicon-stop" aria-hidden="true"></span>
+							</button>
+							<button type="button" class="action-btn btn btn-lg btn-default" id='playpause' aria-expanded="false">
+								<span class="sr-only">Play</span>
+								<span class="glyphicon glyphicon-play" aria-hidden="true"></span>
+							</button>
+							<button type="button" class="action-btn btn btn-lg btn-default" id='next' aria-expanded="false">
+								<span class="sr-only">Next</span>
+								<span class="glyphicon glyphicon-fast-forward" aria-hidden="true"></span>
+							</button>
+						</div>
+					</div>
+					<div class="input-group">
+						<div class="input-group-btn">
+							<button type="button" class="action-btn btn btn-lg btn-default" id='random' aria-expanded="false">
+								<span class="sr-only">Random</span>
+								<span class="glyphicon glyphicon-random" aria-hidden="true"></span>
+							</button>
+							<button type="button" class="action-btn btn btn-lg btn-default" id='repeat' aria-expanded="false">
+								<span class="sr-only">Repeat</span>
+								<span class="glyphicon glyphicon-repeat" aria-hidden="true"></span>
+							</button>
+						</div>
+					</div>
+					<div class="input-group">
+						<div class="input-group-btn">
+							<button type="button" class="action-btn btn btn-lg btn-default" id='volume_down' aria-expanded="false">
+								<span class="sr-only">Volume Down</span>
+								<span class="glyphicon glyphicon-volume-down" aria-hidden="true"></span>
+							</button>
+							<button type="button" class="action-btn btn btn-lg btn-default" id='volume_up' aria-expanded="false">
+								<span class="sr-only">Volume Up</span>
+								<span class="glyphicon glyphicon-volume-up" aria-hidden="true"></span>
+							</button>
+						</div>
+					</div>
+				</div>
+			</div>
+		</nav>
+		<div id='volume' class="container panel panel-default" style="position:fixed; z-index:10">
+			<div class="row">
+				<div class="col-xs-1 glyphicon glyphicon-volume-down" aria-hidden="true"></div>
+				<div class="col-xs-10 progress">
+				  <div id='volumebar'class="progress-bar" role="progressbar" aria-valuenow="60" aria-valuemin="0" aria-valuemax="100" style="width: 60%;">
+					<span class="sr-only">60% Complete</span>
+				  </div>
+				</div>
+				<div class="col-xs-1 glyphicon glyphicon-volume-up" aria-hidden="true"></div>
+			</div>
+		</div>
+		<div class="container">
+			<div id="Message" class="row hidden alert alert-warning"></div>
+			<div class="row">
+				<div class="col-md-6 hidden-xs">
+					<div class="panel panel-default">
+						<div class="panel-heading">
+							<div class="row">
+								<h3 class="col-xs-9" id='list'>Play List</h3>
+							</div>
+						</div>
+						<div class="panel-body">
+							<div class="list-group container-fluid ProtectedButton" id='PlayList'>
+							</div>
+							<nav aria-label="Page navigation">
+							  <ul id='PagerList' or-class="pagination" class="pager">
+								<li class="disabled previous">
+								  <a href="#" aria-label="Previous">
+									<span aria-hidden="true">&laquo;</span>
+								  </a>
+								</li>
+								<li class="next">
+								  <a href="#" aria-label="Next">
+									<span aria-hidden="true">&raquo;</span>
+								  </a>
+								</li>
+							  </ul>
+							</nav>
+						</div>
+					</div>
+				</div>
+
+				<div class="col-md-6 col-xs-12" id='info'>
+					<div class="panel panel-default">
+						<div class="panel-heading"><h3 id='Title'></h3><h4 id='Artist'></h4></div>
+						<div class="panel-body">
+							<div class="container-fluid">
+								<div class="row">
+									<span><h4 class="col-sd-9" id ='Album'></h4> Track<div class="col-sd-3" id='Track'></div></span>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+ 	</body>
+</html>

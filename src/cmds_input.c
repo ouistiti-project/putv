@@ -91,9 +91,11 @@ static int method_random(cmds_ctx_t *ctx, char *arg)
 {
 	int enable = 1;
 	if (arg != NULL)
-		atoi(arg);
-	enable = ctx->media->ops->options(ctx->media->ctx, MEDIA_RANDOM, enable);
-	return enable;
+		enable = atoi(arg);
+	if (ctx->media->ops->random == NULL)
+		return -1;
+	ctx->media->ops->random(ctx->media->ctx, enable);
+	return 0;
 }
 
 static int cmds_input_cmd(cmds_ctx_t *ctx)
@@ -177,7 +179,7 @@ static int cmds_input_run(cmds_ctx_t *ctx)
 	return 0;
 }
 
-static cmds_ctx_t *cmds_input_init(player_ctx_t *player, void *arg)
+static cmds_ctx_t *cmds_input_init(player_ctx_t *player, sink_t *sink, void *arg)
 {
 	cmds_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->player = player;

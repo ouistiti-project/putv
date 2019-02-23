@@ -57,6 +57,7 @@ typedef struct media_dirlist_s media_dirlist_t;
 struct media_ctx_s
 {
 	const char *url;
+	player_ctx_t *player;
 	int mediaid;
 	int firstmediaid;
 	int count;
@@ -106,7 +107,8 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data);
 static int media_play(media_ctx_t *ctx, media_parse_t play, void *data);
 static int media_next(media_ctx_t *ctx);
-static media_dirlist_t *media_random(media_ctx_t *ctx, int enable);
+static void media_random(media_ctx_t *ctx, int enable);
+static void media_loop(media_ctx_t *ctx, int enable);
 static int media_end(media_ctx_t *ctx);
 
 /**
@@ -467,32 +469,14 @@ static void media_loop(media_ctx_t *ctx, int enable)
 		ctx->options &= ~OPTION_LOOP;
 }
 
-static media_dirlist_t *media_random(media_ctx_t *ctx, int enable)
+static void media_random(media_ctx_t *ctx, int enable)
 {
-	media_dirlist_t *dir = NULL;
 	if (enable)
 	{
 		ctx->options |= OPTION_RANDOM;
 	}
 	else
 		ctx->options &= ~OPTION_RANDOM;
-	return dir;
-}
-
-static int media_options(media_ctx_t *ctx, media_options_t option, int enable)
-{
-	int ret = 0;
-	if (option == MEDIA_LOOP)
-	{
-		media_loop(ctx, enable);
-		ret = (ctx->options & OPTION_LOOP) == OPTION_LOOP;
-	}
-	else if (option == MEDIA_RANDOM)
-	{
-		media_random(ctx, enable);
-		ret = (ctx->options & OPTION_RANDOM) == OPTION_RANDOM;
-	}
-	return ret;
 }
 
 #ifdef USE_INOTIFY
@@ -534,6 +518,11 @@ static void *_check_dir(void *arg)
 					_find_mediaid_t data = {ctx->mediaid, NULL, NULL};
 					ctx->mediaid = -1;
 					_find(ctx, 0, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
+					if (ctx->mediaid == -1)
+					{
+						media_end(ctx);
+						player_state(ctx->player, STATE_STOP);
+					}
 				}
 #if 0
 				else if (event->mask & IN_MODIFY)
@@ -548,7 +537,7 @@ static void *_check_dir(void *arg)
 }
 #endif
 
-static media_ctx_t *media_init(const char *url,...)
+static media_ctx_t *media_init(player_ctx_t *player, const char *url,...)
 {
 	media_ctx_t *ctx = NULL;
 	if (url)
@@ -568,6 +557,7 @@ static media_ctx_t *media_init(const char *url,...)
 			return NULL;
 
 		ctx = calloc(1, sizeof(*ctx));
+		ctx->player = player;
 		ctx->url = url;
 		ctx->mediaid = -1;
 		ctx->firstmediaid = 0;
@@ -621,5 +611,6 @@ const media_ops_t *media_dir = &(const media_ops_t)
 	.insert = media_insert,
 	.count = media_count,
 	.end = media_end,
-	.options = media_options,
+	.random = media_random,
+	.loop = media_loop,
 };

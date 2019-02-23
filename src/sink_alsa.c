@@ -39,9 +39,11 @@ typedef struct sink_ctx_s sink_ctx_t;
 struct sink_ctx_s
 {
 	player_ctx_t *player;
-	const sink_t *ops;
 	char *soundcard;
 	snd_pcm_t *playback_handle;
+	snd_mixer_t *mixer;
+	snd_mixer_elem_t* mixerchannel;
+
 	pthread_t thread;
 	jitter_t *in;
 	state_t state;
@@ -66,6 +68,28 @@ struct sink_ctx_s
 
 #define LATENCE_MS 50
 #define NB_BUFFER 6
+
+#ifdef SINK_ALSA_MIXER
+void _mixer_setvolume(sink_ctx_t *ctx, unsigned int volume)
+{
+    long min, max;
+    snd_mixer_selem_get_playback_volume_range(ctx->mixerchannel, &min, &max);
+	if (volume > 100)
+		volume == 100;
+    snd_mixer_selem_set_playback_volume_all(ctx->mixerchannel, volume * max / 100);
+}
+
+unsigned int _mixer_getvolume(sink_ctx_t *ctx)
+{
+	long volume;
+    long min, max;
+
+    snd_mixer_selem_get_playback_volume_range(ctx->mixerchannel, &min, &max);
+    snd_mixer_selem_get_playback_volume(ctx->mixerchannel, 0, &volume);
+
+    return (unsigned int) volume * 100 / max;
+}
+#endif
 
 static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate, unsigned int *size)
 {
@@ -232,7 +256,6 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 	jitter_format_t format = SINK_ALSA_FORMAT;
 	sink_ctx_t *ctx = calloc(1, sizeof(*ctx));
 
-	ctx->ops = sink_alsa;
 	ctx->soundcard = strdup(soundcard);
 #ifdef SINK_ALSA_CONFIG
 	char *setting = strchr(ctx->soundcard, ':');
@@ -260,6 +283,20 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 		return NULL;
 	}
 
+#ifdef SINK_ALSA_MIXER
+    snd_mixer_selem_id_t *sid;
+
+    snd_mixer_open(&ctx->mixer, 0);
+    snd_mixer_attach(ctx->mixer, ctx->soundcard);
+    snd_mixer_selem_register(ctx->mixer, NULL, NULL);
+    snd_mixer_load(ctx->mixer);
+
+    snd_mixer_selem_id_alloca(&sid);
+    snd_mixer_selem_id_set_index(sid, 0);
+    snd_mixer_selem_id_set_name(sid, "Master");
+    ctx->mixerchannel = snd_mixer_find_selem(ctx->mixer, sid);
+#endif
+	
 	jitter_t *jitter = jitter_scattergather_init(jitter_name, NB_BUFFER, size);
 #ifdef SAMPLERATE_AUTO
 	jitter->ctx->frequence = 0;
@@ -297,6 +334,7 @@ static int _alsa_checksamplerate(sink_ctx_t *ctx)
 #endif
 	return ret;
 }
+
 static void *alsa_thread(void *arg)
 {
 	int ret;
@@ -370,14 +408,20 @@ static int alsa_run(sink_ctx_t *ctx)
 
 static void alsa_destroy(sink_ctx_t *ctx)
 {
-	pthread_join(ctx->thread, NULL);
+	if (ctx->thread)
+		pthread_join(ctx->thread, NULL);
 	_pcm_close(ctx);
+#ifdef SINK_ALSA_MIXER
+	if (ctx->mixer)
+		snd_mixer_close(ctx->mixer);
+#endif
+
 	jitter_scattergather_destroy(ctx->in);
 	free(ctx->soundcard);
 	free(ctx);
 }
 
-const sink_t *sink_alsa = &(sink_t)
+const sink_ops_t *sink_alsa = &(sink_ops_t)
 {
 	.init = alsa_init,
 	.jitter = alsa_jitter,
@@ -385,10 +429,34 @@ const sink_t *sink_alsa = &(sink_t)
 	.destroy = alsa_destroy,
 };
 
-#ifndef SINK_GET
-#define SINK_GET
-const sink_t *sink_get(sink_ctx_t *ctx)
+#ifdef SINK_ALSA_MIXER
+const sink_ops_t *sink_alsa_mixer = &(sink_ops_t)
 {
-	return ctx->ops;
-}
+	.init = alsa_init,
+	.jitter = alsa_jitter,
+	.run = alsa_run,
+	.destroy = alsa_destroy,
+
+	.getvolume = _mixer_getvolume,
+	.setvolume = _mixer_setvolume,
+};
 #endif
+
+static sink_t _sink = {0};
+sink_t *sink_build(player_ctx_t *player, const char *arg)
+{
+	const sink_ops_t *sinkops = NULL;
+#ifdef SINK_ALSA_MIXER
+	sinkops = sink_alsa_mixer;
+	_sink.ctx = sinkops->init(player, arg);
+	if (_sink.ctx == NULL)
+#endif
+	{
+		sinkops = sink_alsa;
+		_sink.ctx = sinkops->init(player, arg);
+	}
+	if (_sink.ctx == NULL)
+		return NULL;
+	_sink.ops = sinkops;
+	return &_sink;
+}

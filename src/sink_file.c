@@ -118,7 +118,7 @@ static void sink_destroy(sink_ctx_t *sink)
 	free(sink);
 }
 
-const sink_t *sink_file = &(sink_t)
+const sink_ops_t *sink_file = &(sink_ops_t)
 {
 	.init = sink_init,
 	.jitter = sink_jitter,
@@ -126,10 +126,14 @@ const sink_t *sink_file = &(sink_t)
 	.destroy = sink_destroy,
 };
 
-#ifndef SINK_GET
-#define SINK_GET
-const sink_t *sink_get(sink_ctx_t *ctx)
+static sink_t _sink = {0};
+sink_t *sink_build(player_ctx_t *player, const char *arg)
 {
-	return ctx->ops;
+	const sink_ops_t *sinkops = NULL;
+	sinkops = sink_file;
+	_sink.ctx = sinkops->init(player, arg);
+	if (_sink.ctx == NULL)
+		return NULL;
+	_sink.ops = sinkops;
+	return &_sink;
 }
-#endif

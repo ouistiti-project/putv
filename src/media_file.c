@@ -156,25 +156,9 @@ static int media_list(media_ctx_t *ctx, media_parse_t cb, void *data)
 	return media_find(ctx, -1, cb, data);
 }
 
-static int media_play(media_ctx_t *ctx, media_parse_t cb, void *data)
-{
-	int ret = -1;
-	if (ctx->current != NULL)
-	{
-		ret = cb(data, ctx->current->id, ctx->current->url, ctx->current->info, ctx->current->mime);
-		if (ret > -1)
-			ret = ctx->current->id;
-	}
-	return ret;
-}
-
 static int media_next(media_ctx_t *ctx)
 {
 	int ret = -1;
-	if (ctx->current != NULL)
-		ctx->current = ctx->current->next;
-	else
-		ctx->current = ctx->media;
 	if ((ctx->current == NULL) && (ctx->options & OPTION_LOOP))
 	{
 		dbg("media loop");
@@ -182,6 +166,25 @@ static int media_next(media_ctx_t *ctx)
 	}
 
 	if (ctx->current != NULL)
+		ret = ctx->current->id;
+	return ret;
+}
+
+static int media_play(media_ctx_t *ctx, media_parse_t cb, void *data)
+{
+	int ret = -1;
+	if (ctx->current != NULL)
+		ctx->current = ctx->current->next;
+	else
+		ctx->current = ctx->media;
+
+	/**
+	 * We have to accept that ctx_>current->next == NULL
+	 * otherwise we manage the loop.
+	 */
+	if (ctx->current != NULL)
+		ret = cb(data, ctx->current->id, ctx->current->url, ctx->current->info, ctx->current->mime);
+	if (ret > -1)
 		ret = ctx->current->id;
 	return ret;
 }
@@ -207,22 +210,7 @@ static void media_random(media_ctx_t *ctx, int enable)
 {
 }
 
-static int media_options(media_ctx_t *ctx, media_options_t option, int enable)
-{
-	int ret = 0;
-	if (option == MEDIA_LOOP)
-	{
-		media_loop(ctx, enable);
-		ret = (ctx->options & OPTION_LOOP) == OPTION_LOOP;
-	}
-	else if (option == MEDIA_RANDOM)
-	{
-		ret = 0;
-	}
-	return ret;
-}
-
-static media_ctx_t *media_init(const char *url,...)
+static media_ctx_t *media_init(player_ctx_t *player, const char *url,...)
 {
 	media_ctx_t *ctx = NULL;
 	if (url)
@@ -249,13 +237,14 @@ const media_ops_t *media_file = &(const media_ops_t)
 {
 	.init = media_init,
 	.destroy = media_destroy,
-	.next = media_next,
 	.play = media_play,
+	.next = media_next,
 	.list = media_list,
 	.find = media_find,
 	.remove = media_remove,
 	.insert = media_insert,
 	.count = media_count,
 	.end = media_end,
-	.options = media_options,
+	.random = NULL,
+	.loop = media_loop,
 };

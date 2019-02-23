@@ -35,6 +35,18 @@
 
 #include <pthread.h>
 
+/**
+ * user database access
+ */
+# include <pwd.h>
+# include <grp.h>
+/**
+ * directory access
+ */
+# include <sys/stat.h>
+# include <sys/types.h>
+# include <unistd.h>
+
 #include "player.h"
 #include "encoder.h"
 #include "sink.h"
@@ -99,11 +111,14 @@ int main(int argc, char **argv)
 	const char *root = "/tmp";
 	int mode = 0;
 	const char *name = basename(argv[0]);
-	
+	const char *user = NULL;
+	const char *pidfile = NULL;
+	const char *filtername = "pcm_stereo";
+
 	int opt;
 	do
 	{
-		opt = getopt(argc, argv, "R:m:o:hDVxalr");
+		opt = getopt(argc, argv, "R:m:o:u:p:f:hDVxalr");
 		switch (opt)
 		{
 			case 'R':
@@ -114,6 +129,15 @@ int main(int argc, char **argv)
 			break;
 			case 'o':
 				outarg = optarg;
+			break;
+			case 'u':
+				user = optarg;
+			break;
+			case 'p':
+				pidfile = optarg;
+			break;
+			case 'f':
+				filtername = optarg;
 			break;
 			case 'h':
 				return -1;
@@ -136,12 +160,19 @@ int main(int argc, char **argv)
 		}
 	} while(opt != -1);
 
-	if ((mode & DAEMONIZE) && fork() != 0)
+	pid_t pid = 0;
+	if ((mode & DAEMONIZE) && ((pid = fork()) != 0))
 	{
+		if (pidfile != NULL)
+		{
+			FILE *file = fopen(pidfile, "w");
+			fprintf(file, "%d\n", pid);
+			fclose(file);
+		}
 		return 0;
 	}
 
-	player_ctx_t *player = player_init();
+	player_ctx_t *player = player_init(filtername);
 	player_change(player, mediapath, (mode & RANDOM), (mode & LOOP));
 
 	if (mode & AUTOSTART)
@@ -165,41 +196,69 @@ int main(int argc, char **argv)
 #endif
 	}
 
+	uid_t pw_uid = getuid();
+	gid_t pw_gid = getgid();
+	if (user != NULL)
+	{
+		struct passwd *result;
+		result = getpwnam(user);
+		if (result == NULL)
+		{
+			err("Error: user %s not found\n", user);
+			return -1;
+		}
+		pw_uid = result->pw_uid;
+		pw_gid = result->pw_gid;
+	}
+
+	struct stat rootstat;
+	int ret = stat(root,&rootstat);
+	if (ret != 0)
+	{
+		mkdir(root, 0770);
+		ret = stat(root,&rootstat);
+		if (ret != 0)
+		{
+			err("the directory %s is not available", root);
+		}
+	}
+
+	sink_t *sink = sink_build(player, outarg);;
+
 	cmds_t cmds[3];
 	int nbcmds = 0;
 #ifdef CMDLINE
 	if (!(mode & DAEMONIZE))
 	{
 		cmds[nbcmds].ops = cmds_line;
-		cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, NULL);
+		cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, sink, NULL);
 		nbcmds++;
 	}
 #endif
 #ifdef CMDINPUT
 	cmds[nbcmds].ops = cmds_input;
-	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, CMDINPUT_PATH);
+	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, sink, CMDINPUT_PATH);
 	nbcmds++;
 #endif
 #ifdef JSONRPC
 	char socketpath[256];
 	snprintf(socketpath, sizeof(socketpath) - 1, "%s/%s", root, name);
 	cmds[nbcmds].ops = cmds_json;
-	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, (void *)socketpath);
+	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, sink, (void *)socketpath);
 	nbcmds++;
 #endif
+
+	setegid(pw_gid);
+	if (seteuid(pw_uid))
+		err("Error: start server as root");
 
 	int i;
 	for (i = 0; i < nbcmds; i++)
 		cmds[i].ops->run(cmds[i].ctx);
 
-	const sink_t *sink;
-	sink_ctx_t *sink_ctx;
+	sink->ops->run(sink->ctx);
 	jitter_t *sink_jitter = NULL;
-
-	sink = SINK;
-	sink_ctx = sink->init(player, outarg);
-	sink->run(sink_ctx);
-	sink_jitter = sink->jitter(sink_ctx);
+	sink_jitter = sink->ops->jitter(sink->ctx);
 
 #ifdef USE_REALTIME
 	struct sched_param params;
@@ -209,7 +268,7 @@ int main(int argc, char **argv)
 
 	run_player(player, sink_jitter);
 
-	sink->destroy(sink_ctx);
+	sink->ops->destroy(sink->ctx);
 	player_destroy(player);
 
 	for (i = 0; i < nbcmds; i++)

@@ -52,12 +52,7 @@ struct decoder_ctx_s
 	jitter_t *out;
 	unsigned char *outbuffer;
 	size_t outbufferlen;
-#ifdef FILTER
-	filter_t filter;
-#else
-	unsigned char samplesize;
-#endif
-	unsigned char nchannels;
+	filter_t *filter;
 };
 #define DECODER_CTX
 #include "decoder.h"
@@ -134,13 +129,18 @@ enum mad_flow output(void *data,
 	audio.regain = 0;
 	int i;
 	for (i = 0; i < audio.nchannels && i < MAXCHANNELS; i++)
+	{
 		audio.samples[i] = pcm->samples[i];
+#ifdef FILTER_SCALING
+		ctx->filter->ops->scaling(ctx->filter->ctx, audio.samples[i], audio.nsamples);
+#endif
+	}
 	decoder_dbg("decoder mad: audio frame %d Hz, %d channels, %d samples", audio.samplerate, audio.nchannels, audio.nsamples);
 
 	unsigned int nsamples;
 	if (audio.nchannels == 1)
 		audio.samples[1] = audio.samples[0];
-#ifdef FILTER
+
 	while (audio.nsamples > 0)
 	{
 		if (ctx->outbuffer == NULL)
@@ -149,7 +149,7 @@ enum mad_flow output(void *data,
 		}
 
 		ctx->outbufferlen +=
-			ctx->filter.ops->run(ctx->filter.ctx, &audio,
+			ctx->filter->ops->run(ctx->filter->ctx, &audio,
 				ctx->outbuffer + ctx->outbufferlen,
 				ctx->out->ctx->size - ctx->outbufferlen);
 		if (ctx->outbufferlen >= ctx->out->ctx->size)
@@ -159,40 +159,6 @@ enum mad_flow output(void *data,
 			ctx->outbufferlen = 0;
 		}
 	}
-#else
-	for (i = 0; i < audio.nsamples; i++)
-	{
-		if (ctx->outbuffer == NULL)
-		{
-			ctx->outbuffer = ctx->out->ops->pull(ctx->out->ctx);
-		}
-		signed int sample;
-		sample = audio.samples[0][i];
-
-		int j;
-		for (j = 0; j < ctx->samplesize; j++)
-		{
-			*(ctx->outbuffer + ctx->outbufferlen + j) = (sample >> (j * 8) ) & 0x00FF;
-		}
-		ctx->outbufferlen += 4;
-		if (ctx->nchannels == 2)
-		{
-			if (audio.nchannels > 1)
-				sample = audio.samples[1][i];
-			for (j = 0; j < ctx->samplesize; j++)
-			{
-				*(ctx->outbuffer + ctx->outbufferlen + j) = (sample >> (j * 8) ) & 0x00FF;
-			}
-			ctx->outbufferlen += 4;
-		}
-		if (ctx->outbufferlen >= ctx->out->ctx->size)
-		{
-			ctx->out->ops->push(ctx->out->ctx, ctx->out->ctx->size, NULL);
-			ctx->outbuffer = NULL;
-			ctx->outbufferlen = 0;
-		}
-	}
-#endif
 
 	return MAD_FLOW_CONTINUE;
 }
@@ -227,7 +193,7 @@ enum mad_flow error(void *data,
 		}
 		else
 #endif
-			dbg("decoder mad: error 0x%04x (%s) at byte offset %p",
+			decoder_dbg("decoder mad: error 0x%04x (%s) at byte offset %p",
 				stream->error, mad_stream_errorstr(stream),
 				stream->this_frame );
 		return MAD_FLOW_CONTINUE;
@@ -250,12 +216,12 @@ enum mad_flow error(void *data,
 #define NBUFFER 3
 
 static const char *jitter_name = "mad decoder";
-static decoder_ctx_t *mad_init(player_ctx_t *player)
+static decoder_ctx_t *mad_init(player_ctx_t *player, filter_t *filter)
 {
 	decoder_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->ops = decoder_mad;
-	ctx->nchannels = 2;
 
+	ctx->filter = filter;
 	mad_decoder_init(&ctx->decoder, ctx,
 			input, 0 /* header */, 0 /* filter */, output,
 			error, 0 /* message */);
@@ -294,46 +260,7 @@ static void *mad_thread(void *arg)
 static int mad_run(decoder_ctx_t *ctx, jitter_t *jitter)
 {
 	ctx->out = jitter;
-	/**
-	 * Initialization of the filter here.
-	 * Because we need the jitter out.
-	 */
-#ifdef FILTER
-#ifdef FILTER_SCALING
-	ctx->filter.ops = filter_pcm_scaling;
-#else
-	ctx->filter.ops = filter_pcm;
-#endif
-	ctx->filter.ctx = ctx->filter.ops->init(jitter->ctx->frequence, ctx->out->format);
-#else
-	switch (ctx->out->format)
-	{
-	case PCM_16bits_LE_mono:
-		ctx->samplesize = 2;
-		ctx->nchannels = 1;
-	break;
-	case PCM_16bits_LE_stereo:
-		ctx->samplesize = 2;
-		ctx->nchannels = 2;
-	break;
-	case PCM_24bits3_LE_stereo:
-		ctx->samplesize = 3;
-		ctx->nchannels = 2;
-	break;
-	case PCM_24bits4_LE_stereo:
-		ctx->samplesize = 4;
-		ctx->nchannels = 2;
-	break;
-	case PCM_32bits_BE_stereo:
-	case PCM_32bits_LE_stereo:
-		ctx->samplesize = 4;
-		ctx->nchannels = 2;
-	break;
-	default:
-		err("decoder out format not supported %d", ctx->out->format);
-		return -1;
-	}
-#endif
+	ctx->filter->ops->set(ctx->filter->ctx, NULL, jitter->ctx->frequence);
 	pthread_create(&ctx->thread, NULL, mad_thread, ctx);
 	return 0;
 }
@@ -348,13 +275,10 @@ static int decoder_check(const char *path)
 
 static void mad_destroy(decoder_ctx_t *ctx)
 {
-	pthread_join(ctx->thread, NULL);
+	if (ctx->thread > 0)
+		pthread_join(ctx->thread, NULL);
 	/* release the decoder */
 	mad_decoder_finish(&ctx->decoder);
-#ifdef FILTER
-	if (ctx->filter.ops && ctx->filter.ctx)
-		ctx->filter.ops->destroy(ctx->filter.ctx);
-#endif
 	JITTER_destroy(ctx->in);
 	free(ctx);
 }

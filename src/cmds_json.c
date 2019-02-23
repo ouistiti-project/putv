@@ -36,20 +36,28 @@
 #include "unix_server.h"
 #include "player.h"
 #include "jsonrpc.h"
+#define DATA_LENGTH 1200
 typedef struct cmds_ctx_s cmds_ctx_t;
 struct cmds_ctx_s
 {
 	player_ctx_t *player;
+	sink_t *sink;
 	const char *socketpath;
 	pthread_t thread;
 	pthread_mutex_t mutex;
 	thread_info_t *info;
+	struct
+	{
+		char data[DATA_LENGTH];
+		int length;
+	} buff_snd;
 };
 #define CMDS_CTX
 #include "cmds.h"
 #include "media.h"
 #include "decoder.h"
 #include "src.h"
+#include "sink.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -58,6 +66,8 @@ struct cmds_ctx_s
 #else
 #define dbg(...)
 #endif
+
+#define cmds_dbg(...)
 
 #ifdef DEBUG
 #define JSONRPC_DEBUG_FORMAT JSON_INDENT(2)
@@ -114,50 +124,58 @@ typedef struct entry_s
 	json_t *list;
 	int max;
 	int first;
-	int index;
+	int count;
 } entry_t;
 
 static int _append_entry(void *arg, int id, const char *url,
 		const char *info, const char *mime)
 {
+	int ret = 0;
 	entry_t *entry = (entry_t*)arg;
 
-	entry->index++;
-	if ((entry->index > entry->first) && (entry->index <= (entry->first + entry->max)))
+	if ((id >= entry->first) && entry->max)
 	{
 		json_t *object = json_object();
-		if (_print_entry(object, url, info, mime) == 0)
+		if (id >= 0 &&_print_entry(object, url, info, mime) == 0)
 		{
 			json_t *index = json_integer(id);
 			json_object_set(object, "id", index);
 			json_array_append_new(entry->list, object);
+			entry->max--;
+			entry->count++;
+			if (entry->max == 0)
+				ret = -1;
 		}
 		else
 			json_decref(object);
 	}
-	if (entry->index > (entry->first + entry->max))
-	{
-		return -1;
-	}
-	return 0;
+	return ret;
 }
 
 static int method_list(json_t *json_params, json_t **result, void *userdata)
 {
 	int ret;
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
-
 	media_t *media = player_media(ctx->player);
 	int count = media->ops->count(media->ctx);
 	int nbitems = MAX_ITEMS;
 	nbitems = (count < nbitems)? count:nbitems;
 
+	if (media->ops->list == NULL)
+	{
+		*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
+		return -1;
+	}
+
 	entry_t entry;
 	entry.list = json_array();
 
-	json_t *maxitems = json_object_get(json_params, "maxitems");
-	if (maxitems)
-		entry.max = (json_integer_value(maxitems) < nbitems)?json_integer_value(maxitems):nbitems;
+	json_t *maxitems_js = json_object_get(json_params, "maxitems");
+	if (maxitems_js)
+	{
+		int maxitems = json_integer_value(maxitems_js);
+		entry.max = (maxitems < nbitems)?maxitems:nbitems;
+	}
 	else
 		entry.max = nbitems;
 
@@ -167,9 +185,9 @@ static int method_list(json_t *json_params, json_t **result, void *userdata)
 	else
 		entry.first = 0;
 
-	entry.index = 0;
+	entry.count = 0;
 	media->ops->list(media->ctx, _append_entry, (void *)&entry);
-	*result = json_pack("{s:i,s:i,s:o}", "count", count, "nbitems", nbitems, "playlist", entry.list);
+	*result = json_pack("{s:i,s:i,s:o}", "count", count, "nbitems", entry.count, "playlist", entry.list);
 
 	return 0;
 }
@@ -179,6 +197,12 @@ static int method_remove(json_t *json_params, json_t **result, void *userdata)
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 	media_t *media = player_media(ctx->player);
 	int ret;
+
+	if (media->ops->remove == NULL)
+	{
+		*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
+		return -1;
+	}
 
 	if (json_is_array(json_params))
 	{
@@ -227,6 +251,12 @@ static int method_append(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 	media_t *media = player_media(ctx->player);
+
+	if (media->ops->insert == NULL)
+	{
+		*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
+		return -1;
+	}
 
 	if (json_is_array(json_params)) {
 		int ret;
@@ -453,14 +483,28 @@ static int method_onchange(json_t *json_params, json_t **result, void *userdata)
 		.result = json_object(),
 	};
 	int id = player_mediaid(ctx->player);
+	int count = media->ops->count(media->ctx);
+	const char *mediapath = media_path();
 	ret = media->ops->find(media->ctx, id, _display, &display);
 	if (ret == 1)
 	{
 		*result = display.result;
 	}
+	else
+	{
+		json_decref(display.result);
+	}
 	if (*result == NULL)
 	{
-		*result = json_pack("{s:s}", "state", str_stop);
+		*result = json_pack("{s:s}",
+				"state", str_stop);
+	}
+	json_object_set(*result, "count", json_integer(count));
+	json_object_set(*result, "media", json_string(mediapath));
+	if (ctx->sink->ops->getvolume != NULL)
+	{
+		unsigned int volume = ctx->sink->ops->getvolume(ctx->sink->ctx);
+		json_object_set(*result, "volume", json_integer(volume));
 	}
 	return 0;
 }
@@ -473,29 +517,103 @@ static int method_status(json_t *json_params, json_t **result, void *userdata)
 static int method_options(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
-	int ret;
+	int ret = -1;
 	media_t *media = player_media(ctx->player);
 
-	*result = json_object();
-	json_t *value;
+	json_t *value = NULL;
+	json_t *loop_value = NULL;
+	json_t *random_value = NULL;
 	if (json_is_object(json_params))
 	{
 		value = json_object_get(json_params, "loop");
 		if (json_is_boolean(value))
 		{
 			int state = json_boolean_value(value);
-			ret = media->ops->options(media->ctx, MEDIA_LOOP, state);
-			value = json_boolean(ret);
-			json_object_set(*result, "loop", value);
+			if (media->ops->loop)
+			{
+				media->ops->loop(media->ctx, state);
+				ret = 0;
+			}
+			else
+			{
+				*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
+				return -1;
+			}
+
+			loop_value = json_boolean(state);
 		}
 		value = json_object_get(json_params, "random");
 		if (json_is_boolean(value))
 		{
 			int state = json_boolean_value(value);
-			ret = media->ops->options(media->ctx, MEDIA_RANDOM, state);
-			value = json_boolean(ret);
-			json_object_set(*result, "random", value);
+			if (media->ops->random)
+			{
+				media->ops->random(media->ctx, state);
+				ret = 0;
+			}
+			else
+			{
+				*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
+				return -1;
+			}
+
+			random_value = json_boolean(state);
 		}
+		*result = json_object();
+		if (loop_value != NULL)
+			json_object_set(*result, "loop", loop_value);
+		if (random_value != NULL)
+			json_object_set(*result, "random", random_value);
+	}
+	return 0;
+}
+
+static int method_volume(json_t *json_params, json_t **result, void *userdata)
+{
+	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
+	int ret = -1;
+
+	if (ctx->sink->ops->getvolume == NULL)
+	{
+		*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
+		return -1;
+	}
+	json_t *value = NULL;
+	if (json_is_object(json_params))
+	{
+		value = json_object_get(json_params, "level");
+		if (json_is_integer(value))
+		{
+			if (ctx->sink->ops->setvolume == NULL)
+			{
+				*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
+				return -1;
+			}
+			int volume = json_boolean_value(value);
+			if (volume > 100)
+				volume = 100;
+			if (volume < 0)
+				volume = 0;
+			ctx->sink->ops->setvolume(ctx->sink->ctx, volume);
+		}
+		int volume = ctx->sink->ops->getvolume(ctx->sink->ctx);
+		value = json_object_get(json_params, "step");
+		if (json_is_integer(value))
+		{
+			if (ctx->sink->ops->setvolume == NULL)
+			{
+				*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
+				return -1;
+			}
+			volume += json_integer_value(value);
+			if (volume > 100)
+				volume = 100;
+			if (volume < 0)
+				volume = 0;
+			ctx->sink->ops->setvolume(ctx->sink->ctx, volume);
+		}
+		*result = json_object();
+		json_object_set(*result, "level", json_integer(volume));
 	}
 	return 0;
 }
@@ -525,41 +643,133 @@ static int method_capabilities(json_t *json_params, json_t **result, void *userd
 	actions = json_array();
 
 	json_t *action;
+
+	action = json_object();
+	value = json_string("change");
+	json_object_set(action, "method", value);
+	params = json_array();
+	value = json_string("id");
+	json_array_append(params, value);
+	value = json_string("media");
+	json_array_append(params, value);
+	value = json_string("name");
+	json_array_append(params, value);
+	json_object_set(action, "params", params);
+	json_array_append(actions, action);
+
 	action = json_object();
 	value = json_string("play");
 	json_object_set(action, "method", value);
-	params = json_object();
+	params = json_null();
 	json_object_set(action, "params", params);
 	json_array_append(actions, action);
 	action = json_object();
 	value = json_string("pause");
 	json_object_set(action, "method", value);
-	params = json_object();
+	params = json_null();
 	json_object_set(action, "params", params);
 	json_array_append(actions, action);
 	action = json_object();
 	value = json_string("stop");
 	json_object_set(action, "method", value);
-	params = json_object();
+	params = json_null();
 	json_object_set(action, "params", params);
 	json_array_append(actions, action);
-	action = json_object();
-	value = json_string("next");
-	json_object_set(action, "method", value);
-	params = json_object();
-	json_object_set(action, "params", params);
-	json_array_append(actions, action);
+	if (media->ops->next != NULL)
+	{
+		action = json_object();
+		value = json_string("next");
+		json_object_set(action, "method", value);
+		params = json_null();
+		json_object_set(action, "params", params);
+		json_array_append(actions, action);
+	}
 	action = json_object();
 	value = json_string("status");
 	json_object_set(action, "method", value);
-	params = json_object();
+	params = json_null();
 	json_object_set(action, "params", params);
 	json_array_append(actions, action);
-	value = json_string("list");
-	json_object_set(action, "method", value);
-	params = json_object();
-	json_object_set(action, "params", params);
-	json_array_append(actions, action);
+	if (media->ops->list != NULL)
+	{
+		action = json_object();
+		value = json_string("list");
+		json_object_set(action, "method", value);
+		params = json_array();
+		value = json_string("maxitems");
+		json_array_append(params, value);
+		value = json_string("first");
+		json_array_append(params, value);
+		json_object_set(action, "params", params);
+		json_array_append(actions, action);
+	}
+	if (media->ops->insert != NULL)
+	{
+		action = json_object();
+		value = json_string("append");
+		json_object_set(action, "method", value);
+		params = json_array();
+		value = json_string("url");
+		json_array_append(params, value);
+		value = json_string("id");
+		json_array_append(params, value);
+		json_object_set(action, "params", params);
+		json_array_append(actions, action);
+	}
+	if (media->ops->remove != NULL)
+	{
+		action = json_object();
+		value = json_string("remove");
+		json_object_set(action, "method", value);
+		params = json_array();
+		value = json_string("id");
+		json_array_append(params, value);
+		json_object_set(action, "params", params);
+		json_array_append(actions, action);
+	}
+	action = NULL;
+	if (media->ops->random != NULL)
+	{
+		if (action == NULL)
+		{
+			action = json_object();
+			value = json_string("options");
+			json_object_set(action, "method", value);
+			params = json_array();
+		}
+		value = json_string("random");
+		json_array_append(params, value);
+	}
+	if (media->ops->loop != NULL)
+	{
+		if (action == NULL)
+		{
+			action = json_object();
+			value = json_string("options");
+			json_object_set(action, "method", value);
+			params = json_array();
+		}
+		value = json_string("loop");
+		json_array_append(params, value);
+	}
+	if (action != NULL)
+	{
+		json_object_set(action, "params", params);
+		json_array_append(actions, action);
+	}
+	if (ctx->sink->ops->getvolume != NULL)
+	{
+		action = json_object();
+		value = json_string("volume");
+		json_object_set(action, "method", value);
+		params = json_array();
+		value = json_string("level");
+		json_array_append(params, value);
+		value = json_string("step");
+		json_array_append(params, value);
+		json_object_set(action, "params", params);
+		json_array_append(actions, action);
+	}
 	json_object_set(*result, "actions", actions);
 
 	json_t *input;
@@ -639,8 +849,10 @@ static struct jsonrpc_method_entry_t method_table[] = {
 	{ 'r', "append", method_append, "[]" },
 	{ 'r', "remove", method_remove, "[]" },
 	{ 'r', "status", method_status, "" },
+	{ 'r', "change", method_change, "o" },
 	{ 'n', "onchange", method_onchange, "o" },
 	{ 'r', "options", method_options, "o" },
+	{ 'r', "volume", method_volume, "o" },
 	{ 0, NULL },
 };
 
@@ -650,15 +862,17 @@ static int _cmds_send(const char *buff, size_t size, void *userctx)
 	thread_info_t *info = (thread_info_t *)userctx;
 	cmds_ctx_t *ctx = info->userctx;
 	int sock = info->sock;
-	int ret;
-#if 0
-	char *string = malloc(size + 1);
-	memcpy(string, buff, size);
-	string[size] = 0;
-	warn("send %d: %s", size, string);
-	free(string);
-#endif
-	ret = send(sock, buff, size, MSG_NOSIGNAL);
+	int ret = size;
+
+	if (ctx->buff_snd.length + size + 1 > sizeof(ctx->buff_snd.data))
+	{
+		ret = send(sock, ctx->buff_snd.data, ctx->buff_snd.length, MSG_DONTWAIT | MSG_NOSIGNAL);
+		cmds_dbg("send %d/%d: %s", ret, ctx->buff_snd.length, ctx->buff_snd.data);
+		ctx->buff_snd.length = 0;
+	}
+	memcpy(ctx->buff_snd.data + ctx->buff_snd.length, buff, size);
+	ctx->buff_snd.length += size;
+	ctx->buff_snd.data[ctx->buff_snd.length] = 0;
 	return (ret > 0)?0:-1;
 }
 #endif
@@ -674,7 +888,10 @@ static void jsonrpc_onchange(void * userctx, player_ctx_t *player, state_t state
 	if (notification)
 	{
 		json_dump_callback(notification, _cmds_send, info, JSONRPC_DEBUG_FORMAT);
-		send(info->sock, "", 1, MSG_DONTWAIT | MSG_NOSIGNAL);
+		int sock = info->sock;
+		int ret = send(sock, ctx->buff_snd.data, ctx->buff_snd.length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
+		cmds_dbg("send %d/%d: %s", ret, ctx->buff_snd.length + 1, ctx->buff_snd.data);
+		ctx->buff_snd.length = 0;
 		json_decref(notification);
 	}
 #else
@@ -720,6 +937,7 @@ static int jsonrpc_command(thread_info_t *info)
 		{
 			char buffer[1500];
 			ret = recv(sock, buffer, 1500, MSG_NOSIGNAL);
+			cmds_dbg("recv %d: %s", ret, buffer);
 			if (ret > 0)
 			{
 				json_error_t error;
@@ -727,23 +945,30 @@ static int jsonrpc_command(thread_info_t *info)
 				if (request != NULL)
 				{
 					json_t *response = jsonrpc_jresponse(request, method_table, ctx);
+					/**
+					 * The json callback may send an event before the answer.
+					 * Use lock before jresonse may generate double lock
+					 */
+					pthread_mutex_lock(&ctx->mutex);
 					if (response != NULL)
 					{
 #ifdef JSONRPC_LARGEPACKET
-						pthread_mutex_lock(&ctx->mutex);
 						json_dump_callback(response, _cmds_send, info, JSONRPC_DEBUG_FORMAT);
-						send(sock, "", 1, MSG_DONTWAIT | MSG_NOSIGNAL);
-						pthread_mutex_unlock(&ctx->mutex);
+						if (ctx->buff_snd.length > 0)
+						{
+							int ret = send(sock, ctx->buff_snd.data, ctx->buff_snd.length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
+							cmds_dbg("send %d/%d: %s", ret, ctx->buff_snd.length + 1, ctx->buff_snd.data);
+						}
+						ctx->buff_snd.length = 0;
 #else
-						pthread_mutex_lock(&ctx->mutex);
 						char *buff = json_dumps(response, JSONRPC_DEBUG_FORMAT );
 						ret = send(sock, buff, strlen(buff), MSG_NOSIGNAL);
 						ret = send(sock, "", 1, MSG_DONTWAIT | MSG_NOSIGNAL);
-						pthread_mutex_unlock(&ctx->mutex);
 #endif
 						json_decref(response);
 					}
 					json_decref(request);
+					pthread_mutex_unlock(&ctx->mutex);
 				}
 			}
 			if (ret == 0)
@@ -766,11 +991,12 @@ static int jsonrpc_command(thread_info_t *info)
 	return ret;
 }
 
-static cmds_ctx_t *cmds_json_init(player_ctx_t *player, void *arg)
+static cmds_ctx_t *cmds_json_init(player_ctx_t *player, sink_t *sink, void *arg)
 {
 	cmds_ctx_t *ctx = NULL;
 	ctx = calloc(1, sizeof(*ctx));
 	ctx->player = player;
+	ctx->sink = sink;
 	ctx->socketpath = (const char *)arg;
 	pthread_mutex_init(&ctx->mutex, NULL);
 	return ctx;

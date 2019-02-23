@@ -250,7 +250,8 @@ static void encoder_destroy(encoder_ctx_t *ctx)
 	if (ctx->dumpfd > 0)
 		close(ctx->dumpfd);
 #endif
-	pthread_join(ctx->thread, NULL);
+	if (ctx->thread)
+		pthread_join(ctx->thread, NULL);
 	lame_close(ctx->encoder);
 	/* release the decoder */
 	jitter_scattergather_destroy(ctx->in);

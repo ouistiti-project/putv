@@ -142,12 +142,14 @@ static int alsa_run(sink_ctx_t *ctx)
 
 static void alsa_destroy(sink_ctx_t *ctx)
 {
+	if (ctx->thread)
+		pthread_join(ctx->thread, NULL);
 	pcm_close(ctx->playback_handle);
 	jitter_scattergather_destroy(ctx->in);
 	free(ctx);
 }
 
-const sink_t *sink_tinyalsa = &(sink_t)
+const sink_ops_t *sink_tinyalsa = &(sink_ops_t)
 {
 	.init = alsa_init,
 	.jitter = alsa_jitter,
@@ -155,10 +157,14 @@ const sink_t *sink_tinyalsa = &(sink_t)
 	.destroy = alsa_destroy,
 };
 
-#ifndef SINK_GET
-#define SINK_GET
-const sink_t *sink_get(sink_ctx_t *ctx)
+static sink_t _sink = {0};
+sink_t *sink_build(player_ctx_t *player, const char *arg)
 {
-	return ctx->ops;
+	const sink_ops_t *sinkops = NULL;
+	sinkops = sink_tinyalsa;
+	_sink.ctx = sinkops->init(player, arg);
+	if (_sink.ctx == NULL)
+		return NULL;
+	_sink.ops = sinkops;
+	return &_sink;
 }
-#endif

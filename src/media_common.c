@@ -31,6 +31,7 @@
 
 #include "media.h"
 #include "decoder.h"
+#include "player.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -71,7 +72,8 @@ const char *utils_getpath(const char *url, const char *proto)
 	return path;
 }
 
-media_t *media_build(const char *url)
+static const char *current_path;
+media_t *media_build(player_ctx_t *player, const char *url)
 {
 	const media_ops_t *const media_list[] = {
 	#ifdef MEDIA_DIR
@@ -90,7 +92,7 @@ media_t *media_build(const char *url)
 	media_ctx_t *media_ctx = NULL;
 	while (media_list[i] != NULL)
 	{
-		media_ctx = media_list[i]->init(url);
+		media_ctx = media_list[i]->init(player, url);
 		if (media_ctx != NULL)
 			break;
 		i++;
@@ -103,6 +105,12 @@ media_t *media_build(const char *url)
 	media_t *media = calloc(1, sizeof(*media));
 	media->ops = media_list[i];
 	media->ctx = media_ctx;
+	current_path = url;
 
 	return media;
+}
+
+const char *media_path()
+{
+	return current_path;
 }

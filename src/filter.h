@@ -23,13 +23,18 @@ struct filter_audio_s
 	char regain;
 };
 
+
 #ifndef FILTER_CTX
 typedef void filter_ctx_t;
 #endif
+typedef int (*sampled_t)(filter_ctx_t *ctx, sample_t sample, int bitspersample, unsigned char *out);
 typedef struct filter_ops_s filter_ops_t;
 struct filter_ops_s
 {
-	filter_ctx_t *(*init)(unsigned int rate, jitter_format_t format);
+	const char *name;
+	filter_ctx_t *(*init)(sampled_t sampled, jitter_format_t format, ...);
+	int (*set)(filter_ctx_t *ctx, sampled_t sampled, unsigned int rate);
+	int (*scaling)(filter_ctx_t *ctx, sample_t *samples, int nbsamples);
 	int (*run)(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *buffer, size_t size);
 	void (*destroy)(filter_ctx_t *);
 };
@@ -41,6 +46,6 @@ struct filter_s
 	filter_ctx_t *ctx;
 };
 
-extern const filter_ops_t *filter_pcm;
-extern const filter_ops_t *filter_pcm_scaling;
+filter_t *filter_build(const char *name, jitter_format_t format);
+
 #endif

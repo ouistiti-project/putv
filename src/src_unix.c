@@ -160,7 +160,8 @@ static int src_run(src_ctx_t *ctx, jitter_t *jitter)
 
 static void src_destroy(src_ctx_t *ctx)
 {
-	pthread_join(ctx->thread, NULL);
+	if (ctx->thread)
+		pthread_join(ctx->thread, NULL);
 	close(ctx->handle);
 	free(ctx);
 }

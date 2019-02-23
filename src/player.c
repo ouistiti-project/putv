@@ -40,6 +40,7 @@
 #include "decoder.h"
 #include "encoder.h"
 #include "sink.h"
+#include "filter.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -70,6 +71,8 @@ struct player_event_s
 
 struct player_ctx_s
 {
+	const char *filtername;
+	filter_t *filter;
 	media_t *media;
 	media_t *nextmedia;
 	state_t state;
@@ -79,30 +82,32 @@ struct player_ctx_s
 	pthread_mutex_t mutex;
 };
 
-player_ctx_t *player_init()
+player_ctx_t *player_init(const char *filtername)
 {
 	player_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	pthread_mutex_init(&ctx->mutex, NULL);
 	pthread_cond_init(&ctx->cond, NULL);
 	ctx->state = STATE_STOP;
+	ctx->filtername = filtername;
 	return ctx;
 }
 
 int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop)
 {
-	media_t *media = media_build(mediapath);
+	media_t *media = media_build(ctx, mediapath);
 	if (media)
 	{
 		ctx->nextmedia = media;
-		ctx->state != STATE_STOP;
-		if (loop)
+		ctx->state = STATE_STOP;
+		pthread_cond_broadcast(&ctx->cond);
+		if (loop && media->ops->loop)
 		{
-			media->ops->options(media->ctx, MEDIA_LOOP, 1);
+			media->ops->loop(media->ctx, 1);
 		}
 
-		if (random)
+		if (random && media->ops->random)
 		{
-			media->ops->options(media->ctx, MEDIA_RANDOM, 1);
+			media->ops->random(media->ctx, 1);
 		}
 		if (ctx->media == NULL)
 			ctx->media = media;
@@ -225,9 +230,11 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 	struct _player_play_s *data = (struct _player_play_s *)arg;
 	player_ctx_t *player = data->ctx;
 	src_t *src = NULL;
+	decoder_t *decoder = NULL;
 
 	dbg("player: prepare %d %s", id, url);
-	src = src_build(player, url, mime);
+	decoder = decoder_build(player, mime, player->filter);
+	src = src_build(player, url, decoder);
 	if (src != NULL)
 	{
 		data->dec = calloc(1, sizeof(*data->dec));
@@ -251,28 +258,36 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 		.ctx = ctx,
 		.dec = NULL,
 	};
+
+	ctx->filter = filter_build(ctx->filtername, encoder_jitter->format);
+
 	while (ctx->state != STATE_ERROR)
 	{
 		pthread_mutex_lock(&ctx->mutex);
 		while (ctx->state == STATE_STOP)
 		{
-			dbg("player: stop");
-			encoder_jitter->ops->reset(encoder_jitter->ctx);
-			pthread_cond_wait(&ctx->cond, &ctx->mutex);
-		}
-		pthread_mutex_unlock(&ctx->mutex);
-		if (ctx->media != ctx->nextmedia)
-		{
-			if (ctx->media)
+			if (ctx->media != ctx->nextmedia)
 			{
-				ctx->media->ops->destroy(ctx->media->ctx);
-				free(ctx->media);
+				if (ctx->media)
+				{
+					ctx->media->ops->destroy(ctx->media->ctx);
+					free(ctx->media);
+				}
+				ctx->media = ctx->nextmedia;
+				ctx->state = STATE_CHANGE;
 			}
-			ctx->media = ctx->nextmedia;
+			else
+			{
+				dbg("player: stop");
+				encoder_jitter->ops->reset(encoder_jitter->ctx);
+				pthread_cond_wait(&ctx->cond, &ctx->mutex);
+			}
 		}
 		if (ctx->media == NULL)
 			break;
-		ctx->media->ops->next(ctx->media->ctx);
+		pthread_mutex_unlock(&ctx->mutex);
+		if (ctx->media->ops->next)
+			ctx->media->ops->next(ctx->media->ctx);
 
 		do
 		{
@@ -293,7 +308,10 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 				ctx->state = STATE_PLAY;
 				ctx->current->decoder->ops->run(ctx->current->decoder->ctx, encoder_jitter);
 				ctx->current->src->ops->run(ctx->current->src->ctx, ctx->current->decoder->ops->jitter(ctx->current->decoder->ctx));
-				ctx->media->ops->next(ctx->media->ctx);
+				if (ctx->media->ops->next)
+					ctx->media->ops->next(ctx->media->ctx);
+				else if (ctx->media->ops->end)
+					ctx->media->ops->end(ctx->media->ctx);
 			}
 			else {
 				if (player.dec != NULL)
@@ -314,6 +332,12 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 			}
 		} while (ctx->state != STATE_STOP);
 		ctx->media->ops->end(ctx->media->ctx);
+	}
+	if (ctx->filter)
+	{
+		ctx->filter->ops->destroy(ctx->filter->ctx);
+		free(ctx->filter);
+		ctx->filter = NULL;
 	}
 	return 0;
 }

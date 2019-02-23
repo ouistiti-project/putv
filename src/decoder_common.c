@@ -34,6 +34,7 @@
 
 #include "player.h"
 #include "decoder.h"
+#include "filter.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -45,25 +46,29 @@
 
 #define decoder_dbg(...)
 
-decoder_t *decoder_build(player_ctx_t *player, const char *mime)
+decoder_t *decoder_build(player_ctx_t *player, const char *mime, filter_t *filter)
 {
 	decoder_t *decoder = NULL;
 	const decoder_ops_t *ops = NULL;
 	decoder_ctx_t *ctx = NULL;
 #ifdef DECODER_MAD
 	if (mime && !strcmp(mime, decoder_mad->mime))
+	{
 		ops = decoder_mad;
+	}
 #endif
 #ifdef DECODER_FLAC
 	if (mime && !strcmp(mime, decoder_flac->mime))
+	{
 		ops = decoder_flac;
+	}
 #endif
 	if (ops == NULL)
 		ops = DECODER;
 
 	if (ops != NULL)
 	{
-		ctx = ops->init(player);
+		ctx = ops->init(player, filter);
 	}
 	if (ctx != NULL)
 	{

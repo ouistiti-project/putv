@@ -27,7 +27,7 @@ struct src_s
 	decoder_t *video[2];
 };
 
-src_t *src_build(player_ctx_t *player, const char *url, const char *mime);
+src_t *src_build(player_ctx_t *player, const char *url, decoder_t *decoder);
 
 extern const src_ops_t *src_file;
 extern const src_ops_t *src_curl;

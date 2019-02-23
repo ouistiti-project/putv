@@ -40,6 +40,7 @@
 #include "decoder.h"
 #include "encoder.h"
 #include "sink.h"
+#include "filter.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -70,6 +71,7 @@ struct player_event_s
 
 struct player_ctx_s
 {
+	filter_t *filter;
 	media_t *media;
 	media_t *nextmedia;
 	state_t state;
@@ -226,9 +228,11 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 	struct _player_play_s *data = (struct _player_play_s *)arg;
 	player_ctx_t *player = data->ctx;
 	src_t *src = NULL;
+	decoder_t *decoder = NULL;
 
 	dbg("player: prepare %d %s", id, url);
-	src = src_build(player, url, mime);
+	decoder = decoder_build(player, mime, player->filter);
+	src = src_build(player, url, decoder);
 	if (src != NULL)
 	{
 		data->dec = calloc(1, sizeof(*data->dec));
@@ -252,6 +256,9 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 		.ctx = ctx,
 		.dec = NULL,
 	};
+
+	ctx->filter = filter_build("pcm_stereo", encoder_jitter->format);
+
 	while (ctx->state != STATE_ERROR)
 	{
 		pthread_mutex_lock(&ctx->mutex);
@@ -323,6 +330,12 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 			}
 		} while (ctx->state != STATE_STOP);
 		ctx->media->ops->end(ctx->media->ctx);
+	}
+	if (ctx->filter)
+	{
+		ctx->filter->ops->destroy(ctx->filter->ctx);
+		free(ctx->filter);
+		ctx->filter = NULL;
 	}
 	return 0;
 }

@@ -1,5 +1,5 @@
 /*****************************************************************************
- * main.c
+ * input.c
  * this file is part of https://github.com/ouistiti-project/putv
  *****************************************************************************
  * Copyright (C) 2016-2017
@@ -141,6 +141,12 @@ int input_parseevent(input_ctx_t *ctx, const struct input_event *event)
 	case KEY_NEXTSONG:
 	case KEY_NEXT:
 		client_next(ctx->client, input_checkstate, ctx);
+	break;
+	case KEY_VOLUMEDOWN:
+		client_volume(ctx->client, NULL, ctx, -5);
+	break;
+	case KEY_VOLUMEUP:
+		client_volume(ctx->client, NULL, ctx, +5);
 	break;
 	case KEY_R:
 	break;

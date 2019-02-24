@@ -112,6 +112,20 @@ static int answer_state(json_t *json_params, json_t **result, void *userdata)
 	return 0;
 }
 
+static int method_volume(json_t *json_params, json_t **result, void *userdata)
+{
+	client_data_t *data = userdata;
+	*result = json_pack("{ss}", "step", data->integer);
+	return 0;
+}
+
+static int answer_volume(json_t *json_params, json_t **result, void *userdata)
+{
+	client_data_t *data = userdata;
+	answer_proto(data, json_params);
+	return 0;
+}
+
 static int notification_onchange(json_t *json_params, json_t **result, void *userdata)
 {
 	client_data_t *data = userdata;
@@ -143,6 +157,8 @@ struct jsonrpc_method_entry_t table[] =
 	{'a',"stop", answer_state, "o", 0, NULL},
 	{'r',"status", method_state, "", 0, NULL},
 	{'a',"status", answer_state, "o", 0, NULL},
+	{'r',"volume", method_volume, "o", 0, NULL},
+	{'a',"volume", answer_volume, "o", 0, NULL},
 	{'n',"onchange", notification_onchange, "o", 0, NULL},
 	{0, NULL},
 };
@@ -238,6 +254,19 @@ int client_status(client_data_t *data, client_event_prototype_t proto, void *pro
 	data->proto = proto;
 	data->data = protodata;
 	client_cmd(data, "status");
+	pthread_mutex_unlock(&data->mutex);
+	return 0;
+}
+
+int client_volume(client_data_t *data, client_event_prototype_t proto, void *protodata, int step)
+{
+	if (data->pid != 0)
+		return -1;
+	pthread_mutex_lock(&data->mutex);
+	data->proto = proto;
+	data->data = protodata;
+	data->integer = step;
+	client_cmd(data, "volume");
 	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }

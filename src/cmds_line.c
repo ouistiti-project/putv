@@ -40,12 +40,14 @@ typedef struct cmds_ctx_s cmds_ctx_t;
 struct cmds_ctx_s
 {
 	player_ctx_t *player;
+	sink_t *sink;
 	pthread_t thread;
 	int run;
 };
 #define CMDS_CTX
 #include "cmds.h"
 #include "media.h"
+#include "sink.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -174,6 +176,20 @@ static int method_next(cmds_ctx_t *ctx, char *arg)
 	return (player_state(ctx->player, STATE_CHANGE) == STATE_CHANGE);
 }
 
+static int method_volume(cmds_ctx_t *ctx, char *arg)
+{
+	unsigned int volume = atoi(arg);
+	if (ctx->sink->ops->setvolume != NULL && volume != -1)
+	{
+		ctx->sink->ops->setvolume(ctx->sink->ctx, volume);
+	}
+	if (ctx->sink->ops->getvolume != NULL)
+	{
+		volume = ctx->sink->ops->getvolume(ctx->sink->ctx);
+	}
+	return volume;
+}
+
 static int method_loop(cmds_ctx_t *ctx, char *arg)
 {
 	int enable = 1;
@@ -231,10 +247,11 @@ void cmds_line_onchange(void *arg, player_ctx_t *player, state_t state)
 	media->ops->find(media->ctx, id, _display, ctx);
 }
 
-static cmds_ctx_t *cmds_line_init(player_ctx_t *player, void *arg)
+static cmds_ctx_t *cmds_line_init(player_ctx_t *player, sink_t *sink, void *arg)
 {
 	cmds_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->player = player;
+	ctx->sink = sink;
 	return ctx;
 }
 
@@ -328,6 +345,11 @@ static int cmds_line_cmd(cmds_ctx_t *ctx)
 				{
 					method = method_next;
 					i += 4;
+				}
+				if (!strncmp(buffer + i, "volume",6))
+				{
+					method = method_volume;
+					i += 6;
 				}
 				if (!strncmp(buffer + i, "loop",4))
 				{

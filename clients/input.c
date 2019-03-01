@@ -67,6 +67,8 @@ struct input_ctx_s
 	const char *root;
 	const char *name;
 	const char *input_path;
+	json_t *media;
+	int media_id;
 	int inputfd;
 	char *socketpath;
 	client_data_t *client;
@@ -148,7 +150,31 @@ int input_parseevent(input_ctx_t *ctx, const struct input_event *event)
 	case KEY_VOLUMEUP:
 		client_volume(ctx->client, NULL, ctx, +5);
 	break;
-	case KEY_R:
+	case KEY_PROG1:
+		if (ctx->media)
+		{
+			int i = ctx->media_id + 1;
+			if (i == json_array_size(ctx->media))
+				i = 0;
+			json_t *media = json_array_get(ctx->media, i);
+			if (json_is_object(media))
+			{
+				media_change(ctx->client, NULL, ctx, media);
+			}
+		}
+	break;
+	case KEY_PROG2:
+		if (ctx->media)
+		{
+			int i = ctx->media_id - 1;
+			if (i == -1)
+				i = json_array_size(ctx->media) - 1;
+			json_t *media = json_array_get(ctx->media, i);
+			if (json_is_object(media))
+			{
+				media_change(ctx->client, NULL, ctx, media);
+			}
+		}
 	break;
 	}
 	return 0;
@@ -278,11 +304,12 @@ int main(int argc, char **argv)
 		.name = basename(argv[0]),
 		.input_path = "/dev/input/event0",
 	};
+	const char *media_path;
 	
 	int opt;
 	do
 	{
-		opt = getopt(argc, argv, "R:n:i:hD");
+		opt = getopt(argc, argv, "R:n:i:m:hD");
 		switch (opt)
 		{
 			case 'R':
@@ -293,6 +320,9 @@ int main(int argc, char **argv)
 			break;
 			case 'i':
 				input_data.input_path = optarg;
+			break;
+			case 'm':
+				media_path = optarg;
 			break;
 			case 'h':
 				return -1;
@@ -308,6 +338,13 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
+	json_error_t error;
+	input_data.media = json_load_file(media_path, 0, &error);
+	if (! json_is_array(input_data.media))
+	{
+		json_decref(input_data.media);
+		input_data.media = NULL;
+	}
 #ifdef USE_INOTIFY
 	input_data.inotifyfd = inotify_init();
 	int dirfd = inotify_add_watch(input_data.inotifyfd, input_data.root,
@@ -321,5 +358,6 @@ int main(int argc, char **argv)
 	run_client((void *)&input_data);
 	free(input_data.socketpath);
 #endif
+	json_decref(input_data.media);
 	return 0;
 }

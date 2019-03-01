@@ -28,6 +28,26 @@
 #ifndef __CLIENT_JSON_H__
 #define __CLIENT_JSON_H__
 
+typedef struct media_s media_t;
+struct media_s
+{
+	int id;
+	const char *url;
+	const char *title;
+	const char *artist;
+	const char *genre;
+	const char *album;
+};
+
+typedef struct list_s list_t;
+struct list_s
+{
+	int count;
+	int first;
+	int last;
+	media_t *entries;
+};
+
 typedef int (*client_event_prototype_t)(void *data, json_t *params);
 typedef struct client_event_s client_event_t;
 typedef struct client_data_s client_data_t;
@@ -40,6 +60,8 @@ struct client_data_s
 	void *data;
 	int integer;
 	const char *string;
+	media_t *media;
+	list_t *list;
 	enum
 	{
 		OPTION_ASYNC = 0x01,
@@ -57,5 +79,9 @@ int client_play(client_data_t *data, client_event_prototype_t proto, void *proto
 int client_pause(client_data_t *data, client_event_prototype_t proto, void *protodata);
 int client_stop(client_data_t *data, client_event_prototype_t proto, void *protodata);
 int client_volume(client_data_t *data, client_event_prototype_t proto, void *protodata, int step);
+
+int media_insert(client_data_t *data, client_event_prototype_t proto, void *protodata, media_t *media);
+int media_remove(client_data_t *data, client_event_prototype_t proto, void *protodata, media_t *media);
+int media_list(client_data_t *data, client_event_prototype_t proto, void *protodata, list_t *list);
 
 #endif

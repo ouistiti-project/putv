@@ -339,15 +339,22 @@ static int opus_parse_info(const char *info, char **ptitle, char **partist, char
 {
 	json_error_t error;
 	json_t *jinfo = json_loads(info, 0, &error);
-	json_unpack(jinfo, "{s:s,s:s,s:s,s:s}", str_key_title, ptitle, str_key_artist, partist, str_key_album, palbum, str_key_genre, pgenre);
-	if (*ptitle)
-		*ptitle = strdup(*ptitle);
-	if (*partist)
-		*partist = strdup(*partist);
-	if (*palbum)
-		*palbum = strdup(*palbum);
-	if (*pgenre)
-		*pgenre = strdup(*pgenre);
+	if (json_is_object(jinfo))
+	{
+		json_t *value;
+		value = json_object_get(jinfo, str_key_title);
+		if (value != NULL)
+			*ptitle = strdup(json_string_value(value));
+		value = json_object_get(jinfo, str_key_artist);
+		if (value != NULL)
+			*partist = strdup(json_string_value(value));
+		value = json_object_get(jinfo, str_key_album);
+		if (value != NULL)
+			*palbum = strdup(json_string_value(value));
+		value = json_object_get(jinfo, str_key_genre);
+		if (value != NULL)
+			*pgenre = strdup(json_string_value(value));
+	}
 	json_decref(jinfo);
 	return 0;
 }

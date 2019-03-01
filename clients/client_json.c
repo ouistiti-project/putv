@@ -126,6 +126,20 @@ static int answer_volume(json_t *json_params, json_t **result, void *userdata)
 	return 0;
 }
 
+static int method_change(json_t *json_params, json_t **result, void *userdata)
+{
+	client_data_t *data = userdata;
+	*result = data->params;
+	return 0;
+}
+
+static int answer_change(json_t *json_params, json_t **result, void *userdata)
+{
+	client_data_t *data = userdata;
+	answer_proto(data, json_params);
+	return 0;
+}
+
 static int method_append(json_t *json_params, json_t **result, void *userdata)
 {
 	client_data_t *data = userdata;
@@ -224,6 +238,8 @@ struct jsonrpc_method_entry_t table[] =
 	{'a',"status", answer_state, "o", 0, NULL},
 	{'r',"volume", method_volume, "o", 0, NULL},
 	{'a',"volume", answer_volume, "o", 0, NULL},
+	{'r',"change", method_change, "o", 0, NULL},
+	{'a',"change", answer_change, "o", 0, NULL},
 	{'r',"append", method_append, "o", 0, NULL},
 	{'a',"append", answer_append, "o", 0, NULL},
 	{'r',"remove", method_remove, "o", 0, NULL},
@@ -352,6 +368,19 @@ int client_eventlistener(client_data_t *data, const char *name, client_event_pro
 	event->data = protodata;
 	event->next = data->events;
 	data->events = event;
+	return 0;
+}
+
+int media_change(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *media)
+{
+	if (data->pid != 0)
+		return -1;
+	pthread_mutex_lock(&data->mutex);
+	data->proto = proto;
+	data->data = protodata;
+	data->params = media;
+	client_cmd(data, "change");
+	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
 

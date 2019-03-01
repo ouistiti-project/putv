@@ -60,6 +60,7 @@ struct client_data_s
 	void *data;
 	int integer;
 	const char *string;
+	json_t*params;
 	media_t *media;
 	list_t *list;
 	enum
@@ -80,6 +81,7 @@ int client_pause(client_data_t *data, client_event_prototype_t proto, void *prot
 int client_stop(client_data_t *data, client_event_prototype_t proto, void *protodata);
 int client_volume(client_data_t *data, client_event_prototype_t proto, void *protodata, int step);
 
+int media_change(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *media);
 int media_insert(client_data_t *data, client_event_prototype_t proto, void *protodata, media_t *media);
 int media_remove(client_data_t *data, client_event_prototype_t proto, void *protodata, media_t *media);
 int media_list(client_data_t *data, client_event_prototype_t proto, void *protodata, list_t *list);

@@ -193,6 +193,7 @@ static int media_remove(media_ctx_t *ctx, int id, const char *path)
 		id = findmedia(db, path);
 		force = 1;
 	}
+
 	if (id > 0)
 	{
 		sqlite3_stmt *statement;
@@ -228,6 +229,7 @@ static int media_remove(media_ctx_t *ctx, int id, const char *path)
 			ret = -1;
 		else
 		{
+			ret = 0;
 			media_dbg("putv: remove media %s", path);
 		}
 		sqlite3_finalize(statement);
@@ -710,7 +712,11 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 	free(tpath);
 	sqlite3_finalize(statement);
 
-	return ret;
+#ifndef MEDIA_SQLITE_EXT
+	return id;
+#else
+	return opusid;
+#endif
 }
 
 static int _media_execute(media_ctx_t *ctx, sqlite3_stmt *statement, media_parse_t cb, void *data)

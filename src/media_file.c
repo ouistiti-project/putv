@@ -116,7 +116,7 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 	else
 		media->mime = utils_getmime(path);
 	media->id = id;
-	return 0;
+	return id;
 }
 
 static int media_remove(media_ctx_t *ctx, int id, const char *path)

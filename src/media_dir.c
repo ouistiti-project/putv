@@ -359,8 +359,7 @@ static int media_count(media_ctx_t *ctx)
 
 static int media_insert(media_ctx_t *ctx, const char *path, const char *info, const char *mime)
 {
-	ctx->url = path;
-	return 0;
+	return -1;
 }
 
 static int media_remove(media_ctx_t *ctx, int id, const char *path)

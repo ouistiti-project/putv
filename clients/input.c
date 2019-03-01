@@ -145,10 +145,10 @@ int input_parseevent(input_ctx_t *ctx, const struct input_event *event)
 		client_next(ctx->client, input_checkstate, ctx);
 	break;
 	case KEY_VOLUMEDOWN:
-		client_volume(ctx->client, NULL, ctx, -5);
+		client_volume(ctx->client, NULL, ctx, json_integer(-5));
 	break;
 	case KEY_VOLUMEUP:
-		client_volume(ctx->client, NULL, ctx, +5);
+		client_volume(ctx->client, NULL, ctx, json_integer(+5));
 	break;
 	case KEY_PROG1:
 		if (ctx->media)

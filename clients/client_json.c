@@ -115,7 +115,15 @@ static int answer_state(json_t *json_params, json_t **result, void *userdata)
 static int method_volume(json_t *json_params, json_t **result, void *userdata)
 {
 	client_data_t *data = userdata;
-	*result = json_pack("{si}", "step", data->integer);
+	if (json_is_integer(data->params))
+	{
+		*result = json_object();
+		json_object_set(*result, "step", data->params);
+	}
+	else if (json_is_object(data->params))
+	{
+		*result = data->params;
+	}
 	return 0;
 }
 
@@ -347,14 +355,14 @@ int client_status(client_data_t *data, client_event_prototype_t proto, void *pro
 	return 0;
 }
 
-int client_volume(client_data_t *data, client_event_prototype_t proto, void *protodata, int step)
+int client_volume(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *step)
 {
 	if (data->pid != 0)
 		return -1;
 	pthread_mutex_lock(&data->mutex);
 	data->proto = proto;
 	data->data = protodata;
-	data->integer = step;
+	data->params = step;
 	client_cmd(data, "volume");
 	pthread_mutex_unlock(&data->mutex);
 	return 0;

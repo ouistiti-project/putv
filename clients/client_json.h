@@ -58,7 +58,6 @@ struct client_data_s
 	unsigned long int pid;
 	client_event_prototype_t proto;
 	void *data;
-	int integer;
 	const char *string;
 	json_t*params;
 	media_t *media;
@@ -79,7 +78,7 @@ int client_next(client_data_t *data, client_event_prototype_t proto, void *proto
 int client_play(client_data_t *data, client_event_prototype_t proto, void *protodata);
 int client_pause(client_data_t *data, client_event_prototype_t proto, void *protodata);
 int client_stop(client_data_t *data, client_event_prototype_t proto, void *protodata);
-int client_volume(client_data_t *data, client_event_prototype_t proto, void *protodata, int step);
+int client_volume(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *step);
 
 int media_change(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *media);
 int media_insert(client_data_t *data, client_event_prototype_t proto, void *protodata, media_t *media);

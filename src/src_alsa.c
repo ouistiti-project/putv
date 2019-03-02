@@ -62,14 +62,12 @@ struct src_ctx_s
 #define dbg(...)
 #endif
 
-#define src_dbg dbg
+#define src_dbg(...)
 
 static int _pcm_open(src_ctx_t *ctx, snd_pcm_format_t pcm_format, unsigned int rate, unsigned long *size)
 {
 	int ret;
 	int dir;
-
-	ret = snd_pcm_open(&ctx->handle, ctx->soundcard, SND_PCM_STREAM_CAPTURE, 0);
 
 	snd_pcm_hw_params_t *hw_params;
 	ret = snd_pcm_hw_params_malloc(&hw_params);
@@ -93,7 +91,7 @@ static int _pcm_open(src_ctx_t *ctx, snd_pcm_format_t pcm_format, unsigned int r
 		err("src: access");
 		goto error;
 	}
-pcm_format = SND_PCM_FORMAT_S16;
+
 	ret = snd_pcm_hw_params_set_format(ctx->handle, hw_params, pcm_format);
 	if (ret < 0)
 	{
@@ -130,13 +128,14 @@ pcm_format = SND_PCM_FORMAT_S16;
 
 	snd_pcm_uframes_t buffer_size;
 	snd_pcm_hw_params_get_buffer_size(hw_params, &buffer_size);
-	dbg("buffer size %lu", buffer_size);
-	dbg("sample rate %u", rate);
 	snd_pcm_uframes_t periodsize;
 	snd_pcm_hw_params_get_period_size(hw_params, &periodsize, 0);
-	dbg("period size %lu", periodsize);
-	dbg("sample size %d", ctx->samplesize);
-	dbg("nchannels %u", ctx->nchannels);
+	src_dbg("src alsa config :");
+	src_dbg("\tbuffer size %lu", buffer_size);
+	src_dbg("\tperiod size %lu", periodsize);
+	src_dbg("\tsample rate %u", rate);
+	src_dbg("\tsample size %d", ctx->samplesize);
+	src_dbg("\tnchannels %u", ctx->nchannels);
 	if (size)
 		*size = periodsize;
 
@@ -145,12 +144,10 @@ pcm_format = SND_PCM_FORMAT_S16;
 		err("src: prepare");
 		goto error;
 	}
-dbg("hello 1");
 	ctx->samplerate = rate;
 
 error:
 	snd_pcm_hw_params_free(hw_params);
-dbg("hello 2");
 	return ret;
 }
 
@@ -162,15 +159,35 @@ static int _pcm_close(src_ctx_t *ctx)
 }
 
 static const char *jitter_name = "alsa";
-static src_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
+static src_ctx_t *alsa_init(player_ctx_t *player, const char *url)
 {
 	int count = 2;
-	src_ctx_t *ctx = calloc(1, sizeof(*ctx));
+	const char *soundcard;
+	src_ctx_t *ctx = NULL;
 
-	ctx->soundcard = soundcard;
+	if (strstr(url, "://") != NULL)
+	{
+		soundcard = strstr(url, "pcm://");
+		if (soundcard == NULL)
+			return NULL;
+		soundcard += 6;
+	}
+	else
+	{
+		soundcard = url;
+	}
 
-	ctx->player = player;
+	int ret;
+	snd_pcm_t *handle;
+	ret = snd_pcm_open(&handle, soundcard, SND_PCM_STREAM_CAPTURE, 0);
 
+	if (ret == 0)
+	{
+		ctx = calloc(1, sizeof(*ctx));
+		ctx->soundcard = soundcard;
+		ctx->player = player;
+		ctx->handle = handle;
+	}
 	return ctx;
 }
 
@@ -183,6 +200,11 @@ static void *alsa_thread(void *arg)
 	{
 		case PCM_32bits_LE_stereo:
 			pcm_format = SND_PCM_FORMAT_S32_LE;
+			ctx->samplesize = 4;
+			ctx->nchannels = 2;
+		break;
+		case PCM_24bits4_LE_stereo:
+			pcm_format = SND_PCM_FORMAT_S24_LE;
 			ctx->samplesize = 4;
 			ctx->nchannels = 2;
 		break;
@@ -210,15 +232,12 @@ static void *alsa_thread(void *arg)
 	int divider = ctx->samplesize * ctx->nchannels;
 
 	unsigned long size = ctx->out->ctx->size / divider;
-dbg("src size %lu", size);
 	if (_pcm_open(ctx, pcm_format, ctx->out->ctx->frequence, &size) < 0)
 	{
 		err("src: pcm error %s", strerror(errno));
 		return NULL;
 	}
 
-dbg("dst size %lu", size);
-dbg("hello 3");
 	snd_pcm_start(ctx->handle);
 	/* start decoding */
 	unsigned char *buff = NULL;
@@ -238,7 +257,7 @@ dbg("hello 3");
 		if (buff == NULL)
 			buff = ctx->out->ops->pull(ctx->out->ctx);
 		unsigned char *buff2 = NULL;
-dbg("hello 4");
+
 		while ((ret = snd_pcm_avail_update (ctx->handle)) < size)
 		{
 			if (ret >= 0 && snd_pcm_state(ctx->handle) == SND_PCM_STATE_XRUN)
@@ -256,11 +275,10 @@ dbg("hello 4");
 #ifdef LBENDIAN
 			ret = snd_pcm_readi(ctx->handle, buff2, ret);
 #else
-dbg("buff %lu %u", ctx->out->ctx->size, ret * 4);
+			src_dbg("buff %lu %u", ctx->out->ctx->size, ret * 4);
 			ret = snd_pcm_readi(ctx->handle, buff, ret);
 #endif
 		}
-dbg("hello 1");
 		if (ret == -EPIPE)
 		{
 			warn("pcm recover");
@@ -283,7 +301,6 @@ dbg("hello 1");
 #endif
 			ctx->out->ops->push(ctx->out->ctx, ret * divider, NULL);
 			buff = NULL;
-			src_dbg("src: play %d", ret);
 		}
 		free(buff2);
 	}

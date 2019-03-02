@@ -62,6 +62,9 @@ src_t *src_build(player_ctx_t *player, const char *url, decoder_t *decoder)
 	#ifdef SRC_CURL
 		src_curl,
 	#endif
+	#ifdef SRC_ALSA
+		src_alsa,
+	#endif
 		NULL
 	};
 
@@ -72,6 +75,8 @@ src_t *src_build(player_ctx_t *player, const char *url, decoder_t *decoder)
 	src_default = src_unix;
 	#elif defined(SRC_CURL)
 	src_default = src_curl;
+	#elif defined(SRC_ALSA)
+	src_default = src_alsa;
 	#endif
 
 	int i = 0;

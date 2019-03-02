@@ -28,24 +28,12 @@
 #ifndef __CLIENT_JSON_H__
 #define __CLIENT_JSON_H__
 
-typedef struct media_s media_t;
-struct media_s
-{
-	int id;
-	const char *url;
-	const char *title;
-	const char *artist;
-	const char *genre;
-	const char *album;
-};
-
 typedef struct list_s list_t;
 struct list_s
 {
 	int count;
 	int first;
 	int last;
-	media_t *entries;
 };
 
 typedef int (*client_event_prototype_t)(void *data, json_t *params);
@@ -58,9 +46,7 @@ struct client_data_s
 	unsigned long int pid;
 	client_event_prototype_t proto;
 	void *data;
-	const char *string;
 	json_t*params;
-	media_t *media;
 	list_t *list;
 	enum
 	{
@@ -81,8 +67,8 @@ int client_stop(client_data_t *data, client_event_prototype_t proto, void *proto
 int client_volume(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *step);
 
 int media_change(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *media);
-int media_insert(client_data_t *data, client_event_prototype_t proto, void *protodata, media_t *media);
-int media_remove(client_data_t *data, client_event_prototype_t proto, void *protodata, media_t *media);
+int media_insert(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *media);
+int media_remove(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *media);
 int media_list(client_data_t *data, client_event_prototype_t proto, void *protodata, list_t *list);
 
 #endif

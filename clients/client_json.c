@@ -151,24 +151,12 @@ static int answer_change(json_t *json_params, json_t **result, void *userdata)
 static int method_append(json_t *json_params, json_t **result, void *userdata)
 {
 	client_data_t *data = userdata;
-	json_error_t error;
-	*result = json_array();
-
-	json_t *entry = json_object();
-	json_t *info = json_object();
-	if (data->media->title != NULL)
-		json_object_set(info, "Title", json_string(data->media->title));
-	if (data->media->artist != NULL)
-		json_object_set(info, "Artist", json_string(data->media->artist));
-	if (data->media->artist != NULL)
-		json_object_set(info, "Album", json_string(data->media->album));
-	if (data->media->artist != NULL)
-		json_object_set(info, "Genre", json_string(data->media->genre));
-	json_object_set(entry, "url", json_string(data->media->url));
-	json_object_set(entry, "info", info);
-	json_array_append(*result, entry);
-	warn("insert %s", json_dumps(*result, 0));
-	return 0;
+	if (json_is_array(data->params))
+	{
+		*result = data->params;
+		return 0;
+	}
+	return -1;
 }
 
 static int answer_append(json_t *json_params, json_t **result, void *userdata)
@@ -181,13 +169,12 @@ static int answer_append(json_t *json_params, json_t **result, void *userdata)
 static int method_remove(json_t *json_params, json_t **result, void *userdata)
 {
 	client_data_t *data = userdata;
-	json_error_t error;
-	*result = json_object();
-	if (data->media->id != -1)
-		json_object_set(*result, "id", json_integer(data->media->id));
-	if (data->media->url != NULL)
-		json_object_set(*result, "url", json_string(data->media->url));
-	return 0;
+	if (json_is_object(data->params))
+	{
+		*result = data->params;
+		return 0;
+	}
+	return -1;
 }
 
 static int answer_remove(json_t *json_params, json_t **result, void *userdata)
@@ -392,27 +379,27 @@ int media_change(client_data_t *data, client_event_prototype_t proto, void *prot
 	return 0;
 }
 
-int media_insert(client_data_t *data, client_event_prototype_t proto, void *protodata, media_t *media)
+int media_insert(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *media)
 {
 	if (data->pid != 0)
 		return -1;
 	pthread_mutex_lock(&data->mutex);
 	data->proto = proto;
 	data->data = protodata;
-	data->media = media;
+	data->params = media;
 	client_cmd(data, "append");	
 	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
 
-int media_remove(client_data_t *data, client_event_prototype_t proto, void *protodata, media_t *media)
+int media_remove(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *media)
 {
 	if (data->pid != 0)
 		return -1;
 	pthread_mutex_lock(&data->mutex);
 	data->proto = proto;
 	data->data = protodata;
-	data->media = media;
+	data->params = media;
 	client_cmd(data, "remove");	
 	pthread_mutex_unlock(&data->mutex);
 	return 0;

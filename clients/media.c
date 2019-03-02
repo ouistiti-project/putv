@@ -58,6 +58,17 @@ typedef enum
 	LIST,
 } method_t;
 
+typedef struct media_s media_t;
+struct media_s
+{
+	int id;
+	const char *url;
+	const char *title;
+	const char *artist;
+	const char *genre;
+	const char *album;
+};
+
 typedef struct data_s data_t;
 struct data_s
 {
@@ -240,6 +251,7 @@ int main(int argc, char **argv)
 	{
 		pthread_create(&thread, NULL, client_loop, (void *)&data);
 	}
+	json_t *params;
 	int nbitems = 0;
 	do {
 		data.method = NONE;
@@ -247,10 +259,30 @@ int main(int argc, char **argv)
 		switch (method)
 		{
 		case INSERT:
-			media_insert(&data.client, method_insert, &data, &data.media);
+			params = json_array();
+			json_t *entry = json_object();
+			if (data.media.url != NULL)
+				json_object_set(entry, "url", json_string(data.media.url));
+			json_t *info = json_object();
+			if (data.media.artist != NULL)
+				json_object_set(info, "Title", json_string(data.media.title));
+			if (data.media.artist != NULL)
+				json_object_set(info, "Artist", json_string(data.media.artist));
+			if (data.media.artist != NULL)
+				json_object_set(info, "Album", json_string(data.media.album));
+			if (data.media.artist != NULL)
+				json_object_set(info, "Genre", json_string(data.media.genre));
+			json_object_set(entry, "info", info);
+			json_array_append(params, entry);
+			media_insert(&data.client, method_insert, &data, params);
 		break;
 		case REMOVE:
-			media_remove(&data.client, method_remove, &data, &data.media);
+			params = json_object();
+			if (data.media.id != -1)
+				json_object_set(params, "id", json_integer(data.media.id));
+			if (data.media.url != NULL)
+				json_object_set(params, "url", json_string(data.media.url));
+			media_remove(&data.client, method_remove, &data, params);
 		break;
 		case LIST:
 			media_list(&data.client, method_list, &data, &data.list);

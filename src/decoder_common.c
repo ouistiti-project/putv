@@ -63,6 +63,12 @@ decoder_t *decoder_build(player_ctx_t *player, const char *mime, filter_t *filte
 		ops = decoder_flac;
 	}
 #endif
+#ifdef DECODER_PASSTHROUGH
+	if (mime && !strcmp(mime, decoder_passthrough->mime))
+	{
+		ops = decoder_passthrough;
+	}
+#endif
 	if (ops == NULL)
 		ops = DECODER;
 

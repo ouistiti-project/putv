@@ -53,6 +53,10 @@ const char *utils_getmime(const char *path)
 	if (!decoder_flac->check(path))
 		return decoder_flac->mime;
 #endif
+#ifdef DECODER_PASSTHROUGH
+	if (!decoder_passthrough->check(path))
+		return decoder_passthrough->mime;
+#endif
 	return mime_octetstream;
 }
 

@@ -232,7 +232,7 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 	src_t *src = NULL;
 	decoder_t *decoder = NULL;
 
-	dbg("player: prepare %d %s", id, url);
+	dbg("player: prepare %d %s %s", id, url, mime);
 	decoder = decoder_build(player, mime, player->filter);
 	src = src_build(player, url, decoder);
 	if (src != NULL)

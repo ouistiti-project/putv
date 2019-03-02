@@ -239,11 +239,16 @@ static int method_remove(json_t *json_params, json_t **result, void *userdata)
 		}
 	}
 	if (ret == -1)
+	{
 		*result = jsonrpc_error_object(-12345,
 			"remove error",
 			json_string("media could not be removed into the playlist"));
+	}
 	else
+	{
 		*result = json_pack("{s:s,s:s}", "status", "DONE", "message", "media removed");
+		ret = 0;
+	}
 	return ret;
 }
 
@@ -294,7 +299,10 @@ static int method_append(json_t *json_params, json_t **result, void *userdata)
 					"append error",
 					json_string("media could not be inserted into the playlist"));
 			else
-				*result = json_pack("{s:s,s:s, s:i}", "status", "DONE", "message", "media append", "id", ret);
+			{
+				*result = json_pack("{s:s,s:s,s:i}", "status", "DONE", "message", "media append", "id", ret);
+				ret = 0;
+			}
 		}
 	}
 	else
@@ -512,8 +520,7 @@ static int method_onchange(json_t *json_params, json_t **result, void *userdata)
 	}
 	if (*result == NULL)
 	{
-		*result = json_pack("{s:s}",
-				"state", str_stop);
+		*result = json_pack("{s:s}", "state", str_stop);
 	}
 	json_object_set(*result, "count", json_integer(count));
 	json_object_set(*result, "media", json_string(mediapath));

@@ -75,6 +75,7 @@ static int media_count(media_ctx_t *ctx)
 	return 1;
 }
 
+#ifdef MEDIA_FILE_LIST
 static media_url_t *_media_find(media_ctx_t *ctx, int id)
 {
 	media_url_t *media = ctx->media;
@@ -115,7 +116,7 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 	else
 		media->mime = utils_getmime(path);
 	media->id = id;
-	return 0;
+	return id;
 }
 
 static int media_remove(media_ctx_t *ctx, int id, const char *path)
@@ -155,6 +156,16 @@ static int media_list(media_ctx_t *ctx, media_parse_t cb, void *data)
 {
 	return media_find(ctx, -1, cb, data);
 }
+#else
+static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data)
+{
+	media_url_t *media = ctx->media;
+	if (cb != NULL && cb(data, media->id, media->url, media->info, media->mime) < 0)
+		return -1;
+	return 1;
+}
+
+#endif
 
 static int media_next(media_ctx_t *ctx)
 {
@@ -216,7 +227,25 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url,...)
 	if (url)
 	{
 		ctx = calloc(1, sizeof(*ctx));
+#ifdef MEDIA_FILE_LIST
 		media_insert(ctx, url, NULL, utils_getmime(url));
+#else
+		const char *mime = utils_getmime(url);
+		if(mime != mime_octetstream)
+		{
+			media_url_t *media;
+			media = calloc(1, sizeof(*media));
+			media->url = strdup(url);
+			media->mime = mime;
+			media->id = 0;
+			ctx->media = media;
+		}
+		else
+		{
+			free(ctx);
+			ctx = NULL;
+		}
+#endif
 	}
 	return ctx;
 }
@@ -239,10 +268,16 @@ const media_ops_t *media_file = &(const media_ops_t)
 	.destroy = media_destroy,
 	.play = media_play,
 	.next = media_next,
+#ifdef MEDIA_FILE_LIST
 	.list = media_list,
-	.find = media_find,
 	.remove = media_remove,
 	.insert = media_insert,
+#else
+	.list = NULL,
+	.remove = NULL,
+	.insert = NULL,
+#endif
+	.find = media_find,
 	.count = media_count,
 	.end = media_end,
 	.random = NULL,

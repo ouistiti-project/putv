@@ -196,7 +196,7 @@ static int method_remove(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 	media_t *media = player_media(ctx->player);
-	int ret;
+	int ret = -1;
 
 	if (media->ops->remove == NULL)
 	{
@@ -225,13 +225,13 @@ static int method_remove(json_t *json_params, json_t **result, void *userdata)
 	else if (json_is_object(json_params))
 	{
 		json_t *value;
-		value = json_object_get(value, "id");
+		value = json_object_get(json_params, "id");
 		if (json_is_integer(value))
 		{
 			int id = json_integer_value(value);
 			ret = media->ops->remove(media->ctx, id, NULL);
 		}
-		value = json_object_get(value, "url");
+		value = json_object_get(json_params, "url");
 		if (json_is_string(value))
 		{
 			const char *str = json_string_value(value);
@@ -239,12 +239,17 @@ static int method_remove(json_t *json_params, json_t **result, void *userdata)
 		}
 	}
 	if (ret == -1)
+	{
 		*result = jsonrpc_error_object(-12345,
-			"append error",
-			json_string("media could not be insert into the playlist"));
+			"remove error",
+			json_string("media could not be removed into the playlist"));
+	}
 	else
-		*result = json_pack("{s:s,s:s}", "status", "DONE", "message", "media append");
-	return 0;
+	{
+		*result = json_pack("{s:s,s:s}", "status", "DONE", "message", "media removed");
+		ret = 0;
+	}
+	return ret;
 }
 
 static int method_append(json_t *json_params, json_t **result, void *userdata)
@@ -258,8 +263,8 @@ static int method_append(json_t *json_params, json_t **result, void *userdata)
 		return -1;
 	}
 
+	int ret = -1;
 	if (json_is_array(json_params)) {
-		int ret;
 		size_t index;
 		json_t *value;
 		json_array_foreach(json_params, index, value)
@@ -274,20 +279,36 @@ static int method_append(json_t *json_params, json_t **result, void *userdata)
 				json_t * path = json_object_get(value, "url");
 				json_t * info = json_object_get(value, "info");
 				json_t * mime = json_object_get(value, "mime");
-				ret = media->ops->insert(media->ctx,
-						json_string_value(path),
-						json_string_value(info),
-						json_string_value(mime));
+				if (json_is_string(info))
+				{
+					ret = media->ops->insert(media->ctx,
+							json_string_value(path),
+							json_string_value(info),
+							json_string_value(mime));
+				}
+				else if (json_is_object(info))
+				{
+					ret = media->ops->insert(media->ctx,
+							json_string_value(path),
+							json_dumps(info, 0),
+							json_string_value(mime));
+				}
 			}
 			if (ret == -1)
 				*result = jsonrpc_error_object(-12345,
 					"append error",
-					json_string("media could not be insert into the playlist"));
+					json_string("media could not be inserted into the playlist"));
 			else
-				*result = json_pack("{s:s,s:s}", "status", "DONE", "message", "media append");
+			{
+				*result = json_pack("{s:s,s:s,s:i}", "status", "DONE", "message", "media append", "id", ret);
+				ret = 0;
+			}
 		}
 	}
-	return 0;
+	else
+		*result = jsonrpc_error_object_predefined(JSONRPC_INVALID_PARAMS, json_string("player state error"));
+
+	return ret;
 }
 
 static int method_play(json_t *json_params, json_t **result, void *userdata)
@@ -374,21 +395,24 @@ static int method_next(json_t *json_params, json_t **result, void *userdata)
 	case STATE_STOP:
 		state = str_stop;
 		*result = json_pack("{ss}", "state", state);
+	return 0;
 	break;
 	case STATE_PLAY:
 	case STATE_CHANGE:
 		state = str_play;
 		*result = json_pack("{ss}", "state", state);
+	return 0;
 	break;
 	case STATE_PAUSE:
 		state = str_pause;
 		*result = json_pack("{ss}", "state", state);
+	return 0;
 	break;
 	default:
 		*result = jsonrpc_error_object_predefined(JSONRPC_INVALID_PARAMS, json_string("player state error"));
+	return -1;
 	break;
 	}
-	return 0;
 }
 
 typedef struct _display_ctx_s _display_ctx_t;
@@ -496,8 +520,7 @@ static int method_onchange(json_t *json_params, json_t **result, void *userdata)
 	}
 	if (*result == NULL)
 	{
-		*result = json_pack("{s:s}",
-				"state", str_stop);
+		*result = json_pack("{s:s}", "state", str_stop);
 	}
 	json_object_set(*result, "count", json_integer(count));
 	json_object_set(*result, "media", json_string(mediapath));
@@ -847,7 +870,7 @@ static struct jsonrpc_method_entry_t method_table[] = {
 	{ 'r', "next", method_next, "" },
 	{ 'r', "list", method_list, "o" },
 	{ 'r', "append", method_append, "[]" },
-	{ 'r', "remove", method_remove, "[]" },
+	{ 'r', "remove", method_remove, "o" },
 	{ 'r', "status", method_status, "" },
 	{ 'r', "change", method_change, "o" },
 	{ 'n', "onchange", method_onchange, "o" },
@@ -937,9 +960,9 @@ static int jsonrpc_command(thread_info_t *info)
 		{
 			char buffer[1500];
 			ret = recv(sock, buffer, 1500, MSG_NOSIGNAL);
-			cmds_dbg("recv %d: %s", ret, buffer);
 			if (ret > 0)
 			{
+				cmds_dbg("recv %d: %s", ret, buffer);
 				json_error_t error;
 				json_t *request = json_loads(buffer, 0, &error);
 				if (request != NULL)

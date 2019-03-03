@@ -112,6 +112,94 @@ static int answer_state(json_t *json_params, json_t **result, void *userdata)
 	return 0;
 }
 
+static int method_volume(json_t *json_params, json_t **result, void *userdata)
+{
+	client_data_t *data = userdata;
+	if (json_is_integer(data->params))
+	{
+		*result = json_object();
+		json_object_set(*result, "step", data->params);
+	}
+	else if (json_is_object(data->params))
+	{
+		*result = data->params;
+	}
+	return 0;
+}
+
+static int answer_volume(json_t *json_params, json_t **result, void *userdata)
+{
+	client_data_t *data = userdata;
+	answer_proto(data, json_params);
+	return 0;
+}
+
+static int method_change(json_t *json_params, json_t **result, void *userdata)
+{
+	client_data_t *data = userdata;
+	*result = data->params;
+	return 0;
+}
+
+static int answer_change(json_t *json_params, json_t **result, void *userdata)
+{
+	client_data_t *data = userdata;
+	answer_proto(data, json_params);
+	return 0;
+}
+
+static int method_append(json_t *json_params, json_t **result, void *userdata)
+{
+	client_data_t *data = userdata;
+	if (json_is_array(data->params))
+	{
+		*result = data->params;
+		return 0;
+	}
+	return -1;
+}
+
+static int answer_append(json_t *json_params, json_t **result, void *userdata)
+{
+	client_data_t *data = userdata;
+	answer_proto(data, json_params);
+	return 0;
+}
+
+static int method_remove(json_t *json_params, json_t **result, void *userdata)
+{
+	client_data_t *data = userdata;
+	if (json_is_object(data->params))
+	{
+		*result = data->params;
+		return 0;
+	}
+	return -1;
+}
+
+static int answer_remove(json_t *json_params, json_t **result, void *userdata)
+{
+	client_data_t *data = userdata;
+	answer_proto(data, json_params);
+	return 0;
+}
+
+static int method_list(json_t *json_params, json_t **result, void *userdata)
+{
+	client_data_t *data = userdata;
+	json_error_t error;
+	*result = json_object();
+	json_object_set(*result, "first", json_integer(data->list->first));
+	return 0;
+}
+
+static int answer_list(json_t *json_params, json_t **result, void *userdata)
+{
+	client_data_t *data = userdata;
+	answer_proto(data, json_params);
+	return 0;
+}
+
 static int notification_onchange(json_t *json_params, json_t **result, void *userdata)
 {
 	client_data_t *data = userdata;
@@ -143,6 +231,16 @@ struct jsonrpc_method_entry_t table[] =
 	{'a',"stop", answer_state, "o", 0, NULL},
 	{'r',"status", method_state, "", 0, NULL},
 	{'a',"status", answer_state, "o", 0, NULL},
+	{'r',"volume", method_volume, "o", 0, NULL},
+	{'a',"volume", answer_volume, "o", 0, NULL},
+	{'r',"change", method_change, "o", 0, NULL},
+	{'a',"change", answer_change, "o", 0, NULL},
+	{'r',"append", method_append, "o", 0, NULL},
+	{'a',"append", answer_append, "o", 0, NULL},
+	{'r',"remove", method_remove, "o", 0, NULL},
+	{'a',"remove", answer_remove, "o", 0, NULL},
+	{'r',"list", method_list, "o", 0, NULL},
+	{'a',"list", answer_list, "o", 0, NULL},
 	{'n',"onchange", notification_onchange, "o", 0, NULL},
 	{0, NULL},
 };
@@ -171,6 +269,8 @@ int client_cmd(client_data_t *data, char * cmd)
 {
 	int ret;
 	char *buffer = jsonrpc_request(cmd, strlen(cmd), table, (char*)data, &data->pid);
+	if (buffer == NULL)
+		return -1;
 	int pid = data->pid;
 	ret = send(data->sock, buffer, strlen(buffer) + 1, MSG_NOSIGNAL);
 	if (data->options & OPTION_ASYNC)
@@ -242,6 +342,19 @@ int client_status(client_data_t *data, client_event_prototype_t proto, void *pro
 	return 0;
 }
 
+int client_volume(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *step)
+{
+	if (data->pid != 0)
+		return -1;
+	pthread_mutex_lock(&data->mutex);
+	data->proto = proto;
+	data->data = protodata;
+	data->params = step;
+	client_cmd(data, "volume");
+	pthread_mutex_unlock(&data->mutex);
+	return 0;
+}
+
 int client_eventlistener(client_data_t *data, const char *name, client_event_prototype_t proto, void *protodata)
 {
 	client_event_t *event = calloc(1, sizeof(*event));
@@ -250,6 +363,58 @@ int client_eventlistener(client_data_t *data, const char *name, client_event_pro
 	event->data = protodata;
 	event->next = data->events;
 	data->events = event;
+	return 0;
+}
+
+int media_change(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *media)
+{
+	if (data->pid != 0)
+		return -1;
+	pthread_mutex_lock(&data->mutex);
+	data->proto = proto;
+	data->data = protodata;
+	data->params = media;
+	client_cmd(data, "change");
+	pthread_mutex_unlock(&data->mutex);
+	return 0;
+}
+
+int media_insert(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *media)
+{
+	if (data->pid != 0)
+		return -1;
+	pthread_mutex_lock(&data->mutex);
+	data->proto = proto;
+	data->data = protodata;
+	data->params = media;
+	client_cmd(data, "append");	
+	pthread_mutex_unlock(&data->mutex);
+	return 0;
+}
+
+int media_remove(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *media)
+{
+	if (data->pid != 0)
+		return -1;
+	pthread_mutex_lock(&data->mutex);
+	data->proto = proto;
+	data->data = protodata;
+	data->params = media;
+	client_cmd(data, "remove");	
+	pthread_mutex_unlock(&data->mutex);
+	return 0;
+}
+
+int media_list(client_data_t *data, client_event_prototype_t proto, void *protodata, list_t *list)
+{
+	if (data->pid != 0)
+		return -1;
+	pthread_mutex_lock(&data->mutex);
+	data->proto = proto;
+	data->data = protodata;
+	data->list = list;
+	client_cmd(data, "list");	
+	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
 

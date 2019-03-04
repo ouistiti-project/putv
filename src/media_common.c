@@ -76,9 +76,12 @@ const char *utils_getpath(const char *url, const char *proto)
 	return path;
 }
 
-static const char *current_path;
+static char *current_path;
 media_t *media_build(player_ctx_t *player, const char *url)
 {
+	if (url == NULL)
+		return NULL;
+
 	const media_ops_t *const media_list[] = {
 	#ifdef MEDIA_DIR
 		media_dir,
@@ -92,24 +95,30 @@ media_t *media_build(player_ctx_t *player, const char *url)
 		NULL
 	};
 
+	char *oldpath = current_path;
+	current_path = strdup(url);
+
 	int i = 0;
 	media_ctx_t *media_ctx = NULL;
 	while (media_list[i] != NULL)
 	{
-		media_ctx = media_list[i]->init(player, url);
+		media_ctx = media_list[i]->init(player, current_path);
 		if (media_ctx != NULL)
 			break;
 		i++;
 	}
 	if (media_ctx == NULL)
 	{
+		free(current_path);
+		current_path = oldpath;
 		err("media not found %s", url);
 		return NULL;
 	}
 	media_t *media = calloc(1, sizeof(*media));
 	media->ops = media_list[i];
 	media->ctx = media_ctx;
-	current_path = url;
+	if (oldpath)
+		free(oldpath);
 
 	return media;
 }

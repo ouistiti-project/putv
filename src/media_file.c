@@ -175,6 +175,8 @@ static int media_next(media_ctx_t *ctx)
 		dbg("media loop");
 		ctx->current = ctx->media;
 	}
+	else if (ctx->current != NULL)
+		ctx->current = ctx->current->next;
 
 	if (ctx->current != NULL)
 		ret = ctx->current->id;
@@ -184,10 +186,6 @@ static int media_next(media_ctx_t *ctx)
 static int media_play(media_ctx_t *ctx, media_parse_t cb, void *data)
 {
 	int ret = -1;
-	if (ctx->current != NULL)
-		ctx->current = ctx->current->next;
-	else
-		ctx->current = ctx->media;
 
 	/**
 	 * We have to accept that ctx_>current->next == NULL

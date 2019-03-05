@@ -47,7 +47,6 @@ typedef struct sink_ctx_s sink_ctx_t;
 struct sink_ctx_s
 {
 	player_ctx_t *player;
-	const sink_t *ops;
 	const char *filepath;
 	pthread_t thread;
 	pthread_t thread2;
@@ -94,7 +93,6 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *filepath)
 	jitter_format_t format = SINK_BITSSTREAM;
 	sink_ctx_t *ctx = calloc(1, sizeof(*ctx));
 
-	ctx->ops = sink_unix;
 	ctx->filepath = filepath;
 
 	pthread_mutex_init(&ctx->mutex, NULL);

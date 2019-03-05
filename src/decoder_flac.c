@@ -51,7 +51,7 @@ struct decoder_ctx_s
 	jitter_t *out;
 	unsigned char *outbuffer;
 	size_t outbufferlen;
-	filter_t *filter;
+	const filter_t *filter;
 };
 #define DECODER_CTX
 #include "decoder.h"
@@ -73,7 +73,7 @@ struct decoder_ctx_s
 #define NBUFFER 3
 
 static const char *jitter_name = "flac decoder";
-static decoder_ctx_t *decoder_init(player_ctx_t *player, filter_t *filter)
+static decoder_ctx_t *decoder_init(player_ctx_t *player, const filter_t *filter)
 {
 	decoder_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->ops = decoder_flac;

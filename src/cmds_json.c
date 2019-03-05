@@ -507,8 +507,6 @@ static int method_onchange(json_t *json_params, json_t **result, void *userdata)
 		.result = json_object(),
 	};
 	int id = player_mediaid(ctx->player);
-	int count = media->ops->count(media->ctx);
-	const char *mediapath = media_path();
 	ret = media->ops->find(media->ctx, id, _display, &display);
 	if (ret == 1)
 	{
@@ -522,8 +520,16 @@ static int method_onchange(json_t *json_params, json_t **result, void *userdata)
 	{
 		*result = json_pack("{s:s}", "state", str_stop);
 	}
+
+	int next = media->ops->play(media->ctx, NULL, NULL);
+	json_object_set(*result, "next", json_integer(next));
+
+	int count = media->ops->count(media->ctx);
 	json_object_set(*result, "count", json_integer(count));
+
+	const char *mediapath = media_path();
 	json_object_set(*result, "media", json_string(mediapath));
+
 	if (ctx->sink->ops->getvolume != NULL)
 	{
 		unsigned int volume = ctx->sink->ops->getvolume(ctx->sink->ctx);

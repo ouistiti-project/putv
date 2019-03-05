@@ -260,11 +260,18 @@ static int _find(media_ctx_t *ctx, int level, media_dirlist_t **pit, int *pmedia
 	}
 	else if (it->level > level)
 	{
-		_find(ctx, level + 1, pit, pmediaid, cb, arg);
+		ret =_find(ctx, level + 1, pit, pmediaid, cb, arg);
 		it = *pit;
-		it->index++;
+		/**
+		 * return 0 means that something found.
+		 * in this case the index has not to be change,
+		 * to begin for this point with the next search.
+		 */
+		if (ret != 0 && it)
+			it->index++;
 	}
-	while (it->nitems > 0 && it->index < it->nitems)
+
+	while (ret != 0 && it->nitems > 0 && it->index < it->nitems)
 	{
 		if (it->items[it->index]->d_name[0] == '.')
 		{
@@ -343,6 +350,7 @@ static int _find(media_ctx_t *ctx, int level, media_dirlist_t **pit, int *pmedia
 	{
 		it = _free_medialist(it, 1);
 	}
+
 	if (*pmediaid > ctx->count)
 		ctx->count = *pmediaid;
 	*pit = it;
@@ -389,12 +397,13 @@ static int media_list(media_ctx_t *ctx, media_parse_t cb, void *arg)
 
 static int media_play(media_ctx_t *ctx, media_parse_t cb, void *arg)
 {
-	int ret = -1;
-	if (ctx->mediaid < 0)
-		ctx->mediaid = 0;
-	ret = media_find(ctx, ctx->mediaid, cb, arg);
-	if (ret == 0)
-		ctx->mediaid = -1;
+	if (ctx->mediaid >= 0)
+	{
+		int ret = -1;
+		ret = media_find(ctx, ctx->mediaid, cb, arg);
+		if (ret == 0)
+			ctx->mediaid = -1;
+	}
 	return ctx->mediaid;
 }
 
@@ -410,7 +419,6 @@ static int media_next(media_ctx_t *ctx)
 		if (ctx->mediaid >= ctx->count)
 			ctx->mediaid = 0;
 		ctx->mediaid--;
-		warn("next media %d", ctx->mediaid);
 		ctx->firstmediaid = -1;
 	}
 	else
@@ -562,6 +570,7 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url,...)
 		ctx->firstmediaid = 0;
 		_find_mediaid_t data = {-1, NULL, NULL};
 		_find(ctx, 0, &ctx->current, &ctx->count, _find_mediaid, &data);
+
 #ifdef USE_INOTIFY
 		ctx->inotifyfd = inotify_init();
 		ctx->dirfd = inotify_add_watch(ctx->inotifyfd, utils_getpath(ctx->url, "file://"),

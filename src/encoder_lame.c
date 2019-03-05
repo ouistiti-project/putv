@@ -91,9 +91,9 @@ static int encoder_lame_init(encoder_ctx_t *ctx)
 	lame_set_in_samplerate(ctx->encoder, ctx->samplerate);
 	lame_set_num_channels(ctx->encoder, ctx->nchannels);
 	lame_set_quality(ctx->encoder, 5);
-	//lame_set_mode(encoder->encoder, STEREO);
+	lame_set_mode(ctx->encoder, STEREO);
 	//lame_set_mode(encoder->encoder, JOINT_STEREO);
-	//lame_set_errorf(encoder->encoder, error_report);
+	lame_set_errorf(ctx->encoder, error_report);
 	lame_set_VBR(ctx->encoder, vbr_off);
 	//lame_set_VBR(encoder->encoder, vbr_default);
 	lame_set_disable_reservoir(ctx->encoder, 1);
@@ -115,8 +115,12 @@ static encoder_ctx_t *encoder_init(player_ctx_t *player)
 #ifdef LAME_DUMP
 	ctx->dumpfd = open("lame_dump.mp3", O_RDWR | O_CREAT, 0644);
 #endif
-	//ctx->samplesframe = lame_get_framesize(ctx->encoder);
-	ctx->samplesframe = 576;
+	/**
+	 * set samples frame to 3 framesize to have less than 1500 bytes
+	 * but more than 1000 bytes into the output
+	 */
+	ctx->samplesframe = lame_get_framesize(ctx->encoder) * 3;
+	//ctx->samplesframe = 576;
 	jitter_t *jitter = jitter_scattergather_init(jitter_name, 3,
 				ctx->samplesframe * ctx->samplesize * ctx->nchannels);
 	ctx->in = jitter;

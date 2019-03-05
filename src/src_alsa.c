@@ -329,4 +329,5 @@ const src_ops_t *src_alsa = &(src_ops_t)
 	.init = alsa_init,
 	.run = alsa_run,
 	.destroy = alsa_destroy,
+	.mime = "audio/pcm",
 };

@@ -50,7 +50,7 @@
 
 #define src_dbg(...)
 
-src_t *src_build(player_ctx_t *player, const char *url, decoder_t *decoder)
+src_t *src_build(player_ctx_t *player, const char *url, const char *mime)
 {
 	const src_ops_t *const src_list[] = {
 	#ifdef SRC_FILE
@@ -120,6 +120,11 @@ src_t *src_build(player_ctx_t *player, const char *url, decoder_t *decoder)
 	src_t *src = calloc(1, sizeof(*src));
 	src->ops = src_default;
 	src->ctx = src_ctx;
+
+	if (src->ops->mime != NULL)
+		mime = src->ops->mime;
+	decoder_t *decoder = NULL;
+	decoder = decoder_build(player, mime, player_filter(player));
 
 	src->audio[0] = decoder;
 	return src;

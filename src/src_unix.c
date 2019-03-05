@@ -1,5 +1,5 @@
 /*****************************************************************************
- * src_alsa.c
+ * src_unix.c
  * this file is part of https://github.com/ouistiti-project/putv
  *****************************************************************************
  * Copyright (C) 2016-2017
@@ -169,6 +169,7 @@ static void src_destroy(src_ctx_t *ctx)
 const src_ops_t *src_unix = &(src_ops_t)
 {
 	.protocol = "unix://",
+	.mime = "audio/mp3",
 	.init = src_init,
 	.run = src_run,
 	.destroy = src_destroy,

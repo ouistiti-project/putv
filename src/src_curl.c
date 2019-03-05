@@ -170,4 +170,5 @@ const src_ops_t *src_curl = &(src_ops_t)
 	.init = src_init,
 	.run = src_run,
 	.destroy = src_destroy,
+	.mime = NULL,
 };

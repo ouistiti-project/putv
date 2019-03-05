@@ -235,11 +235,9 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 	struct _player_play_s *data = (struct _player_play_s *)arg;
 	player_ctx_t *player = data->ctx;
 	src_t *src = NULL;
-	decoder_t *decoder = NULL;
 
 	dbg("player: prepare %d %s %s", id, url, mime);
-	decoder = decoder_build(player, mime, player->filter);
-	src = src_build(player, url, decoder);
+	src = src_build(player, url, mime);
 	if (src != NULL)
 	{
 		data->dec = calloc(1, sizeof(*data->dec));
@@ -349,4 +347,9 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 		ctx->filter = NULL;
 	}
 	return 0;
+}
+
+const filter_t *player_filter(player_ctx_t *ctx)
+{
+	return ctx->filter;
 }

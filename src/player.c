@@ -119,7 +119,12 @@ void player_next(player_ctx_t *ctx)
 {
 	if (ctx->media != NULL)
 	{
-		ctx->media->ops->next(ctx->media->ctx);
+		/**
+		 * next command just request the main loop to complete
+		 * the current entry to jump to the next one.
+		 * The main loop will set the next one long time before
+		 * than somebody request the jump to the next one.
+		 */
 		player_state(ctx, STATE_CHANGE);
 	}
 }
@@ -287,7 +292,9 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 			break;
 		pthread_mutex_unlock(&ctx->mutex);
 		if (ctx->media->ops->next)
+		{
 			ctx->media->ops->next(ctx->media->ctx);
+		}
 
 		do
 		{
@@ -309,7 +316,9 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 				ctx->current->decoder->ops->run(ctx->current->decoder->ctx, encoder_jitter);
 				ctx->current->src->ops->run(ctx->current->src->ctx, ctx->current->decoder->ops->jitter(ctx->current->decoder->ctx));
 				if (ctx->media->ops->next)
+				{
 					ctx->media->ops->next(ctx->media->ctx);
+				}
 				else if (ctx->media->ops->end)
 					ctx->media->ops->end(ctx->media->ctx);
 			}

@@ -15,8 +15,8 @@ struct decoder_ops_s
 	decoder_ctx_t *(*init)(player_ctx_t *, const filter_t *);
 	jitter_t *(*jitter)(decoder_ctx_t *decoder);
 	int (*run)(decoder_ctx_t *, jitter_t *);
+	const char *(*mime)(decoder_ctx_t *ctx);
 	void (*destroy)(decoder_ctx_t *);
-	const char *mime;
 };
 
 typedef struct decoder_s decoder_t;

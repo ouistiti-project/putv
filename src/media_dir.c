@@ -135,7 +135,7 @@ static int _run_cb(_find_mediaid_t *mdata, int id, const char *path, const char 
 		object = json_object();
 
 #if defined(USE_ID3TAG)
-		if (mime && !strcmp(mime, "audio/mp3"))
+		if (mime && !strcmp(mime, mime_audiomp3))
 		{
 			static struct
 			{

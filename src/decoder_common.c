@@ -52,19 +52,19 @@ decoder_t *decoder_build(player_ctx_t *player, const char *mime, const filter_t 
 	const decoder_ops_t *ops = NULL;
 	decoder_ctx_t *ctx = NULL;
 #ifdef DECODER_MAD
-	if (mime && !strcmp(mime, decoder_mad->mime))
+	if (mime && !strcmp(mime, decoder_mad->mime(NULL)))
 	{
 		ops = decoder_mad;
 	}
 #endif
 #ifdef DECODER_FLAC
-	if (mime && !strcmp(mime, decoder_flac->mime))
+	if (mime && !strcmp(mime, decoder_flac->mime(NULL)))
 	{
 		ops = decoder_flac;
 	}
 #endif
 #ifdef DECODER_PASSTHROUGH
-	if (mime && !strcmp(mime, decoder_passthrough->mime))
+	if (mime && !strcmp(mime, decoder_passthrough->mime(NULL)))
 	{
 		ops = decoder_passthrough;
 	}

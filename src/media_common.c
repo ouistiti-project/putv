@@ -42,20 +42,23 @@
 #endif
 
 const char const *mime_octetstream = "octet/stream";
+const char const *mime_audiomp3 = "audio/mp3";
+const char const *mime_audioflac = "audio/flac";
+const char const *mime_audiopcm = "audio/pcm";
 
 const char *utils_getmime(const char *path)
 {
 #ifdef DECODER_MAD
 	if (!decoder_mad->check(path))
-		return decoder_mad->mime;
+		return decoder_mad->mime(NULL);
 #endif
 #ifdef DECODER_FLAC
 	if (!decoder_flac->check(path))
-		return decoder_flac->mime;
+		return decoder_flac->mime(NULL);
 #endif
 #ifdef DECODER_PASSTHROUGH
 	if (!decoder_passthrough->check(path))
-		return decoder_passthrough->mime;
+		return decoder_passthrough->mime(NULL);
 #endif
 	return mime_octetstream;
 }

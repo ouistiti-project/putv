@@ -806,11 +806,11 @@ static int method_capabilities(json_t *json_params, json_t **result, void *userd
 	json_t *codec;
 	codec = json_array();
 #ifdef DECODER_MAD
-	value = json_string(decoder_mad->mime);
+	value = json_string(decoder_mad->mime(NULL));
 	json_array_append(codec, value);
 #endif
 #ifdef DECODER_FLAC
-	value = json_string(decoder_flac->mime);
+	value = json_string(decoder_flac->mime(NULL));
 	json_array_append(codec, value);
 #endif
 	json_object_set(input, "codec", codec);

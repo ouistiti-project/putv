@@ -53,6 +53,7 @@ struct src_ctx_s
 };
 #define SRC_CTX
 #include "src.h"
+#include "media.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -317,7 +318,7 @@ static int alsa_run(src_ctx_t *ctx, jitter_t *jitter)
 
 static const char *alsa_mime(src_ctx_t *ctx)
 {
-	return "audio/pcm";
+	return mime_audiopcm;
 }
 
 static void alsa_destroy(src_ctx_t *ctx)

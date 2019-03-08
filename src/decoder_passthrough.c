@@ -45,6 +45,7 @@ struct decoder_ctx_s
 };
 #define DECODER_CTX
 #include "decoder.h"
+#include "media.h"
 #include "jitter.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -86,6 +87,11 @@ static int decoder_check(const char *path)
 	return 1;
 }
 
+static const char *decoder_mime(decoder_ctx_t *ctx)
+{
+	return mime_audiopcm;
+}
+
 static void decoder_destroy(decoder_ctx_t *ctx)
 {
 	free(ctx);
@@ -97,6 +103,6 @@ const decoder_ops_t *decoder_passthrough = &(decoder_ops_t)
 	.init = decoder_init,
 	.jitter = decoder_jitter,
 	.run = decoder_run,
+	.mime = decoder_mime,
 	.destroy = decoder_destroy,
-	.mime = "audio/pcm",
 };

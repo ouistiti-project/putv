@@ -48,6 +48,7 @@ struct src_ctx_s
 };
 #define SRC_CTX
 #include "src.h"
+#include "media.h"
 #include "jitter.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -81,34 +82,33 @@ static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 
 static src_ctx_t *src_init(player_ctx_t *ctx, const char *url)
 {
-	int fd;
-	const char *path = NULL;
+	int fd = -1;
+	char *path = NULL;
 	if (!strcmp(url, "-"))
 		fd = 0;
 	else
 	{
-		if (strstr(url, "://") != NULL)
+		char *protocol = NULL;
+		char *path = NULL;
+		char *value = utils_parseurl(url, &protocol, NULL, NULL, &path, NULL);
+		if (protocol && strcmp(protocol, "file") != 0)
 		{
-			path = strstr(url, "file://");
-			if (path == NULL)
-				return NULL;
-			path += 7;
-		}
-		else
-		{
-			path = url;
-		}
-		if (path[0] == '~')
-		{
-			struct passwd *pw = NULL;
-			pw = getpwuid(geteuid());
-			chdir(pw->pw_dir);
-			path++;
-			if (path[0] == '/')
-				path++;
+			return NULL;
 		}
 		if (path != NULL)
+		{
+			if (path[0] == '~')
+			{
+				struct passwd *pw = NULL;
+				pw = getpwuid(geteuid());
+				chdir(pw->pw_dir);
+				path++;
+				if (path[0] == '/')
+					path++;
+			}
 			fd = open(path, O_RDONLY);
+		}
+		free(value);
 	}
 	if (fd >= 0)
 	{

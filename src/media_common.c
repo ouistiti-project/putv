@@ -79,6 +79,76 @@ const char *utils_getpath(const char *url, const char *proto)
 	return path;
 }
 
+char *utils_parseurl(const char *url, char **protocol, char **host, char **port, char **path, char **search)
+{
+	char *turl = malloc(strlen(url) + 1 + 1);
+	strcpy(turl, url);
+
+	char *str_protocol = turl;
+	char *str_host = strstr(turl, "://");
+	if (str_host == NULL)
+	{
+		if (protocol)
+			*protocol = NULL;
+		if (host)
+			*host = NULL;
+		if (path)
+			*path = turl;
+		return turl;
+	}
+	*str_host = '\0';
+	str_host += 3;
+	char *str_port = strchr(str_host, ':');
+	char *str_path = strchr(str_host, '/');
+	char *str_search = strchr(str_host, '?');
+
+	if (str_port != NULL)
+	{
+		if (str_path && str_path < str_port)
+		{
+			str_port = NULL;
+		}
+		else if (str_search && str_search < str_port)
+		{
+			str_port = NULL;
+		}
+		else
+		{
+			*str_port = '\0';
+			str_port += 1;
+		}
+	}
+	if (str_path != NULL)
+	{
+		if (str_search && str_search < str_path)
+		{
+			str_path = NULL;
+		}
+		else
+		{
+			memmove(str_path + 1, str_path, strlen(str_path) + 1);
+			*str_path = '\0';
+			str_path += 1;
+		}
+	}
+	if (str_search != NULL)
+	{
+		*str_search = '\0';
+		str_search += 1;
+	}
+	if (protocol)
+		*protocol = str_protocol;
+	if (host)
+		*host = str_host;
+	if (port)
+		*port = str_port;
+	if (path)
+		*path = str_path;
+	if (search)
+		*search = str_search;
+	return turl;
+}
+
 static char *current_path;
 media_t *media_build(player_ctx_t *player, const char *url)
 {

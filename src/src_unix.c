@@ -69,39 +69,47 @@ static const char *jitter_name = "unix socket";
 static src_ctx_t *src_init(player_ctx_t *player, const char *url)
 {
 	int count = 2;
-	const char *path = NULL;
-	if (strstr(url, "://") != NULL)
+	int ret;
+	struct sockaddr_un addr;
+	memset(&addr, 0, sizeof(struct sockaddr_un));
+	addr.sun_family = AF_UNIX;
+
+	char *protocol = NULL;
+	char *path = NULL;
+	char *value = utils_parseurl(url, &protocol, NULL, NULL, &path, NULL);
+	if (protocol && strcmp(protocol, "unix") != 0)
 	{
-		path = strstr(url, "file://");
-		if (path != NULL)
-			path += 7;
-		else if ((path = strstr(url, "unix://")) != NULL)
-			path += 7;
-		else
+		free(value);
+		return NULL;
+	}
+	if (path != NULL)
+	{
+		if (path[0] == '~')
+		{
+			struct passwd *pw = NULL;
+			pw = getpwuid(geteuid());
+			chdir(pw->pw_dir);
+			path++;
+			if (path[0] == '/')
+				path++;
+		}
+		struct stat filestat;
+		ret = stat(path, &filestat);
+		if (ret != 0 || !S_ISSOCK(filestat.st_mode))
+		{
+			err("error: %s is not a socket", path);
+			free(value);
 			return NULL;
+		}
+		strncpy(addr.sun_path, path, sizeof(addr.sun_path) - 1);
 	}
 	else
 	{
-		path = url;
-	}
-	if (path[0] == '~')
-	{
-		struct passwd *pw = NULL;
-		pw = getpwuid(geteuid());
-		chdir(pw->pw_dir);
-		path++;
-		if (path[0] == '/')
-			path++;
-	}
-
-	int ret;
-	struct stat filestat;
-	ret = stat(path, &filestat);
-	if (ret != 0 || !S_ISSOCK(filestat.st_mode))
-	{
-		err("error: %s is not a socket", path);
+		free(value);
 		return NULL;
 	}
+	free(value);
+
 
 
 	int handle = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -110,11 +118,6 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url)
 		err("connection error on socket %s", path);
 		return NULL;
 	}
-
-	struct sockaddr_un addr;
-	memset(&addr, 0, sizeof(struct sockaddr_un));
-	addr.sun_family = AF_UNIX;
-	strncpy(addr.sun_path, path, sizeof(addr.sun_path) - 1);
 
 	ret = connect(handle, (struct sockaddr *) &addr, sizeof(addr));
 	if (ret < 0)

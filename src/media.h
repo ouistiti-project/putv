@@ -12,6 +12,12 @@ extern const char const *mime_audiopcm;
 
 const char *utils_getmime(const char *path);
 const char *utils_getpath(const char *url, const char *proto);
+char *utils_parseurl(const char *url,
+								char **protocol,
+								char **host,
+								char **port,
+								char **path,
+								char **search);
 
 typedef struct media_ctx_s media_ctx_t;
 

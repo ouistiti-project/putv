@@ -408,7 +408,41 @@ static void *alsa_thread(void *arg)
 
 static int alsa_run(sink_ctx_t *ctx)
 {
+#ifdef USE_REALTIME
+	int ret;
+
+	pthread_attr_t attr;
+	struct sched_param params;
+
+	pthread_attr_init(&attr);
+
+	ret = pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+	if (ret < 0)
+		err("setdetachstate error %s", strerror(errno));
+	ret = pthread_attr_setscope(&attr, PTHREAD_SCOPE_PROCESS);
+	if (ret < 0)
+		err("setscope error %s", strerror(errno));
+	ret = pthread_attr_setschedpolicy(&attr, SINK_POLICY);
+	if (ret < 0)
+		err("setschedpolicy error %s", strerror(errno));
+	params.sched_priority = SINK_PRIORITY;
+	ret = pthread_attr_setschedparam(&attr, &params);
+	if (ret < 0)
+		err("setschedparam error %s", strerror(errno));
+	if (getuid() == 0)
+		ret = pthread_attr_setinheritsched(&attr, PTHREAD_EXPLICIT_SCHED);
+	else
+	{
+		warn("run server as root to use realtime");
+		ret = pthread_attr_setinheritsched(&attr, PTHREAD_INHERIT_SCHED);
+	}
+	if (ret < 0)
+		err("setinheritsched error %s", strerror(errno));
+	pthread_create(&ctx->thread, &attr, sink_thread, ctx);
+	pthread_attr_destroy(&attr);
+#else
 	pthread_create(&ctx->thread, NULL, alsa_thread, ctx);
+#endif
 	return 0;
 }
 

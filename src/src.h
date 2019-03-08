@@ -13,9 +13,9 @@ typedef struct src_ops_s src_ops_t;
 struct src_ops_s
 {
 	const char *protocol;
-	const char *mime;
 	src_ctx_t *(*init)(player_ctx_t *, const char *path);
 	int (*run)(src_ctx_t *, jitter_t *jitter);
+	const char *(*mime)(src_ctx_t *ctx);
 	void (*destroy)(src_ctx_t *);
 };
 

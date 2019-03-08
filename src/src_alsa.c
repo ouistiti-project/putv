@@ -315,6 +315,11 @@ static int alsa_run(src_ctx_t *ctx, jitter_t *jitter)
 	return 0;
 }
 
+static const char *alsa_mime(src_ctx_t *ctx)
+{
+	return "audio/pcm";
+}
+
 static void alsa_destroy(src_ctx_t *ctx)
 {
 	pthread_join(ctx->thread, NULL);
@@ -329,5 +334,5 @@ const src_ops_t *src_alsa = &(src_ops_t)
 	.init = alsa_init,
 	.run = alsa_run,
 	.destroy = alsa_destroy,
-	.mime = "audio/pcm",
+	.mime = alsa_mime,
 };

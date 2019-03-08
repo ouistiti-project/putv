@@ -38,6 +38,7 @@
 
 #include "player.h"
 #include "decoder.h"
+#include "media.h"
 #include "src.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -121,8 +122,13 @@ src_t *src_build(player_ctx_t *player, const char *url, const char *mime)
 	src->ops = src_default;
 	src->ctx = src_ctx;
 
-	if (src->ops->mime != NULL)
-		mime = src->ops->mime;
+	if (src->ops->mime != NULL &&
+		(mime == NULL || mime[0] == '\0' || !strcmp(mime, mime_octetstream)))
+	{
+		mime = src->ops->mime(src->ctx);
+		if (mime == NULL)
+			mime = mime_octetstream;
+	}
 	decoder_t *decoder = NULL;
 	decoder = decoder_build(player, mime, player_filter(player));
 

@@ -44,7 +44,7 @@ typedef struct src_ctx_s src_ctx_t;
 struct src_ctx_s
 {
 	player_ctx_t *player;
-	const src_ops_t *ops;
+	const char *mime;
 	int handle;
 	state_t state;
 	pthread_t thread;
@@ -53,6 +53,7 @@ struct src_ctx_s
 };
 #define SRC_CTX
 #include "src.h"
+#include "media.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -126,7 +127,15 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url)
 	src_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->player = player;
 	ctx->handle = handle;
-
+	ctx->mime = utils_getmime(path);
+	if (ctx->mime == mime_octetstream)
+	{
+#ifdef DECODER_LAME
+		ctx->mime = "audio/mp3";
+#elif defined(DECODER_FLAC)
+		ctx->mime = "audio/flac";
+#endif
+	}
 	return ctx;
 }
 
@@ -178,6 +187,11 @@ static int src_run(src_ctx_t *ctx, jitter_t *jitter)
 	return 0;
 }
 
+static const char *src_mime(src_ctx_t *ctx)
+{
+	return ctx->mime;
+}
+
 static void src_destroy(src_ctx_t *ctx)
 {
 	if (ctx->thread)
@@ -189,12 +203,8 @@ static void src_destroy(src_ctx_t *ctx)
 const src_ops_t *src_unix = &(src_ops_t)
 {
 	.protocol = "unix://|file://",
-#ifdef DECODER_LAME
-	.mime = "audio/mp3",
-#elif defined(DECODER_FLAC)
-	.mime = "audio/flac",
-#endif
 	.init = src_init,
 	.run = src_run,
+	.mime = src_mime,
 	.destroy = src_destroy,
 };

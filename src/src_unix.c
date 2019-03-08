@@ -189,7 +189,11 @@ static void src_destroy(src_ctx_t *ctx)
 const src_ops_t *src_unix = &(src_ops_t)
 {
 	.protocol = "unix://|file://",
+#ifdef DECODER_LAME
 	.mime = "audio/mp3",
+#elif defined(DECODER_FLAC)
+	.mime = "audio/flac",
+#endif
 	.init = src_init,
 	.run = src_run,
 	.destroy = src_destroy,

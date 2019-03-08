@@ -170,13 +170,29 @@ static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data)
 static int media_next(media_ctx_t *ctx)
 {
 	int ret = -1;
-	if ((ctx->current == NULL) && (ctx->options & OPTION_LOOP))
+	if (ctx->current != NULL)
 	{
-		dbg("media loop");
+		ctx->current = ctx->current->next;
+		/**
+		 * if the list is available the next may be not null.
+		 * stop or replay for the last entry, depends of the LOOP
+		 * option
+		 */
+		if ((ctx->current == NULL) &&
+			(ctx->options & OPTION_LOOP))
+		{
+			dbg("media loop");
+			ctx->current = ctx->media;
+		}
+	}
+	else
+	{
+		/**
+		 * first call to the next function
+		 * has to set the current with the first
+		 */
 		ctx->current = ctx->media;
 	}
-	else if (ctx->current != NULL)
-		ctx->current = ctx->current->next;
 
 	if (ctx->current != NULL)
 		ret = ctx->current->id;

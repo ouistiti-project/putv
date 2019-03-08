@@ -82,8 +82,7 @@ static int heartbeat_wait(heartbeat_ctx_t *ctx, void *arg)
 		ctx->clock.tv_nsec -= 1000000000;
 		ctx->clock.tv_sec += 1;
 	}
-	struct timespec rest;
-	memset(&rest, 0, sizeof(rest));
+	struct timespec rest = {0};
 	struct timespec now = {0, 0};
 	clock_gettime(clockid, &now);
 	if (now.tv_sec > ctx->clock.tv_sec ||
@@ -97,8 +96,8 @@ static int heartbeat_wait(heartbeat_ctx_t *ctx, void *arg)
 			now.tv_sec -= 1;
 		}
 		if (now.tv_nsec > 10000000)
-			heartbeat_dbg("heartbeat to late %u.%u", now.tv_sec, now.tv_nsec);
-		//clock_gettime(clockid, &ctx->clock);
+			heartbeat_dbg("heartbeat to late %lu.%09lu", now.tv_sec, now.tv_nsec);
+		clock_gettime(clockid, &ctx->clock);
 		return -1;
 	}
 	int flags = TIMER_ABSTIME;
@@ -106,7 +105,7 @@ static int heartbeat_wait(heartbeat_ctx_t *ctx, void *arg)
 	{
 		err("heartbeat hook");
 	}
-	heartbeat_dbg("heartbeat: boom %d", msec);
+	heartbeat_dbg("heartbeat: boom %ld.%03ld", msec / 1000, msec %1000);
 	clock_gettime(clockid, &ctx->clock);
 	beat->nsamples = 0;
 

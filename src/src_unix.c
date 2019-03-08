@@ -157,7 +157,9 @@ static void *src_thread(void *arg)
 		}
 		else if (ret == 0)
 		{
+			ctx->out->ops->push(ctx->out->ctx, 0, NULL);
 			ctx->out->ops->flush(ctx->out->ctx);
+			break;
 		}
 		else
 		{

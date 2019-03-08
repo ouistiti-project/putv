@@ -67,7 +67,7 @@ struct sink_ctx_s
 #define sink_dbg(...)
 
 #define LATENCE_MS 50
-#define NB_BUFFER 6
+#define NB_BUFFER 3
 
 #ifdef USE_REALTIME
 // REALTIME_SCHED is set from the Makefile to SCHED_RR
@@ -196,11 +196,18 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 	{
 		int dir = 0;
 		periodsize = *size;
-		buffersize = *size * NB_BUFFER;
+		buffersize = (*size * NB_BUFFER) / (ctx->samplesize * ctx->nchannels);// in number of frames
 		ret = snd_pcm_hw_params_set_buffer_size_near(ctx->playback_handle, hw_params, &buffersize);
 		if (ret < 0)
 		{
 			err("sink: buffer_size");
+			goto error;
+		}
+
+		ret = snd_pcm_hw_params_set_periods(ctx->playback_handle, hw_params, NB_BUFFER, 0);
+		if (ret < 0)
+		{
+			err("sink: periods");
 			goto error;
 		}
 
@@ -232,8 +239,10 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 		rate,
 		ctx->samplesize,
 		ctx->nchannels);
-	ctx->buffersize = periodsize;
-	*size = periodsize;
+	ctx->buffersize = periodsize * ctx->samplesize * ctx->nchannels;
+	*size = periodsize * ctx->samplesize * ctx->nchannels;
+	ctx->buffersize = (buffersize * ctx->samplesize * ctx->nchannels) / NB_BUFFER;
+	*size = ctx->buffersize;
 
 	ret = snd_pcm_prepare(ctx->playback_handle);
 	if (ret < 0) {
@@ -384,7 +393,7 @@ static void *alsa_thread(void *arg)
 			_alsa_checksamplerate(ctx);
 			//snd_pcm_mmap_begin
 			ret = snd_pcm_writei(ctx->playback_handle, buff, length / divider);
-			sink_dbg("sink  alsa : write %d %d", ret * divider, length);
+			sink_dbg("sink  alsa : write %d/%d %d/%d %d", ret * divider, length, ret, length / divider, divider);
 			if (ret == -EPIPE)
 			{
 				warn("pcm recover");

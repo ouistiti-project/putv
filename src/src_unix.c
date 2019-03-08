@@ -31,6 +31,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/ioctl.h>
@@ -63,16 +64,20 @@ struct src_ctx_s
 
 #define src_dbg(...)
 
-static const char *jitter_name = "unxi socket";
+static const char *jitter_name = "unix socket";
 static src_ctx_t *src_init(player_ctx_t *player, const char *url)
 {
 	int count = 2;
-	src_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	const char *path = NULL;
-
 	if (strstr(url, "://") != NULL)
 	{
-		path = strstr(url, "file://") + 7;
+		path = strstr(url, "file://");
+		if (path != NULL)
+			path += 7;
+		else if ((path = strstr(url, "unix://")) != NULL)
+			path += 7;
+		else
+			return NULL;
 	}
 	else
 	{
@@ -88,27 +93,40 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url)
 			path++;
 	}
 
-	ctx->ops = src_unix;
-	ctx->player = player;
-
-	ctx->handle = socket(AF_UNIX, SOCK_STREAM, 0);
-	if (ctx->handle == 0)
+	int ret;
+	struct stat filestat;
+	ret = stat(path, &filestat);
+	if (ret != 0 || !S_ISSOCK(filestat.st_mode))
 	{
-		free(ctx);
+		err("error: %s is not a socket", path);
 		return NULL;
 	}
+
+
+	int handle = socket(AF_UNIX, SOCK_STREAM, 0);
+	if (handle == 0)
+	{
+		err("connection error on socket %s", path);
+		return NULL;
+	}
+
 	struct sockaddr_un addr;
 	memset(&addr, 0, sizeof(struct sockaddr_un));
 	addr.sun_family = AF_UNIX;
 	strncpy(addr.sun_path, path, sizeof(addr.sun_path) - 1);
 
-	int ret = connect(ctx->handle, (struct sockaddr *) &addr, sizeof(addr));
+	ret = connect(handle, (struct sockaddr *) &addr, sizeof(addr));
 	if (ret < 0)
 	{
-		close(ctx->handle);
-		free(ctx);
+		err("connection error on socket %s", path);
+		close(handle);
 		return NULL;
 	}
+
+	src_ctx_t *ctx = calloc(1, sizeof(*ctx));
+	ctx->player = player;
+	ctx->handle = handle;
+
 	return ctx;
 }
 
@@ -168,7 +186,7 @@ static void src_destroy(src_ctx_t *ctx)
 
 const src_ops_t *src_unix = &(src_ops_t)
 {
-	.protocol = "unix://",
+	.protocol = "unix://|file://",
 	.mime = "audio/mp3",
 	.init = src_init,
 	.run = src_run,

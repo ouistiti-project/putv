@@ -69,6 +69,12 @@ struct sink_ctx_s
 #define LATENCE_MS 50
 #define NB_BUFFER 6
 
+#ifdef USE_REALTIME
+// REALTIME_SCHED is set from the Makefile to SCHED_RR
+#define SINK_POLICY REALTIME_SCHED
+#define SINK_PRIORITY 65
+#endif
+
 #ifdef SINK_ALSA_MIXER
 void _mixer_setvolume(sink_ctx_t *ctx, unsigned int volume)
 {

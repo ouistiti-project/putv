@@ -184,7 +184,7 @@ int main(int argc, char **argv)
 
 	if (logfile != NULL && logfile[0] != '\0')
 	{
-		int logfd = open(logfile, O_WRONLY | O_CREAT, 00644);
+		int logfd = open(logfile, O_WRONLY | O_CREAT | O_TRUNC, 00644);
 		if (logfd > 0)
 		{
 			dup2(logfd, 1);

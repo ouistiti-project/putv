@@ -190,24 +190,10 @@ int main(int argc, char **argv)
 			dup2(logfd, 1);
 			dup2(logfd, 2);
 			close(logfd);
-			logfile = NULL;
 		}
 		else
 			err("log file error %s", strerror(errno));
 	}
-#ifndef DEBUG
-	if (logfile == NULL && (getuid() == 0))
-	{
-		int logfd = open("/dev/null", O_WRONLY);
-		if (logfd > 0)
-		{
-			dup2(logfd, 1);
-			dup2(logfd, 2);
-			close(logfd);
-			logfile = NULL;
-		}
-	}
-#endif
 
 	player_ctx_t *player = player_init(filtername);
 	player_change(player, mediapath, (mode & RANDOM), (mode & LOOP));
@@ -264,14 +250,30 @@ int main(int argc, char **argv)
 
 	cmds_t cmds[3];
 	int nbcmds = 0;
-#ifdef CMDLINE
 	if (!(mode & DAEMONIZE))
 	{
+#ifdef CMDLINE
 		cmds[nbcmds].ops = cmds_line;
 		cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, sink, NULL);
 		nbcmds++;
-	}
 #endif
+	}
+	else
+	{
+#ifndef DEBUG
+		int nullfd = open("/dev/null", O_WRONLY);
+		if (nullfd > 0)
+		{
+			dup2(nullfd, 0);
+			if (logfile == NULL)
+			{
+				dup2(nullfd, 1);
+				dup2(nullfd, 2);
+			}
+			close(nullfd);
+		}
+#endif
+	}
 #ifdef CMDINPUT
 	cmds[nbcmds].ops = cmds_input;
 	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, sink, CMDINPUT_PATH);

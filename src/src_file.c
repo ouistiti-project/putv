@@ -68,8 +68,18 @@ static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 	{
 		return 0;
 	}
-	ret = read(ctx->fd, buff, len);
-	src_dbg("src: read %d", ret);
+	fd_set rfds;
+	int maxfd = ctx->fd;
+	FD_ZERO(&rfds);
+	FD_SET(ctx->fd, &rfds);
+	struct timeval timeout = {1,0};
+	ret = select(maxfd + 1, &rfds, NULL, NULL, &timeout);
+	if (ret > 0 && FD_ISSET(ctx->fd,&rfds))
+		ret = read(ctx->fd, buff, len);
+	else if (ret == 0)
+	{
+		warn("src: timeout");
+	}
 	if (ret < 0)
 		err("src file %d error: %s", ctx->fd, strerror(errno));
 	if (ret == 0)

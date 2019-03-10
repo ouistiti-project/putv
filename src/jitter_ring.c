@@ -28,6 +28,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
 
 #define __USE_GNU
 #include <pthread.h>
@@ -226,26 +227,48 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter)
 	pthread_mutex_lock(&private->mutex);
 	if (private->state == JITTER_STOP)
 		_jitter_init(jitter);
-	pthread_mutex_unlock(&private->mutex);
-	if ((private->in <= (private->out + jitter->size)) &&
-		(jitter->produce != NULL))
+	/**
+	 * The jitter is configurated to be use without input thread
+	 * The producer push data in the same thread as the consumer
+	 */
+	if (jitter->produce != NULL)
 	{
-		int len;
-		pthread_mutex_lock(&private->mutex);
-		len = jitter->produce(jitter->producter, 
-			private->in, jitter->size);
-		pthread_mutex_unlock(&private->mutex);
-		if (len > 0)
-			jitter_push(jitter, len, NULL);
-		else
-			return NULL;
-		if (private->state == JITTER_FILLING)
+		/**
+		 * chekck if there enought space into the buffer to push
+		 * more data as least one block
+		 */
+		if 	(private->level <= ((jitter->count - 1) * jitter->size))
 		{
-			dbg("jitter %s not enought data (%d/%ld)", jitter->name, private->level, jitter->size);
-			return NULL;
+			int len;
+			len = jitter->produce(jitter->producter, 
+				private->in, jitter->size);
+			/**
+			 * To push the jitter has to be unlock
+			 * like before to return
+			 */
+			pthread_mutex_unlock(&private->mutex);
+			if (len > 0)
+				jitter_push(jitter, len, NULL);
+			else
+			{
+				return NULL;
+			}
+			if (private->state == JITTER_FILLING)
+			{
+				dbg("jitter %s not enought data (%d/%ld)", jitter->name, private->level, jitter->size);
+				return NULL;
+			}
+			pthread_mutex_lock(&private->mutex);
+		}
+		else
+		{
+			private->state = JITTER_RUNNING;
 		}
 	}
-	pthread_mutex_lock(&private->mutex);
+	/**
+	 * The variatic configuration allows to push and to pop
+	 * a quantity of data different of the configurated block size.
+	 */
 	if ((private->out + jitter->size) > private->bufferend)
 	{
 		/**
@@ -261,9 +284,13 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter)
 		private->out = private->bufferstart - len;
 	}
 
-	while (private->state == JITTER_FILLING && private->in != NULL)
+	/**
+	 * The checking of produce should be useless, but it's a secure addon
+	 */
+	while (private->state == JITTER_FILLING && private->in != NULL && jitter->produce == NULL)
 	{
 		dbg("jitter %s peer block on %p (%d/%ld)", jitter->name, private->out, private->level, jitter->size);
+		jitter_dbg("jitter %s peer block on %p %p %d", jitter->name, private->in, private->out + jitter->size, private->in <= private->out + jitter->size);
 		pthread_cond_wait(&private->condpeer, &private->mutex);
 	}
 

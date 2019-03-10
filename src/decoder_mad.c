@@ -244,7 +244,9 @@ static void *mad_thread(void *arg)
 	int result = 0;
 	decoder_ctx_t *ctx = (decoder_ctx_t *)arg;
 	/* start decoding */
+	dbg("decoder: start running");
 	result = mad_decoder_run(&ctx->decoder, MAD_DECODER_MODE_SYNC);
+	dbg("decoder: stop running");
 	/**
 	 * push the last buffer to the encoder, otherwise the next
 	 * decoder will begins with a pull buffer

@@ -293,6 +293,9 @@ int main(int argc, char **argv)
 	for (i = 0; i < nbcmds; i++)
 		cmds[i].ops->run(cmds[i].ctx);
 
+	/**
+	 * the sink must to run before to start the encoder
+	 */
 	sink->ops->run(sink->ctx);
 	jitter_t *sink_jitter = NULL;
 	sink_jitter = sink->ops->jitter(sink->ctx);

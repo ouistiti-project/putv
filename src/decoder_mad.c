@@ -213,7 +213,7 @@ enum mad_flow error(void *data,
 #define BUFFERSIZE (40*LATENCE)
 
 /// NBBUFFER must be at least 3 otherwise the decoder block on the end of the source
-#define NBUFFER 3
+#define NBUFFER 6
 
 static const char *jitter_name = "mad decoder";
 static decoder_ctx_t *mad_init(player_ctx_t *player, const filter_t *filter)
@@ -230,6 +230,7 @@ static decoder_ctx_t *mad_init(player_ctx_t *player, const filter_t *filter)
 	//jitter_t *jitter = jitter_ringbuffer_init(jitter_name, NBUFFER, BUFFERSIZE);
 	ctx->in = jitter;
 	jitter->format = MPEG2_3_MP3;
+	jitter->ctx->thredhold = 3;
 
 	return ctx;
 }

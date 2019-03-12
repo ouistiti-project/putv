@@ -239,26 +239,28 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter)
 		 */
 		if 	(private->level <= ((jitter->count - 1) * jitter->size))
 		{
-			int len;
-			len = jitter->produce(jitter->producter, 
-				private->in, jitter->size);
-			/**
-			 * To push the jitter has to be unlock
-			 * like before to return
-			 */
-			pthread_mutex_unlock(&private->mutex);
-			if (len > 0)
-				jitter_push(jitter, len, NULL);
-			else
+			do
 			{
-				return NULL;
-			}
-			if (private->state == JITTER_FILLING)
-			{
-				dbg("jitter %s not enought data (%d/%ld)", jitter->name, private->level, jitter->size);
-				return NULL;
-			}
-			pthread_mutex_lock(&private->mutex);
+				/**
+				 * The producer must push enougth data to start
+				 * the running, otherwise the peer will block.
+				 */
+				int len;
+				len = jitter->produce(jitter->producter,
+					private->in, jitter->size);
+				/**
+				 * To push the jitter has to be unlock
+				 * like before to return
+				 */
+				pthread_mutex_unlock(&private->mutex);
+				if (len > 0)
+					jitter_push(jitter, len, NULL);
+				else
+				{
+					return NULL;
+				}
+				pthread_mutex_lock(&private->mutex);
+			} while (private->state == JITTER_FILLING);
 		}
 		else
 		{

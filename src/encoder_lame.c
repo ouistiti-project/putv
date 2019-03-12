@@ -238,7 +238,7 @@ static int encoder_run(encoder_ctx_t *ctx, jitter_t *jitter)
 	if (heartbeat_samples)
 	{
 		ctx->heartbeat.ops = heartbeat_samples;
-		ctx->heartbeat.ctx = heartbeat_samples->init(ctx->samplerate, 2, ctx->nchannels);
+		ctx->heartbeat.ctx = heartbeat_samples->init(ctx->samplerate, jitter->format, ctx->nchannels);
 		dbg("set heart %s", jitter->ctx->name);
 		jitter->ctx->heart = heartbeat_samples->wait;
 		jitter->ctx->heart_ctx = ctx->heartbeat.ctx;

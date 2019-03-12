@@ -49,15 +49,31 @@ struct heartbeat_ctx_s
 #define dbg(...)
 #endif
 
-#define heartbeat_dbg(...)
+#define heartbeat_dbg dbg
 
-heartbeat_ctx_t *heartbeat_init(unsigned int samplerate, unsigned int samplesize, unsigned int nchannels)
+heartbeat_ctx_t *heartbeat_init(unsigned int samplerate, jitter_format_t format, unsigned int nchannels)
 {
 	heartbeat_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->samplerate = samplerate;
-	ctx->samplesize = samplesize;
+	switch (format)
+	{
+	case PCM_16bits_LE_mono:
+	case PCM_16bits_LE_stereo:
+		ctx->samplesize = 2;
+	break;
+	case PCM_24bits3_LE_stereo:
+		ctx->samplesize = 2;
+	break;
+	case PCM_24bits4_LE_stereo:
+	case PCM_32bits_LE_stereo:
+	case PCM_32bits_BE_stereo:
+		ctx->samplesize = 2;
+	break;
+	default:
+		ctx->samplesize = 4;
+	break;
+	}
 	ctx->nchannels = nchannels;
-
 	return ctx;
 }
 

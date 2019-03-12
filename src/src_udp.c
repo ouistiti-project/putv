@@ -101,15 +101,18 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url)
 	}
 
 	int ret;
+	int af = AF_INET;
 
 	in_addr_t inaddr;
-	ret = inet_pton(AF_INET, host, &inaddr);
+	struct in6_addr in6addr;
+	ret = inet_pton(af, host, &inaddr);
 	if (ret != 1)
 	{
-		return NULL;
+		af = AF_INET6;
+		ret = inet_pton(AF_INET6, host, &in6addr);
 	}
 
-	int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+	int sock = socket(af, SOCK_DGRAM, IPPROTO_IP);
 	if (sock == 0)
 	{
 		return NULL;
@@ -118,7 +121,8 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url)
 	struct sockaddr *addr = NULL;
 	int addrlen = 0;
 	struct sockaddr_in saddr;
-	if (sock > 0)
+	struct sockaddr_in6 saddr6;
+	if (af == AF_INET)
 	{
 		memset(&saddr, 0, sizeof(struct sockaddr_in));
 		saddr.sin_family = PF_INET;
@@ -126,6 +130,15 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url)
 		saddr.sin_port = htons(iport); // Use the first free port
 		addr = (struct sockaddr*)&saddr;
 		addrlen = sizeof(saddr);
+	}
+	else
+	{
+		memset(&saddr6, 0, sizeof(struct sockaddr_in6));
+		saddr6.sin6_family = PF_INET6;
+		memcpy(&saddr6.sin6_addr, &in6addr_any, sizeof(saddr6.sin6_addr)); // bind socket to any interface
+		saddr6.sin6_port = htons(iport); // Use the first free port
+		addr = (struct sockaddr*)&saddr6;
+		addrlen = sizeof(saddr6);
 	}
 
 	ret = bind(sock, addr, addrlen);
@@ -135,7 +148,7 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url)
 		ret = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &value, sizeof(value));
 	}
 
-	if ((ret == 0) && IN_MULTICAST(inaddr))
+	if ((ret == 0) && (af == AF_INET) && IN_MULTICAST(inaddr))
 	{
 		struct ip_mreq imreq;
 		memset(&imreq, 0, sizeof(struct ip_mreq));
@@ -146,13 +159,24 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url)
 		ret = setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP,
 			(const void *)&imreq, sizeof(imreq));
 	}
+	else if ((ret == 0) && (af == AF_INET6) && IN6_IS_ADDR_MULTICAST(&in6addr))
+	{
+		struct ipv6_mreq imreq;
+		memset(&imreq, 0, sizeof(struct ip_mreq));
+		memcpy(&imreq.ipv6mr_multiaddr.s6_addr, &in6addr, sizeof(struct in6_addr));
+		imreq.ipv6mr_interface = 0; // use DEFAULT interface
+
+		// JOIN multicast group on default interface
+		ret = setsockopt(sock, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP,
+			(const void *)&imreq, sizeof(imreq));
+	}
 
 	src_ctx_t *ctx = NULL;
 	if (ret == 0)
 	{
 		ctx = calloc(1, sizeof(*ctx));
 
-		if (ctx != NULL)
+		if (af == AF_INET)
 		{
 			memset(&ctx->saddr, 0, sizeof(ctx->saddr));
 			ctx->saddr.sin_family = PF_INET;
@@ -160,6 +184,15 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url)
 			ctx->saddr.sin_port = htons(iport);
 			ctx->addr = (struct sockaddr*)&ctx->saddr;
 			ctx->addrlen = sizeof(ctx->saddr);
+		}
+		else
+		{
+			memset(&ctx->saddr6, 0, sizeof(ctx->saddr6));
+			ctx->saddr6.sin6_family = PF_INET6;
+			memcpy(&ctx->saddr6.sin6_addr, &in6addr, sizeof(struct in6_addr));
+			ctx->saddr6.sin6_port = htons(iport);
+			ctx->addr = (struct sockaddr*)&ctx->saddr6;
+			ctx->addrlen = sizeof(ctx->saddr6);
 		}
 
 		ctx->player = player;

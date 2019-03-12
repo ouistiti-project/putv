@@ -1,12 +1,9 @@
-ifeq ($(DECODER),)
-	ifeq ($(DECODER_PASSTHROUGH),y)
-		DECODER=decoder_passthrough
+ifeq ($(HEARTBEAT),)
+	ifeq ($(SINK_UNIX),y)
+		HEARTBEAT=y
 	endif
-	ifeq ($(DECODER_FLAC),y)
-		DECODER=decoder_flac
-	endif
-	ifeq ($(DECODER_MAD),y)
-		DECODER=decoder_mad
+	ifeq ($(SINK_UDP),y)
+		HEARTBEAT=y
 	endif
 endif
 
@@ -88,6 +85,9 @@ $(PUTV)_LIBRARY-$(SINK_TINYALSA)+=tinyalsa
 $(PUTV)_SOURCES-$(SINK_FILE)+=sink_file.c
 $(PUTV)_CFLAGS-$(SINK_FILE)+=-DSINK_FILE
 $(PUTV)_CFLAGS-$(SINK_FILE)+=-DSINK=sink_file
+$(PUTV)_SOURCES-$(SINK_UDP)+=sink_udp.c
+$(PUTV)_CFLAGS-$(SINK_UPD)+=-DSINK_UPD
+$(PUTV)_CFLAGS-$(SINK_UDP)+=-DSINK=sink_udp
 $(PUTV)_SOURCES-$(SINK_UNIX)+=sink_unix.c
 $(PUTV)_SOURCES-$(SINK_UNIX)+=unix_server.c
 $(PUTV)_CFLAGS-$(SINK_UNIX)+=-DSINK_UNIX

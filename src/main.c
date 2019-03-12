@@ -279,6 +279,11 @@ int main(int argc, char **argv)
 	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, sink, CMDINPUT_PATH);
 	nbcmds++;
 #endif
+#ifdef TINYSVCMDNS
+	cmds[nbcmds].ops = cmds_tinysvcmdns;
+	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, sink, "RadioGaga");
+	nbcmds++;
+#endif
 #ifdef JSONRPC
 	char socketpath[256];
 	snprintf(socketpath, sizeof(socketpath) - 1, "%s/%s", root, name);

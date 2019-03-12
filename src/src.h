@@ -34,4 +34,5 @@ extern const src_ops_t *src_file;
 extern const src_ops_t *src_curl;
 extern const src_ops_t *src_unix;
 extern const src_ops_t *src_alsa;
+extern const src_ops_t *src_udp;
 #endif

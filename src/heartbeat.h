@@ -16,6 +16,8 @@ struct heartbeat_ops_s
 {
 	heartbeat_ctx_t *(*init)(unsigned int rate, jitter_format_t format, unsigned int nchannels);
 	int (*wait)(heartbeat_ctx_t *ctx, void *data);
+	int (*lock)(heartbeat_ctx_t *ctx);
+	int (*unlock)(heartbeat_ctx_t *ctx);
 	void (*destroy)(heartbeat_ctx_t *);
 };
 

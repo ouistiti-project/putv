@@ -29,7 +29,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#include <pthread.h>
 
+#include "jitter.h"
 typedef struct heartbeat_ctx_s heartbeat_ctx_t;
 struct heartbeat_ctx_s
 {
@@ -37,6 +39,7 @@ struct heartbeat_ctx_s
 	unsigned int samplesize;
 	unsigned int nchannels;
 	struct timespec clock;
+	pthread_mutex_t mutex;
 };
 #define HEARTBEAT_CTX
 #include "heartbeat.h"
@@ -74,11 +77,13 @@ heartbeat_ctx_t *heartbeat_init(unsigned int samplerate, jitter_format_t format,
 	break;
 	}
 	ctx->nchannels = nchannels;
+	pthread_mutex_init(&ctx->mutex, NULL);
 	return ctx;
 }
 
 void heartbeat_destroy(heartbeat_ctx_t *ctx)
 {
+	pthread_mutex_destroy(&ctx->mutex);
 	free(ctx);
 }
 
@@ -89,16 +94,17 @@ static int heartbeat_wait(heartbeat_ctx_t *ctx, void *arg)
 	if (ctx->samplerate == 0)
 		return -1;
 	unsigned long msec = beat->nsamples * 1000 / ctx->samplerate;
+	pthread_mutex_lock(&ctx->mutex);
+
 	if (ctx->clock.tv_sec == 0 && ctx->clock.tv_nsec == 0)
 		clock_gettime(clockid, &ctx->clock);
-	ctx->clock.tv_nsec += (msec % 1000) * 1000000;
-	ctx->clock.tv_sec += msec / 1000;
+	ctx->clock.tv_nsec += (usec % 1000) * 1000000;
+	ctx->clock.tv_sec += usec / 1000000000;
 	if (ctx->clock.tv_nsec > 1000000000)
 	{
 		ctx->clock.tv_nsec -= 1000000000;
 		ctx->clock.tv_sec += 1;
 	}
-	struct timespec rest = {0};
 	struct timespec now = {0, 0};
 	clock_gettime(clockid, &now);
 	if (now.tv_sec > ctx->clock.tv_sec ||
@@ -114,6 +120,7 @@ static int heartbeat_wait(heartbeat_ctx_t *ctx, void *arg)
 		if (now.tv_nsec > 10000000)
 			heartbeat_dbg("heartbeat to late %lu.%09lu", now.tv_sec, now.tv_nsec);
 		clock_gettime(clockid, &ctx->clock);
+		pthread_mutex_unlock(&ctx->mutex);
 		return -1;
 	}
 	int flags = TIMER_ABSTIME;
@@ -125,12 +132,25 @@ static int heartbeat_wait(heartbeat_ctx_t *ctx, void *arg)
 	clock_gettime(clockid, &ctx->clock);
 	beat->nsamples = 0;
 
+	pthread_mutex_unlock(&ctx->mutex);
 	return 0;
+}
+
+static int heartbeat_lock(heartbeat_ctx_t *ctx)
+{
+	return pthread_mutex_lock(&ctx->mutex);
+}
+
+static int heartbeat_unlock(heartbeat_ctx_t *ctx)
+{
+	return pthread_mutex_unlock(&ctx->mutex);
 }
 
 const heartbeat_ops_t *heartbeat_samples = &(heartbeat_ops_t)
 {
 	.init = heartbeat_init,
 	.wait = heartbeat_wait,
+	.lock = heartbeat_lock,
+	.unlock = heartbeat_unlock,
 	.destroy = heartbeat_destroy,
 };

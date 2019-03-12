@@ -38,6 +38,7 @@
 #include <lame/lame.h>
 
 #include "player.h"
+#include "jitter.h"
 #include "heartbeat.h"
 
 typedef struct encoder_s encoder_t;
@@ -60,10 +61,10 @@ struct encoder_ctx_s
 	heartbeat_t heartbeat;
 	heartbeat_samples_t beat;
 	unsigned long nsamples;
+	unsigned long nsamplesperbeat;
 };
 #define ENCODER_CTX
 #include "encoder.h"
-#include "jitter.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -74,6 +75,8 @@ struct encoder_ctx_s
 #endif
 
 #define encoder_dbg(...)
+
+#define NB_BUFFERS 10
 
 static const char *jitter_name = "lame encoder";
 void error_report(const char *format, va_list ap)
@@ -121,8 +124,10 @@ static encoder_ctx_t *encoder_init(player_ctx_t *player)
 	 */
 	ctx->samplesframe = lame_get_framesize(ctx->encoder) * 3;
 	//ctx->samplesframe = 576;
-	jitter_t *jitter = jitter_scattergather_init(jitter_name, 3,
+	jitter_t *jitter = jitter_scattergather_init(jitter_name, NB_BUFFERS,
 				ctx->samplesframe * ctx->samplesize * ctx->nchannels);
+	ctx->nsamplesperbeat = NB_BUFFERS * ctx->samplesframe * 2 / 3;
+	err("ctx->nsamplesperbeat %ld %d", ctx->nsamplesperbeat, ctx->samplerate);
 	ctx->in = jitter;
 	jitter->format = PCM_16bits_LE_stereo;
 	jitter->ctx->frequence = 0;
@@ -196,12 +201,15 @@ static void *lame_thread(void *arg)
 
 			if (ctx->nsamples > nsamples)
 			{
-				ctx->beat.nsamples = ctx->nsamples - nsamples;
-				if (ctx->beat.nsamples > (ctx->samplerate / 50))
+				ctx->heartbeat.ops->lock(&ctx->heartbeat.ctx);
+				if (ctx->nsamples > ctx->nsamplesperbeat)
 				{
+					ctx->beat.nsamples = ctx->nsamples;
+					//ctx->beat.nsamples -= nsamples;
 					beat = &ctx->beat;
 					ctx->nsamples = 0;
 				}
+				ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
 			}
 #endif
 			ctx->out->ops->push(ctx->out->ctx, ret, beat);

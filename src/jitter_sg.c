@@ -269,6 +269,11 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 		 * has to send an event to the consumer
 		 * that a new buffer is ready */
 		pthread_cond_broadcast(&private->condpeer);
+		if (jitter->heart != NULL)
+		{
+			if (private->in->beat)
+				pthread_yield();
+		}
 	}
 	else if (private->state == JITTER_FILLING &&
 			private->level == jitter->thredhold)
@@ -353,6 +358,7 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter)
 		 * when the heart beats
 		 */
 		jitter->heart(jitter->heart_ctx, private->out->beat);
+		private->out->beat = NULL;
 	}
 	return private->out->data;
 }

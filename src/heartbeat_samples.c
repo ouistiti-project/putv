@@ -93,13 +93,17 @@ static int heartbeat_wait(heartbeat_ctx_t *ctx, void *arg)
 	clockid_t clockid = CLOCK_REALTIME;
 	if (ctx->samplerate == 0)
 		return -1;
-	unsigned long msec = beat->nsamples * 1000 / ctx->samplerate;
+
 	pthread_mutex_lock(&ctx->mutex);
 
+	unsigned long usec = beat->nsamples * 1000;
+	int divider = ctx->samplerate / 100;
+	usec /= divider;
+	usec *= 10;
 	if (ctx->clock.tv_sec == 0 && ctx->clock.tv_nsec == 0)
 		clock_gettime(clockid, &ctx->clock);
-	ctx->clock.tv_nsec += (usec % 1000) * 1000000;
-	ctx->clock.tv_sec += usec / 1000000000;
+	ctx->clock.tv_nsec += (usec % 1000000) * 1000;
+	ctx->clock.tv_sec += usec / 1000000;
 	if (ctx->clock.tv_nsec > 1000000000)
 	{
 		ctx->clock.tv_nsec -= 1000000000;
@@ -117,20 +121,20 @@ static int heartbeat_wait(heartbeat_ctx_t *ctx, void *arg)
 			now.tv_nsec += 1000000000;
 			now.tv_sec -= 1;
 		}
-		if (now.tv_nsec > 10000000)
-			heartbeat_dbg("heartbeat to late %lu.%09lu", now.tv_sec, now.tv_nsec);
+		heartbeat_dbg("heartbeat to late %lu.%09lu", now.tv_sec, now.tv_nsec);
 		clock_gettime(clockid, &ctx->clock);
 		pthread_mutex_unlock(&ctx->mutex);
 		return -1;
 	}
 	int flags = TIMER_ABSTIME;
+	struct timespec rest = {0};
 	while (clock_nanosleep(clockid, flags, &ctx->clock, &rest) != 0)
 	{
 		err("heartbeat hook");
 	}
-	heartbeat_dbg("heartbeat: boom %ld.%03ld", msec / 1000, msec %1000);
+	heartbeat_dbg("heartbeat: boom %ld.%06ld", usec / 1000000, usec % 1000000);
 	clock_gettime(clockid, &ctx->clock);
-	beat->nsamples = 0;
+	//beat->nsamples = 0;
 
 	pthread_mutex_unlock(&ctx->mutex);
 	return 0;

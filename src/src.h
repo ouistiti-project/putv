@@ -16,8 +16,10 @@ struct src_ops_s
 {
 	const char *protocol;
 	src_ctx_t *(*init)(player_ctx_t *, const char *path);
-	int (*run)(src_ctx_t *, jitter_t *jitter);
+	int (*run)(src_ctx_t *);
 	const char *(*mime)(src_ctx_t *ctx, int index);
+	int (*attach)(src_ctx_t *ctx, int index, decoder_t *decoder);
+	decoder_t *(*estream)(src_ctx_t *ctx, int index);
 	void (*destroy)(src_ctx_t *);
 };
 
@@ -26,7 +28,6 @@ struct src_s
 {
 	const src_ops_t *ops;
 	src_ctx_t *ctx;
-	decoder_t *estream[MAX_DECODER];
 };
 
 src_t *src_build(player_ctx_t *player, const char *url, const char *mime);

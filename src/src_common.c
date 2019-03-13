@@ -139,18 +139,22 @@ src_t *src_build(player_ctx_t *player, const char *url, const char *mime)
 			decoder_t *decoder = NULL;
 			decoder = decoder_build(player, mime, player_filter(player));
 
-			src->estream[i] = decoder;
+			src->ops->attach(src->ctx, i, decoder);
 		} while (i < MAX_DECODER);
 		mime = NULL;
-		if (src->estream[0] == NULL)
+		if (src->ops->estream(src->ctx, 0) == NULL)
 		{
 			mime = mime_octetstream;
-			src->estream[0] = decoder_build(player, mime, player_filter(player));
+			decoder_t *decoder = NULL;
+			decoder = decoder_build(player, mime, player_filter(player));
+			src->ops->attach(src->ctx, 0, decoder);
 		}
 	}
 	else
 	{
-		src->estream[0] = decoder_build(player, mime, player_filter(player));
+		decoder_t *decoder = NULL;
+		decoder = decoder_build(player, mime, player_filter(player));
+		src->ops->attach(src->ctx, 0, decoder);
 	}
 	return src;
 }

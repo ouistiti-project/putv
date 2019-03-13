@@ -55,10 +55,12 @@ struct src_ctx_s
 	struct sockaddr *addr;
 	int addrlen;
 	const char *mime;
+	decoder_t *estream;
 };
 #define SRC_CTX
 #include "src.h"
 #include "media.h"
+#include "decoder.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -83,7 +85,10 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url)
 
 	char *value = utils_parseurl(url, &protocol, &host, &port, &path, &search);
 
-	if (protocol == NULL || strcmp(protocol, "udp"))
+	if (protocol == NULL)
+		return NULL;
+	int rtp = !strcmp(protocol, "rtp");
+	if (!rtp && strcmp(protocol, "udp"))
 		return NULL;
 
 	int iport = 4400;
@@ -249,9 +254,9 @@ static void *src_thread(void *arg)
 	return NULL;
 }
 
-static int src_run(src_ctx_t *ctx, jitter_t *jitter)
+static int src_run(src_ctx_t *ctx)
 {
-	ctx->out = jitter;
+	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx);
 	pthread_create(&ctx->thread, NULL, src_thread, ctx);
 	return 0;
 }
@@ -271,6 +276,18 @@ static const char *src_mime(src_ctx_t *ctx, int index)
 #endif
 }
 
+static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
+{
+	if (index > 0)
+		return -1;
+	ctx->estream = decoder;
+}
+
+static decoder_t *src_estream(src_ctx_t *ctx, int index)
+{
+	return ctx->estream;
+}
+
 static void src_destroy(src_ctx_t *ctx)
 {
 	if (ctx->thread)
@@ -287,5 +304,7 @@ const src_ops_t *src_udp = &(src_ops_t)
 	.init = src_init,
 	.run = src_run,
 	.mime = src_mime,
+	.attach = src_attach,
+	.estream = src_estream,
 	.destroy = src_destroy,
 };

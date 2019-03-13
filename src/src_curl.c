@@ -50,11 +50,13 @@ struct src_ctx_s
 	pthread_t thread;
 	CURL *curl;
 	char *mime;
+	decoder_t *estream;
 };
 #define SRC_CTX
 #include "src.h"
 #include "jitter.h"
 #include "media.h"
+#include "decoder.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -144,10 +146,10 @@ static void *src_thread(void *arg)
 	return 0;
 }
 
-static int src_run(src_ctx_t *ctx, jitter_t *out)
+static int src_run(src_ctx_t *ctx)
 {
 	int ret;
-	ctx->out = out;
+	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx);
 	ret = curl_easy_setopt(ctx->curl, CURLOPT_BUFFERSIZE, ctx->out->ctx->size);
 	//ret = curl_easy_perform(ctx->curl);
 	ret = pthread_create(&ctx->thread, NULL, src_thread, ctx);
@@ -166,6 +168,18 @@ static const char *src_mime(src_ctx_t *ctx, int index)
 			ctx->mime = (char *)mime;
 	}
 	return mime;
+}
+
+static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
+{
+	if (index > 0)
+		return -1;
+	ctx->estream = decoder;
+}
+
+static decoder_t *src_estream(src_ctx_t *ctx, int index)
+{
+	return ctx->estream;
 }
 
 static void src_destroy(src_ctx_t *ctx)
@@ -188,6 +202,8 @@ const src_ops_t *src_curl = &(src_ops_t)
 	.init = src_init,
 	.run = src_run,
 	.mime = src_mime,
+	.attach = src_attach,
+	.estream = src_estream,
 	.destroy = src_destroy,
 	.mime = NULL,
 };

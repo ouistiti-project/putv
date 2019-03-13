@@ -50,10 +50,12 @@ struct src_ctx_s
 	int samplesize;
 	int nchannels;
 	filter_t filter;
+	decoder_t *estream;
 };
 #define SRC_CTX
 #include "src.h"
 #include "media.h"
+#include "decoder.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -160,7 +162,7 @@ static int _pcm_close(src_ctx_t *ctx)
 }
 
 static const char *jitter_name = "alsa";
-static src_ctx_t *alsa_init(player_ctx_t *player, const char *url)
+static src_ctx_t *src_init(player_ctx_t *player, const char *url)
 {
 	int count = 2;
 	const char *soundcard;
@@ -192,7 +194,7 @@ static src_ctx_t *alsa_init(player_ctx_t *player, const char *url)
 	return ctx;
 }
 
-static void *alsa_thread(void *arg)
+static void *src_thread(void *arg)
 {
 	int ret;
 	src_ctx_t *ctx = (src_ctx_t *)arg;
@@ -309,21 +311,33 @@ static void *alsa_thread(void *arg)
 	return NULL;
 }
 
-static int alsa_run(src_ctx_t *ctx, jitter_t *jitter)
+static int src_run(src_ctx_t *ctx)
 {
-	ctx->out = jitter;
-	pthread_create(&ctx->thread, NULL, alsa_thread, ctx);
+	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx);
+	pthread_create(&ctx->thread, NULL, src_thread, ctx);
 	return 0;
 }
 
-static const char *alsa_mime(src_ctx_t *ctx, int index)
+static const char *src_mime(src_ctx_t *ctx, int index)
 {
 	if (index > 0)
 		return NULL;
 	return mime_audiopcm;
 }
 
-static void alsa_destroy(src_ctx_t *ctx)
+static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
+{
+	if (index > 0)
+		return -1;
+	ctx->estream = decoder;
+}
+
+static decoder_t *src_estream(src_ctx_t *ctx, int index)
+{
+	return ctx->estream;
+}
+
+static void src_destroy(src_ctx_t *ctx)
 {
 	pthread_join(ctx->thread, NULL);
 	_pcm_close(ctx);
@@ -334,8 +348,10 @@ static void alsa_destroy(src_ctx_t *ctx)
 const src_ops_t *src_alsa = &(src_ops_t)
 {
 	.protocol = "pcm://",
-	.init = alsa_init,
-	.run = alsa_run,
-	.destroy = alsa_destroy,
-	.mime = alsa_mime,
+	.init = src_init,
+	.run = src_run,
+	.attach = src_attach,
+	.estream = src_estream,
+	.destroy = src_destroy,
+	.mime = src_mime,
 };

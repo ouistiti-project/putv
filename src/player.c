@@ -243,7 +243,7 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 		data->dec = calloc(1, sizeof(*data->dec));
 		data->dec->mediaid = id;
 		data->dec->src = src;
-		data->dec->decoder = src->estream[0];
+		data->dec->decoder = src->ops->estream(src->ctx, 0);
 		return 0;
 	}
 	else
@@ -315,7 +315,7 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 				 * the src needs to be ready before the decoder
 				 * to set a producer if it's needed
 				 */
-				ctx->current->src->ops->run(ctx->current->src->ctx, ctx->current->decoder->ops->jitter(ctx->current->decoder->ctx));
+				ctx->current->src->ops->run(ctx->current->src->ctx);
 				ctx->current->decoder->ops->run(ctx->current->decoder->ctx, encoder_jitter);
 				if (ctx->media->ops->next)
 				{

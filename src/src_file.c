@@ -45,11 +45,13 @@ struct src_ctx_s
 	int fd;
 	player_ctx_t *ctx;
 	jitter_t *out;
+	decoder_t *estream;
 };
 #define SRC_CTX
 #include "src.h"
 #include "media.h"
 #include "jitter.h"
+#include "decoder.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -135,13 +137,25 @@ static src_ctx_t *src_init(player_ctx_t *ctx, const char *url)
 	return NULL;
 }
 
-static int src_run(src_ctx_t *ctx, jitter_t *jitter)
+static int src_run(src_ctx_t *ctx)
 {
-	dbg("src: add producter to %s", jitter->ctx->name);
-	ctx->out = jitter;
-	jitter->ctx->produce = (produce_t)src_read;
-	jitter->ctx->producter = (void *)ctx;
+	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx);
+	dbg("src: add producter to %s", ctx->out->ctx->name);
+	ctx->out->ctx->produce = (produce_t)src_read;
+	ctx->out->ctx->producter = (void *)ctx;
 	return 0;
+}
+
+static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
+{
+	if (index > 0)
+		return -1;
+	ctx->estream = decoder;
+}
+
+static decoder_t *src_estream(src_ctx_t *ctx, int index)
+{
+	return ctx->estream;
 }
 
 static void src_destroy(src_ctx_t *src)
@@ -155,6 +169,8 @@ const src_ops_t *src_file = &(src_ops_t)
 	.protocol = "file://",
 	.init = src_init,
 	.run = src_run,
+	.attach = src_attach,
+	.estream = src_estream,
 	.destroy = src_destroy,
 	.mime = NULL,
 };

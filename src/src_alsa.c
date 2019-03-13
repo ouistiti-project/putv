@@ -316,8 +316,10 @@ static int alsa_run(src_ctx_t *ctx, jitter_t *jitter)
 	return 0;
 }
 
-static const char *alsa_mime(src_ctx_t *ctx)
+static const char *alsa_mime(src_ctx_t *ctx, int index)
 {
+	if (index > 0)
+		return NULL;
 	return mime_audiopcm;
 }
 

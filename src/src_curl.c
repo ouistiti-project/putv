@@ -154,8 +154,10 @@ static int src_run(src_ctx_t *ctx, jitter_t *out)
 	return ret;
 }
 
-static const char *src_mime(src_ctx_t *ctx)
+static const char *src_mime(src_ctx_t *ctx, int index)
 {
+	if (index > 0)
+		return NULL;
 	const char *mime = mime_octetstream;
 	if (ctx->mime == NULL)
 	{

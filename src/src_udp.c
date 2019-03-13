@@ -256,8 +256,10 @@ static int src_run(src_ctx_t *ctx, jitter_t *jitter)
 	return 0;
 }
 
-static const char *src_mime(src_ctx_t *ctx)
+static const char *src_mime(src_ctx_t *ctx, int index)
 {
+	if (index > 0)
+		return NULL;
 	if (ctx->mime)
 		return ctx->mime;
 #ifdef DECODER_MAD

@@ -130,13 +130,27 @@ src_t *src_build(player_ctx_t *player, const char *url, const char *mime)
 	if (src->ops->mime != NULL &&
 		(mime == NULL || mime[0] == '\0' || !strcmp(mime, mime_octetstream)))
 	{
-		mime = src->ops->mime(src->ctx);
-		if (mime == NULL)
-			mime = mime_octetstream;
-	}
-	decoder_t *decoder = NULL;
-	decoder = decoder_build(player, mime, player_filter(player));
+		int i = 0;
+		do
+		{
+			mime = src->ops->mime(src->ctx, i);
+			if (mime == NULL)
+				break;
+			decoder_t *decoder = NULL;
+			decoder = decoder_build(player, mime, player_filter(player));
 
-	src->audio[0] = decoder;
+			src->estream[i] = decoder;
+		} while (i < MAX_DECODER);
+		mime = NULL;
+		if (src->estream[0] == NULL)
+		{
+			mime = mime_octetstream;
+			src->estream[0] = decoder_build(player, mime, player_filter(player));
+		}
+	}
+	else
+	{
+		src->estream[0] = decoder_build(player, mime, player_filter(player));
+	}
 	return src;
 }

@@ -243,7 +243,7 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 		data->dec = calloc(1, sizeof(*data->dec));
 		data->dec->mediaid = id;
 		data->dec->src = src;
-		data->dec->decoder = src->audio[0];
+		data->dec->decoder = src->estream[0];
 		return 0;
 	}
 	else

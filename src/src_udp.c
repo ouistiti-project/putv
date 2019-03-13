@@ -205,8 +205,7 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url)
 		ctx->sock = sock;
 		if (rtp)
 		{
-			//ctx->demux.ops = demux_rtp;
-			exit(-1);
+			ctx->demux.ops = demux_rtp;
 		}
 		else
 			ctx->demux.ops = demux_passthrough;
@@ -300,7 +299,7 @@ static void src_destroy(src_ctx_t *ctx)
 
 const src_ops_t *src_udp = &(src_ops_t)
 {
-	.protocol = "udp://",
+	.protocol = "udp://|rtp://",
 	.init = src_init,
 	.run = src_run,
 	.mime = src_mime,

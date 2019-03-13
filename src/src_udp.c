@@ -40,6 +40,7 @@
 
 #include "player.h"
 #include "jitter.h"
+#include "demux.h"
 typedef struct src_ops_s src_ops_t;
 typedef struct src_ctx_s src_ctx_t;
 struct src_ctx_s
@@ -55,7 +56,7 @@ struct src_ctx_s
 	struct sockaddr *addr;
 	int addrlen;
 	const char *mime;
-	decoder_t *estream;
+	demux_t demux;
 };
 #define SRC_CTX
 #include "src.h"
@@ -202,6 +203,14 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url)
 
 		ctx->player = player;
 		ctx->sock = sock;
+		if (rtp)
+		{
+			//ctx->demux.ops = demux_rtp;
+			exit(-1);
+		}
+		else
+			ctx->demux.ops = demux_passthrough;
+		ctx->demux.ctx = ctx->demux.ops->init(player, search);
 		if (mime)
 			ctx->mime = strdup(mime);
 	}
@@ -217,6 +226,8 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url)
 static void *src_thread(void *arg)
 {
 	src_ctx_t *ctx = (src_ctx_t *)arg;
+	ctx->demux.ops->run(ctx->demux.ctx);
+
 	int ret;
 	while (ctx->state != STATE_ERROR)
 	{
@@ -256,42 +267,31 @@ static void *src_thread(void *arg)
 
 static int src_run(src_ctx_t *ctx)
 {
-	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx);
+	ctx->out = ctx->demux.ops->jitter(ctx->demux.ctx);
 	pthread_create(&ctx->thread, NULL, src_thread, ctx);
 	return 0;
 }
 
 static const char *src_mime(src_ctx_t *ctx, int index)
 {
-	if (index > 0)
-		return NULL;
-	if (ctx->mime)
-		return ctx->mime;
-#ifdef DECODER_MAD
-	return mime_audiomp3;
-#elif defined(DECODER_FLAC)
-	return mime_audioflac;
-#else
-	return mime_octetstream;
-#endif
+	return ctx->demux.ops->mime(ctx->demux.ctx, index);
 }
 
 static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
 {
-	if (index > 0)
-		return -1;
-	ctx->estream = decoder;
+	return ctx->demux.ops->attach(ctx->demux.ctx, index, decoder);
 }
 
 static decoder_t *src_estream(src_ctx_t *ctx, int index)
 {
-	return ctx->estream;
+	return ctx->demux.ops->estream(ctx->demux.ctx, index);
 }
 
 static void src_destroy(src_ctx_t *ctx)
 {
 	if (ctx->thread)
 		pthread_join(ctx->thread, NULL);
+	ctx->demux.ops->destroy(ctx->demux.ctx);
 	if (ctx->mime != NULL)
 		free((char *)ctx->mime);
 	close(ctx->sock);

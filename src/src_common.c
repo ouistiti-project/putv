@@ -140,6 +140,7 @@ src_t *src_build(player_ctx_t *player, const char *url, const char *mime)
 			decoder = decoder_build(player, mime, player_filter(player));
 
 			src->ops->attach(src->ctx, i, decoder);
+			i++;
 		} while (i < MAX_ESTREAM);
 		mime = NULL;
 		if (src->ops->estream(src->ctx, 0) == NULL)

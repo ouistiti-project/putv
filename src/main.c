@@ -26,6 +26,7 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *****************************************************************************/
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 
 #include <libgen.h>
@@ -248,7 +249,12 @@ int main(int argc, char **argv)
 		}
 	}
 
-	sink_t *sink = sink_build(player, outarg);;
+	sink_t *sink = sink_build(player, outarg);
+	if (sink == NULL)
+	{
+		err("output not set");
+		exit(-1);
+	}
 
 	cmds_t cmds[3];
 	int nbcmds = 0;

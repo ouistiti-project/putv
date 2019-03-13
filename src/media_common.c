@@ -149,6 +149,21 @@ char *utils_parseurl(const char *url, char **protocol, char **host, char **port,
 	return turl;
 }
 
+const char *utils_mime2mime(char *mime)
+{
+	const char *mime2 = NULL;
+	if (mime != NULL)
+	{
+		if (!strcmp(mime, mime_audiomp3))
+			mime2 = mime_audiomp3;
+		if (!strcmp(mime, mime_audioflac))
+			mime2 = mime_audioflac;
+		if (!strcmp(mime, mime_audiopcm))
+			mime2 = mime_audiopcm;
+	}
+	return mime2;
+}
+
 static char *current_path;
 media_t *media_build(player_ctx_t *player, const char *url)
 {

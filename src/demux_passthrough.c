@@ -71,8 +71,7 @@ static demux_ctx_t *demux_init(player_ctx_t *player, const char *search)
 	}
 
 	demux_ctx_t *ctx = calloc(1, sizeof(*ctx));
-	if (mime != NULL)
-		ctx->mime = strdup(mime);
+	ctx->mime = utils_mime2mime(mime);
 	return ctx;
 }
 
@@ -115,8 +114,6 @@ static decoder_t *demux_estream(demux_ctx_t *ctx, int index)
 
 static void demux_destroy(demux_ctx_t *ctx)
 {
-	if (ctx->mime)
-		free(ctx->mime);
 	free(ctx);
 }
 

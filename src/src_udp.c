@@ -210,8 +210,7 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url)
 		else
 			ctx->demux.ops = demux_passthrough;
 		ctx->demux.ctx = ctx->demux.ops->init(player, search);
-		if (mime)
-			ctx->mime = strdup(mime);
+		ctx->mime = utils_mime2mime(mime);
 	}
 	if (ctx == NULL)
 	{
@@ -291,8 +290,6 @@ static void src_destroy(src_ctx_t *ctx)
 	if (ctx->thread)
 		pthread_join(ctx->thread, NULL);
 	ctx->demux.ops->destroy(ctx->demux.ctx);
-	if (ctx->mime != NULL)
-		free((char *)ctx->mime);
 	close(ctx->sock);
 	free(ctx);
 }

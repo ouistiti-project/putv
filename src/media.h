@@ -18,6 +18,7 @@ char *utils_parseurl(const char *url,
 								char **port,
 								char **path,
 								char **search);
+const char *utils_mime2mime(char *mime);
 
 typedef struct media_ctx_s media_ctx_t;
 

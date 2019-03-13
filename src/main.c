@@ -99,7 +99,9 @@ static int run_player(player_ctx_t *player, jitter_t *sink_jitter)
 	encoder_jitter = encoder->jitter(encoder_ctx);
 
 	if (encoder_jitter != NULL)
-		ret = player_run(player, encoder_jitter);
+		ret = player_subscribe(player, ES_AUDIO, encoder_jitter);
+	if (ret == 0)
+		ret = player_run(player);
 	encoder->destroy(encoder_ctx);
 	return ret;
 }

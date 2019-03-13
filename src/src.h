@@ -1,7 +1,7 @@
 #ifndef __SRC_H__
 #define __SRC_H__
 
-#define MAX_DECODER 4
+#define MAX_ESTREAM 4
 
 typedef struct player_ctx_s player_ctx_t;
 typedef struct decoder_s decoder_t;

@@ -16,6 +16,13 @@ typedef enum
 	EVENT_ONCHANGE,
 } player_event_type_t;
 
+typedef enum
+{
+	ES_AUDIO,
+	ES_VIDEO,
+	ES_DATA,
+} estream_t;
+
 typedef struct jitter_s jitter_t;
 typedef struct src_s src_t;
 typedef struct decoder_s decoder_t;
@@ -30,7 +37,8 @@ typedef void (*player_event_cb_t)(void *ctx, player_ctx_t *, state_t);
 player_ctx_t *player_init();
 int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop);
 media_t *player_media(player_ctx_t *ctx);
-int player_run(player_ctx_t *userdata, jitter_t *encoder_jitter);
+int player_subscribe(player_ctx_t *userdata, estream_t type, jitter_t *encoder_jitter);
+int player_run(player_ctx_t *userdata);
 void player_destroy(player_ctx_t *ctx);
 int player_waiton(player_ctx_t *ctx, int state);
 state_t player_state(player_ctx_t *ctx, state_t state);

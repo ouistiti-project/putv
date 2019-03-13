@@ -281,7 +281,7 @@ int main(int argc, char **argv)
 #endif
 #ifdef TINYSVCMDNS
 	cmds[nbcmds].ops = cmds_tinysvcmdns;
-	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, sink, "RadioGaga");
+	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, sink, INDEX_HTML);
 	nbcmds++;
 #endif
 #ifdef JSONRPC

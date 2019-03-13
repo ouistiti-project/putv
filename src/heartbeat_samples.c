@@ -52,7 +52,7 @@ struct heartbeat_ctx_s
 #define dbg(...)
 #endif
 
-#define heartbeat_dbg dbg
+#define heartbeat_dbg(...)
 
 heartbeat_ctx_t *heartbeat_init(unsigned int samplerate, jitter_format_t format, unsigned int nchannels)
 {

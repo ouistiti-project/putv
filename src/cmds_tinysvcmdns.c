@@ -32,6 +32,8 @@
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
+#include <bits/local_lim.h>
+#include <sys/utsname.h>
 
 #include <net/if.h>
 #include <netinet/in.h>
@@ -76,12 +78,21 @@ static cmds_ctx_t *cmds_tinysvcmdns_init(player_ctx_t *player, sink_t *sink, voi
 		return NULL;
 	}
 
-	const char *hostname = (const char *) arg;
+	char hostname[HOST_NAME_MAX + 6];
+	gethostname(hostname, HOST_NAME_MAX);
+	if (strlen(hostname) == 0)
+	{
+		struct utsname sysinfo;
+		uname(&sysinfo);
+		snprintf(hostname, HOST_NAME_MAX + 6, "%s.local", sysinfo.nodename);
+	}
+	else
+		strcat(hostname, ".local");
 
 	struct ifreq ifr;
 	memset(&ifr, 0, sizeof(ifr));
 	ifr.ifr_addr.sa_family = AF_INET;
-	int i;
+	int i, first = 1;
 	for ( i = 0; i < 5; i++)
 	{
 		int ret;
@@ -99,17 +110,29 @@ static cmds_ctx_t *cmds_tinysvcmdns_init(player_ctx_t *player, sink_t *sink, voi
 			{
 				ret = ioctl(sock, SIOCGIFADDR, &ifr);
 				in_addr_t saddr = ((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr.s_addr;
-				mdnsd_set_hostname(svr, hostname, saddr);
-
-				struct rr_entry *a2_e = NULL;
-				a2_e = rr_create_a(create_nlabel(hostname), saddr);
-				mdnsd_add_rr(svr, a2_e);
+				if (first)
+				{
+					mdnsd_set_hostname(svr, hostname, saddr);
+					first = 0;
+				}
+				else
+				{
+					struct rr_entry *a2_e = NULL;
+					a2_e = rr_create_a(create_nlabel(hostname), saddr);
+					mdnsd_add_rr(svr, a2_e);
+				}
 			}
 		}
 	}
 
+	char *path = NULL;
+	if (arg != NULL)
+	{
+		path = malloc(strlen((const char*) arg) + 5 + +1);
+		sprintf(path, "path=%s", (const char*) arg);
+	}
 	const char *txt[] = {
-		"path=/ouiradio.html", 
+		path,
 		NULL
 	};
 	struct mdns_service *svc = mdnsd_register_svc(svr, "Pump Up The Volume", 

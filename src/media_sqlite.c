@@ -33,6 +33,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+#include <pwd.h>
+
 #include <sqlite3.h>
 
 #include "player.h"
@@ -1156,6 +1158,16 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url, ...)
 	const char *dbpath = utils_getpath(url, "db://");
 	if (dbpath)
 	{
+		if (dbpath[0] == '~')
+		{
+			struct passwd *pw = NULL;
+			pw = getpwuid(geteuid());
+			chdir(pw->pw_dir);
+			dbpath++;
+			if (dbpath[0] == '/')
+				dbpath++;
+		}
+
 		ret = _media_opendb(&db, dbpath, "putv", &playlist);
 	}
 	if (db)

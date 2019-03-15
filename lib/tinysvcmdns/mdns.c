@@ -41,8 +41,14 @@
 #endif
 
 
-#define DEFAULT_TTL		120
+// See RFC 6762 Section 10 for an account of two TTLs -- 120 seconds for rrs with a host name as the
+// record's name
+// or a host name in the record's rdata
+// 75 minutes for everything else.
+// https://tools.ietf.org/html/rfc6762
 
+#define DEFAULT_TTL_FOR_RECORD_WITH_HOSTNAME 120
+#define DEFAULT_TTL 4500
 
 struct name_comp {
 	uint8_t *label;	// label
@@ -83,9 +89,11 @@ uint8_t *join_nlabel(const uint8_t *n1, const uint8_t *n2) {
 	len2 = strlen((char *) n2);
 
 	s = malloc(len1 + len2 + 1);
-	strncpy((char *) s, (char *) n1, len1);
-	strncpy((char *) s+len1, (char *) n2, len2);
-	s[len1 + len2] = '\0';
+	if (s) {
+		strncpy((char *) s, (char *) n1, len1);
+		strncpy((char *) s+len1, (char *) n2, len2);
+		s[len1 + len2] = '\0';
+	}
 	return s;
 }
 
@@ -161,10 +169,11 @@ uint8_t *create_label(const char *txt) {
 		return NULL;
 
 	s = malloc(len + 2);
-	s[0] = len;
-	strncpy((char *) s + 1, txt, len);
-	s[len + 1] = '\0';
-
+	if (s) {
+		s[0] = len;
+		strncpy((char *) s + 1, txt, len);
+		s[len + 1] = '\0';
+	}
 	return s;
 }
 
@@ -399,6 +408,7 @@ struct rr_entry *rr_create_a(uint8_t *name, uint32_t addr) {
 	DECL_MALLOC_ZERO_STRUCT(rr, rr_entry);
 	FILL_RR_ENTRY(rr, name, RR_A);
 	rr->data.A.addr = addr;
+	rr->ttl = DEFAULT_TTL_FOR_RECORD_WITH_HOSTNAME;
 	return rr;
 }
 
@@ -406,6 +416,7 @@ struct rr_entry *rr_create_aaaa(uint8_t *name, struct in6_addr *addr) {
 	DECL_MALLOC_ZERO_STRUCT(rr, rr_entry);
 	FILL_RR_ENTRY(rr, name, RR_AAAA);
 	rr->data.AAAA.addr = addr;
+	rr->ttl = DEFAULT_TTL_FOR_RECORD_WITH_HOSTNAME;
 	return rr;
 }
 
@@ -428,6 +439,8 @@ struct rr_entry *rr_create_ptr(uint8_t *name, struct rr_entry *d_rr) {
 struct rr_entry *rr_create(uint8_t *name, enum rr_type type) {
 	DECL_MALLOC_ZERO_STRUCT(rr, rr_entry);
 	FILL_RR_ENTRY(rr, name, type);
+	if (type == RR_NSEC)
+		rr->ttl = DEFAULT_TTL_FOR_RECORD_WITH_HOSTNAME;
 	return rr;
 }
 

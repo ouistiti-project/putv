@@ -288,8 +288,14 @@ int main(int argc, char **argv)
 	nbcmds++;
 #endif
 #ifdef TINYSVCMDNS
+	const char *txt[] =
+	{
+		"path="INDEX_HTML,
+		"if="NETIF,
+		NULL,
+	};
 	cmds[nbcmds].ops = cmds_tinysvcmdns;
-	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, sink, INDEX_HTML);
+	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, sink, txt);
 	nbcmds++;
 #endif
 #ifdef JSONRPC
@@ -306,7 +312,8 @@ int main(int argc, char **argv)
 
 	int i;
 	for (i = 0; i < nbcmds; i++)
-		cmds[i].ops->run(cmds[i].ctx);
+		if(cmds[i].ctx != NULL)
+			cmds[i].ops->run(cmds[i].ctx);
 
 	/**
 	 * the sink must to run before to start the encoder
@@ -328,7 +335,8 @@ int main(int argc, char **argv)
 
 	for (i = 0; i < nbcmds; i++)
 	{
-		cmds[i].ops->destroy(cmds[i].ctx);
+		if (cmds[i].ctx != NULL)
+			cmds[i].ops->destroy(cmds[i].ctx);
 	}
 	return 0;
 }

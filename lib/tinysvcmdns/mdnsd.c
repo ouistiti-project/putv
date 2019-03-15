@@ -102,7 +102,7 @@ static void log_message(int loglevel, char *fmt_str, ...) {
 	fprintf(stderr, "%s\n", buf);
 }
 
-static int create_recv_sock() {
+static int create_recv_sock(struct in_addr *iaddr) {
 	int sd = socket(AF_INET, SOCK_DGRAM, 0);
 	if (sd < 0) {
 		log_message(LOG_ERR, "recv socket(): %m");
@@ -140,6 +140,12 @@ static int create_recv_sock() {
 	// enable loopback in case someone else needs the data
 	if ((r = setsockopt(sd, IPPROTO_IP, IP_MULTICAST_LOOP, (char *) &on, sizeof(on))) < 0) {
 		log_message(LOG_ERR, "recv setsockopt(IP_MULTICAST_LOOP): %m");
+		return r;
+	}
+
+	// set multicast interface to send data (only one available on one socket)
+	if ((r = setsockopt(sd, IPPROTO_IP, IP_MULTICAST_IF, &iaddr, sizeof(struct in_addr))) < 0) {
+		log_message(LOG_ERR, "recv setsockopt(IP_MULTICAST_IF): %m");
 		return r;
 	}
 
@@ -612,7 +618,7 @@ void mdns_service_destroy(struct mdns_service *srv) {
 	free(srv);
 }
 
-struct mdnsd *mdnsd_start() {
+struct mdnsd *mdnsd_start(struct in_addr *iaddr) {
 	pthread_t tid;
 	pthread_attr_t attr;
 
@@ -625,7 +631,7 @@ struct mdnsd *mdnsd_start() {
 		return NULL;
 	}
 
-	server->sockfd = create_recv_sock();
+	server->sockfd = create_recv_sock(iaddr);
 	if (server->sockfd < 0) {
 		log_message(LOG_ERR, "unable to create recv socket");
 		free(server);

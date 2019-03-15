@@ -36,7 +36,7 @@ struct mdns_service;
 
 // starts a MDNS responder instance
 // returns NULL if unsuccessful
-struct mdnsd *mdnsd_start();
+struct mdnsd *mdnsd_start(struct in_addr *iaddr);
 
 // stops the given MDNS responder instance
 void mdnsd_stop(struct mdnsd *s);

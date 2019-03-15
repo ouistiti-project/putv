@@ -29,9 +29,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <errno.h>
+
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
+
 #include <bits/local_lim.h>
 #include <sys/utsname.h>
 
@@ -39,6 +42,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/ioctl.h>
+#include <ifaddrs.h>
 
 #include <pthread.h>
 
@@ -72,69 +76,115 @@ struct cmds_ctx_s
 
 static cmds_ctx_t *cmds_tinysvcmdns_init(player_ctx_t *player, sink_t *sink, void *arg)
 {
-	struct mdnsd *svr = mdnsd_start();
-	if (svr == NULL) {
-		err("mdnsd_start() error\n");
-		return NULL;
+	const char *nif = NULL;
+	const char **txt = arg;
+	while (*txt != NULL)
+	{
+		nif = strstr(*txt, "if=");
+		if (nif != NULL)
+		{
+			nif += 3;
+			if (nif[0] == '\0')
+				nif = NULL;
+		}
+		txt++;
 	}
 
-	char hostname[HOST_NAME_MAX + 6];
+	char hostname[HOST_NAME_MAX + 1 + 6];
 	gethostname(hostname, HOST_NAME_MAX);
 	if (strlen(hostname) == 0)
 	{
 		struct utsname sysinfo;
 		uname(&sysinfo);
-		snprintf(hostname, HOST_NAME_MAX + 6, "%s.local", sysinfo.nodename);
+		snprintf(hostname, HOST_NAME_MAX + 1 + 6, "%s.local", sysinfo.nodename);
 	}
 	else
 		strcat(hostname, ".local");
 
-	struct ifreq ifr;
-	memset(&ifr, 0, sizeof(ifr));
-	ifr.ifr_addr.sa_family = AF_INET;
-	int i, first = 1;
-	for ( i = 0; i < 5; i++)
+	struct ifaddrs *ifa_list;
+	struct ifaddrs *ifa_main;
+
+	if (getifaddrs(&ifa_list) < 0) {
+		warn("tinysvcmdns: getifaddrs() failed");
+		return NULL;
+	}
+
+	struct mdnsd *svr = NULL;
+	for (ifa_main = ifa_list; ifa_main != NULL; ifa_main = ifa_main->ifa_next)
 	{
-		int ret;
-		int sock = socket(PF_INET, SOCK_STREAM, IPPROTO_IP);
-		ifr.ifr_ifindex = i;
-		ret = ioctl(sock, SIOCGIFNAME, &ifr);
-		if (ret == 0)
+		if ((nif != NULL) && strcmp(nif, ifa_main->ifa_name) != 0)
+			continue;
+		if ((ifa_main->ifa_flags & IFF_LOOPBACK) || !(ifa_main->ifa_flags & IFF_MULTICAST))
+			continue;
+		if (ifa_main->ifa_addr && ifa_main->ifa_addr->sa_family == AF_INET)
 		{
-			ret = ioctl(sock, SIOCGIFFLAGS, &ifr);
-			if (!ret && (ifr.ifr_flags & IFF_LOOPBACK))
-			{
-				continue;
+			if (svr == NULL)
+				svr = mdnsd_start(&((struct sockaddr_in *)ifa_main->ifa_addr)->sin_addr);
+			if (svr == NULL) {
+				err("mdnsd_start() error\n");
+				return NULL;
 			}
-			if (!ret && (ifr.ifr_flags & IFF_RUNNING))
-			{
-				ret = ioctl(sock, SIOCGIFADDR, &ifr);
-				in_addr_t saddr = ((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr.s_addr;
-				if (first)
-				{
-					mdnsd_set_hostname(svr, hostname, saddr);
-					first = 0;
-				}
-				else
-				{
-					struct rr_entry *a2_e = NULL;
-					a2_e = rr_create_a(create_nlabel(hostname), saddr);
-					mdnsd_add_rr(svr, a2_e);
-				}
+
+			in_addr_t main_ip = ((struct sockaddr_in *)ifa_main->ifa_addr)->sin_addr.s_addr;
+
+			mdnsd_set_hostname(svr, hostname, main_ip); // TTL should be 120 seconds
+			break;
+		}
+#ifdef IPV6
+		else if (ifa_main->ifa_addr && ifa_main->ifa_addr->sa_family == AF_INET6)
+		{
+			if (svr == NULL)
+				svr = mdnsd_start();
+			if (svr == NULL) {
+				err("mdnsd_start() error\n");
+				return NULL;
 			}
+
+			struct in6_addr *addr = &((struct sockaddr_in6 *)ifa_main->ifa_addr)->sin6_addr;
+
+			mdnsd_set_hostname_v6(svr, hostname, addr); // TTL should be 120 seconds
+			break;
+		}
+#endif
+	}
+
+	if (ifa_main == NULL)
+	{
+		warn("tinysvcmdns: no non-loopback ipv4 or ipv6 interface found");
+		return NULL;
+	}
+
+	struct ifaddrs *ifa_other;
+	for (ifa_other = ifa_list; ifa_other != NULL; ifa_other = ifa_other->ifa_next)
+	{
+		if ((ifa_other->ifa_flags & IFF_LOOPBACK) || !(ifa_other->ifa_flags & IFF_MULTICAST))
+			continue;
+		if (ifa_other == ifa_main)
+			continue;
+		switch (ifa_other->ifa_addr->sa_family)
+		{
+			case AF_INET:
+			{
+				uint32_t ip = ((struct sockaddr_in *)ifa_other->ifa_addr)->sin_addr.s_addr;
+				struct rr_entry *a_e =
+				rr_create_a(create_nlabel(hostname), ip); // TTL should be 120 seconds
+				mdnsd_add_rr(svr, a_e);
+			}
+			break;
+			case AF_INET6:
+			{
+				struct in6_addr *addr = &((struct sockaddr_in6 *)ifa_other->ifa_addr)->sin6_addr;
+				struct rr_entry *aaaa_e =
+				rr_create_aaaa(create_nlabel(hostname), addr); // TTL should be 120 seconds
+				mdnsd_add_rr(svr, aaaa_e);
+			}
+			break;
 		}
 	}
 
-	char *path = NULL;
-	if (arg != NULL)
-	{
-		path = malloc(strlen((const char*) arg) + 5 + +1);
-		sprintf(path, "path=%s", (const char*) arg);
-	}
-	const char *txt[] = {
-		path,
-		NULL
-	};
+	freeifaddrs(ifa_list);
+
+	txt = (const char **)arg;
 	struct mdns_service *svc = mdnsd_register_svc(svr, "Pump Up The Volume", 
 									"_http._tcp.local", 80, NULL, txt);
 
@@ -149,18 +199,8 @@ static cmds_ctx_t *cmds_tinysvcmdns_init(player_ctx_t *player, sink_t *sink, voi
 	return ctx;
 }
 
-static void *_cmds_tinysvcmdns_pthread(void *arg)
-{
-	int ret;
-	cmds_ctx_t *ctx = (cmds_ctx_t *)arg;
-	ret = pause();
-	return (void*)(intptr_t)ret;
-}
-
 static int cmds_tinysvcmdns_run(cmds_ctx_t *ctx)
 {
-	pthread_create(&ctx->thread, NULL, _cmds_tinysvcmdns_pthread, (void *)ctx);
-
 	return 0;
 }
 

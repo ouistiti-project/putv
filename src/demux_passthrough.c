@@ -43,7 +43,7 @@ struct demux_ctx_s
 	player_ctx_t *ctx;
 	jitter_t *inout;
 	decoder_t *estream;
-	char *mime;
+	const char *mime;
 };
 #define DEMUX_CTX
 #include "demux.h"

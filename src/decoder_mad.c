@@ -97,6 +97,7 @@ enum mad_flow input(void *data,
 	if (stream->next_frame)
 		stream->next_frame = ctx->inbuffer;
 
+	decoder_dbg("decoder mad: data len %ld", len);
 	mad_stream_buffer(stream, ctx->inbuffer, len);
 
 	return MAD_FLOW_CONTINUE;
@@ -206,11 +207,13 @@ enum mad_flow error(void *data,
 		return MAD_FLOW_BREAK;
 	}
 }
-
+void header(void *data, struct mad_header const *header)
+{
+	decoder_ctx_t *ctx = (decoder_ctx_t *)data;
+	decoder_dbg("decoder mad: audio header mpeg1layer%d, samplerate %d", header->layer, header->samplerate);
+}
 /// MAD_BUFFER_MDLEN is too small on ARM device
-//#define BUFFERSIZE (MAD_BUFFER_MDLEN)
-#define LATENCE 200 /*ms*/
-#define BUFFERSIZE (40*LATENCE)
+#define BUFFERSIZE 752
 
 /// NBBUFFER must be at least 3 otherwise the decoder block on the end of the source
 #define NBUFFER 6
@@ -223,14 +226,14 @@ static decoder_ctx_t *mad_init(player_ctx_t *player, const filter_t *filter)
 
 	ctx->filter = filter;
 	mad_decoder_init(&ctx->decoder, ctx,
-			input, 0 /* header */, 0 /* filter */, output,
+			input, header /* header */, 0 /* filter */, output,
 			error, 0 /* message */);
 
 	jitter_t *jitter = JITTER_init(jitter_name, NBUFFER, BUFFERSIZE);
 	//jitter_t *jitter = jitter_ringbuffer_init(jitter_name, NBUFFER, BUFFERSIZE);
 	ctx->in = jitter;
 	jitter->format = MPEG2_3_MP3;
-	jitter->ctx->thredhold = 3;
+	jitter->ctx->thredhold = NBUFFER / 2;
 
 	return ctx;
 }

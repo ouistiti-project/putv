@@ -39,14 +39,25 @@
 #include "decoder.h"
 typedef struct demux_s demux_t;
 typedef struct demux_ops_s demux_ops_t;
+
+typedef struct demux_out_s demux_out_t;
+struct demux_out_s
+{
+	decoder_t *estream;
+	int ssrc;
+	jitter_t *jitter;
+	char *data;
+	const char *mime;
+};
+
 typedef struct demux_ctx_s demux_ctx_t;
 struct demux_ctx_s
 {
-	decoder_t *estream;
-	jitter_t *out;
-	char *output;
+	demux_out_t out[1];
+	int outn;
+	int outlast;
 	jitter_t *in;
-	char *mime;
+	const char *mime;
 	pthread_t thread;
 };
 #define DEMUX_CTX
@@ -96,6 +107,8 @@ static demux_ctx_t *demux_init(player_ctx_t *player, const char *search)
 	demux_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->mime = utils_mime2mime(mime);
 	ctx->in = jitter_scattergather_init(jitter_name, 6, 1500);
+	ctx->in->format = SINK_BITSSTREAM;
+	ctx->in->ctx->thredhold = 3;
 	return ctx;
 }
 
@@ -104,11 +117,46 @@ static jitter_t *demux_jitter(demux_ctx_t *ctx)
 	return ctx->in;
 }
 
-int demux_parseheader(demux_ctx_t *ctx, char *input)
+int demux_parseheader(demux_ctx_t *ctx, char *input, int len)
 {
 	struct rtpheader *header = (struct rtpheader *)input;
+#ifdef DEBUG
+	warn("rtp header:");
+	warn("\theader:\t%d", header->iAudioHeader);
+	warn("\ttimestamp:\t%d", header->timestamp);
+	warn("\tseq:\t%d", header->b.sequence);
+	warn("\tssrc:\t%d", header->ssrc);
+	warn("\ttype:\t%d", header->b.pt);
+	warn("\tnb counter:\t%d", header->b.cc);
+	warn("\tpadding:\t%d", header->b.p);
+#endif
 	if (header->b.pt == 14)
-		return sizeof(*header);
+	{
+		demux_out_t *out = &ctx->out[ctx->outn];
+		int ssrc = header->ssrc;
+		if (out->ssrc == 0)
+		{
+			out->ssrc = ssrc;
+			out->mime = mime_audiomp3;
+		}
+		if (out->ssrc != ssrc)
+			return 0;
+		if (out->data == NULL)
+			out->data = out->jitter->ops->pull(out->jitter->ctx);
+		len -= sizeof(*header);
+		input += sizeof(*header);
+		while (len > out->jitter->ctx->size)
+		{
+			memcpy(out->data, input, out->jitter->ctx->size);
+			out->jitter->ops->push(out->jitter->ctx, out->jitter->ctx->size, NULL);
+			len -= out->jitter->ctx->size;
+			input += out->jitter->ctx->size;
+		}
+		memcpy(out->data, input, len);
+		out->jitter->ops->push(out->jitter->ctx, len, NULL);
+		out->data = NULL;
+		return len;
+	}
 	return 0;
 }
 
@@ -119,34 +167,28 @@ static void *demux_thread(void *arg)
 	do
 	{
 		char *input;
+		demux_out_t *out = &ctx->out[ctx->outn];
 		input = ctx->in->ops->peer(ctx->in->ctx);
-		if (ctx->output == NULL)
-			ctx->output = ctx->out->ops->pull(ctx->out->ctx);
 		if (input == NULL)
 		{
 			run = 0;
-			ctx->out->ops->push(ctx->out->ctx, 0, NULL);
-			break;
 		}
-
-		int len;
-		len = ctx->in->ops->length(ctx->in->ctx);
-		int headerlen;
-		headerlen = demux_parseheader(ctx, input);
-		if (headerlen > 0)
+		else
 		{
-			memcpy(ctx->output, input + headerlen, len - headerlen);
-			ctx->out->ops->push(ctx->out->ctx, len - headerlen, NULL);
-			ctx->output = NULL;
+			int len;
+			len = ctx->in->ops->length(ctx->in->ctx);
+			if ( demux_parseheader(ctx, input, len) < 0)
+				run = 0;
 		}
 		ctx->in->ops->pop(ctx->in->ctx, len);
 	} while (run);
+	if (out->data != NULL)
+		out->jitter->ops->push(out->jitter->ctx, 0, NULL);
 	return NULL;
 }
 
 static int demux_run(demux_ctx_t *ctx)
 {
-	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx);
 	pthread_create(&ctx->thread, NULL, demux_thread, ctx);
 	return 0;
 }
@@ -157,6 +199,8 @@ static const char *demux_mime(demux_ctx_t *ctx, int index)
 		return NULL;
 	if (ctx->mime)
 		return ctx->mime;
+	if (ctx->out[index].mime)
+		return ctx->out[index].mime;
 #ifdef DECODER_MAD
 	return mime_audiomp3;
 #elif defined(DECODER_FLAC)
@@ -170,12 +214,17 @@ static int demux_attach(demux_ctx_t *ctx, int index, decoder_t *decoder)
 {
 	if (index > 0)
 		return -1;
-	ctx->estream = decoder;
+	demux_out_t *out = &ctx->out[index];
+	out->estream = decoder;
+	out->jitter = out->estream->ops->jitter(out->estream->ctx);
+	if (index >= ctx->outlast)
+		ctx->outlast = index + 1;
 }
 
 static decoder_t *demux_estream(demux_ctx_t *ctx, int index)
 {
-	return ctx->estream;
+	if (index < ctx->outlast)
+		return ctx->out[index].estream;
 }
 
 static void demux_destroy(demux_ctx_t *ctx)

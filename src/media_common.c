@@ -149,7 +149,7 @@ char *utils_parseurl(const char *url, char **protocol, char **host, char **port,
 	return turl;
 }
 
-const char *utils_mime2mime(char *mime)
+const char *utils_mime2mime(const char *mime)
 {
 	const char *mime2 = NULL;
 	if (mime != NULL)

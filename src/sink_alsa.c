@@ -350,7 +350,7 @@ static int _alsa_checksamplerate(sink_ctx_t *ctx)
 	return ret;
 }
 
-static void *alsa_thread(void *arg)
+static void *sink_thread(void *arg)
 {
 	int ret;
 	int divider = 2;
@@ -450,7 +450,7 @@ static int alsa_run(sink_ctx_t *ctx)
 	pthread_create(&ctx->thread, &attr, sink_thread, ctx);
 	pthread_attr_destroy(&attr);
 #else
-	pthread_create(&ctx->thread, NULL, alsa_thread, ctx);
+	pthread_create(&ctx->thread, NULL, sink_thread, ctx);
 #endif
 	return 0;
 }

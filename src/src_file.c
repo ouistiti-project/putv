@@ -147,18 +147,10 @@ static src_ctx_t *src_init(player_ctx_t *ctx, const char *url, const char *mime)
 	return NULL;
 }
 
-static int src_run(src_ctx_t *ctx, jitter_t *encoder)
+static int src_run(src_ctx_t *ctx)
 {
 	const event_new_es_t event = {.pid = 0, .mime = ctx->mime};
 	ctx->listener.cb(ctx->listener.arg, SRC_EVENT_NEW_ES, &event);
-	if (ctx->estream)
-	{
-		ctx->estream->ops->run(ctx->estream->ctx, encoder);
-		ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx);
-	}
-	dbg("src: add producter to %s", ctx->out->ctx->name);
-	ctx->out->ctx->produce = (produce_t)src_read;
-	ctx->out->ctx->producter = (void *)ctx;
 	return 0;
 }
 
@@ -173,6 +165,10 @@ static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
 	if (index > 0)
 		return -1;
 	ctx->estream = decoder;
+	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx);
+	dbg("src: add producter to %s", ctx->out->ctx->name);
+	ctx->out->ctx->produce = (produce_t)src_read;
+	ctx->out->ctx->producter = (void *)ctx;
 }
 
 static decoder_t *src_estream(src_ctx_t *ctx, int index)

@@ -271,7 +271,7 @@ static void *src_thread(void *arg)
 	return NULL;
 }
 
-static int src_run(src_ctx_t *ctx, jitter_t *encoder)
+static int src_run(src_ctx_t *ctx)
 {
 	ctx->demux.ops->run(ctx->demux.ctx);
 	ctx->out = ctx->demux.ops->jitter(ctx->demux.ctx);

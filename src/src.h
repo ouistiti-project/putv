@@ -27,7 +27,7 @@ struct src_ops_s
 {
 	const char *protocol;
 	src_ctx_t *(*init)(player_ctx_t *, const char *path, const char *mime);
-	int (*run)(src_ctx_t *, jitter_t *);
+	int (*run)(src_ctx_t *);
 	const char *(*mime)(src_ctx_t *ctx, int index);
 	void (*eventlistener)(src_ctx_t *ctx, src_listener_t listener, void *arg);
 	int (*attach)(src_ctx_t *ctx, int index, decoder_t *decoder);

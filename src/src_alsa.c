@@ -320,11 +320,6 @@ static void *src_thread(void *arg)
 
 static int src_run(src_ctx_t *ctx, jitter_t *encoder)
 {
-	if (ctx->estream)
-	{
-		ctx->estream->ops->run(ctx->estream->ctx, encoder);
-		ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx);
-	}
 	pthread_create(&ctx->thread, NULL, src_thread, ctx);
 	return 0;
 }
@@ -349,6 +344,7 @@ static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
 	if (index > 0)
 		return -1;
 	ctx->estream = decoder;
+	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx);
 }
 
 static decoder_t *src_estream(src_ctx_t *ctx, int index)

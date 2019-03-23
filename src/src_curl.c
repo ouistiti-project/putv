@@ -154,16 +154,11 @@ static void *src_thread(void *arg)
 	return 0;
 }
 
-static int src_run(src_ctx_t *ctx, jitter_t *encoder)
+static int src_run(src_ctx_t *ctx)
 {
 	int ret;
 	const event_new_es_t event = {.pid = 0, .mime = ctx->mime};
 	ctx->listener.cb(ctx->listener.arg, SRC_EVENT_NEW_ES, (void *)&event);
-	if (ctx->estream)
-	{
-		ctx->estream->ops->run(ctx->estream->ctx, encoder);
-		ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx);
-	}
 	ret = curl_easy_setopt(ctx->curl, CURLOPT_BUFFERSIZE, ctx->out->ctx->size);
 	//ret = curl_easy_perform(ctx->curl);
 	ret = pthread_create(&ctx->thread, NULL, src_thread, ctx);
@@ -195,6 +190,7 @@ static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
 	if (index > 0)
 		return -1;
 	ctx->estream = decoder;
+	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx);
 }
 
 static decoder_t *src_estream(src_ctx_t *ctx, int index)

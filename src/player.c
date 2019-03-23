@@ -54,7 +54,6 @@ typedef struct player_decoder_s player_decoder_t;
 
 struct player_decoder_s
 {
-	decoder_t *audio;
 	const src_t *src;
 	int mediaid;
 };
@@ -231,6 +230,23 @@ struct _player_play_s
 	player_decoder_t *dec;
 };
 
+static void _player_listener(void *arg, event_t event, void *eventarg)
+{
+	struct _player_play_s *data = (struct _player_play_s *)arg;
+	player_ctx_t *player = data->ctx;
+	if (event == SRC_EVENT_NEW_ES)
+	{
+		
+		event_new_es_t *event_data = (event_new_es_t *)eventarg;
+		const src_t *src = data->dec->src;
+		decoder_t *decoder = NULL;
+
+		decoder = decoder_build(player, event_data->mime, player_filter(player));
+		src->ops->attach(src->ctx, event_data->pid, decoder);
+		decoder->ops->run(decoder->ctx, player->audioout);
+	}
+}
+
 static int _player_play(void* arg, int id, const char *url, const char *info, const char *mime)
 {
 	struct _player_play_s *data = (struct _player_play_s *)arg;
@@ -244,19 +260,19 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 		data->dec = calloc(1, sizeof(*data->dec));
 		data->dec->mediaid = id;
 		data->dec->src = src;
-		int i = 0;
-		do
+
+		if (src->ops->eventlistener)
+			src->ops->eventlistener(src->ctx, _player_listener, data);
+		else
 		{
-			decoder_t *decoder;
-			decoder = src->ops->estream(src->ctx, i);
-			if (decoder->ops->mime &&
-				!strncmp("audio", decoder->ops->mime(decoder->ctx), 5))
-			{
-				data->dec->audio = decoder;
-				break;
-			}
-			i++;
-		} while (i < MAX_ESTREAM);
+err("attach mime %s", mime);
+			decoder_t *decoder = NULL;
+			decoder = decoder_build(player, mime, player_filter(player));
+
+			src->ops->attach(src->ctx, 0, decoder);
+			decoder->ops->run(decoder->ctx, player->audioout);
+		}
+
 		return 0;
 	}
 	else
@@ -271,10 +287,6 @@ int player_subscribe(player_ctx_t *ctx, estream_t type, jitter_t *encoder_jitter
 {
 	if (type == ES_AUDIO)
 	{
-		if (ctx->audioout != NULL)
-		{
-				ctx->audioout->ops->flush(ctx->audioout->ctx);
-		}
 		ctx->audioout = encoder_jitter;
 	}
 	return 0;
@@ -330,7 +342,6 @@ int player_run(player_ctx_t *ctx)
 			if (ctx->current != NULL)
 			{
 				dbg("player: wait");
-				ctx->current->audio->ops->destroy(ctx->current->audio->ctx);
 				ctx->current->src->ops->destroy(ctx->current->src->ctx);
 				free(ctx->current);
 				ctx->current = NULL;
@@ -345,7 +356,6 @@ int player_run(player_ctx_t *ctx)
 				 * to set a producer if it's needed
 				 */
 				ctx->current->src->ops->run(ctx->current->src->ctx);
-				ctx->current->audio->ops->run(ctx->current->audio->ctx, ctx->audioout);
 				if (ctx->media->ops->next)
 				{
 					ctx->media->ops->next(ctx->media->ctx);
@@ -357,7 +367,6 @@ int player_run(player_ctx_t *ctx)
 				if (player.dec != NULL)
 				{
 					ctx->current = player.dec;
-					ctx->current->audio->ops->destroy(ctx->current->audio->ctx);
 					ctx->current->src->ops->destroy(ctx->current->src->ctx);
 					free(ctx->current);
 					ctx->current = NULL;

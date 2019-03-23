@@ -37,6 +37,8 @@
 #include <pwd.h>
 
 #include "player.h"
+typedef enum event_e event_t;
+typedef void (*src_listener_t)(void *arg, event_t event, void *data);
 typedef struct src_ops_s src_ops_t;
 typedef struct src_ctx_s src_ctx_t;
 struct src_ctx_s
@@ -44,8 +46,14 @@ struct src_ctx_s
 	const src_ops_t *ops;
 	int fd;
 	player_ctx_t *ctx;
+	const char *mime;
 	jitter_t *out;
 	decoder_t *estream;
+	struct
+	{
+		src_listener_t cb;
+		void *arg;
+	} listener;
 };
 #define SRC_CTX
 #include "src.h"
@@ -82,6 +90,7 @@ static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 	{
 		warn("src: timeout");
 	}
+	src_dbg("src: read %d", ret);
 	if (ret < 0)
 		err("src file %d error: %s", ctx->fd, strerror(errno));
 	if (ret == 0)
@@ -92,7 +101,7 @@ static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 	return ret;
 }
 
-static src_ctx_t *src_init(player_ctx_t *ctx, const char *url)
+static src_ctx_t *src_init(player_ctx_t *ctx, const char *url, const char *mime)
 {
 	int fd = -1;
 	char *path = NULL;
@@ -128,6 +137,7 @@ static src_ctx_t *src_init(player_ctx_t *ctx, const char *url)
 		src->ops = src_file;
 		src->fd = fd;
 		src->ctx = ctx;
+		src->mime = mime;
 		return src;
 	}
 	if (path != NULL)
@@ -137,13 +147,25 @@ static src_ctx_t *src_init(player_ctx_t *ctx, const char *url)
 	return NULL;
 }
 
-static int src_run(src_ctx_t *ctx)
+static int src_run(src_ctx_t *ctx, jitter_t *encoder)
 {
-	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx);
+	const event_new_es_t event = {.pid = 0, .mime = ctx->mime};
+	ctx->listener.cb(ctx->listener.arg, SRC_EVENT_NEW_ES, &event);
+	if (ctx->estream)
+	{
+		ctx->estream->ops->run(ctx->estream->ctx, encoder);
+		ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx);
+	}
 	dbg("src: add producter to %s", ctx->out->ctx->name);
 	ctx->out->ctx->produce = (produce_t)src_read;
 	ctx->out->ctx->producter = (void *)ctx;
 	return 0;
+}
+
+static void src_eventlistener(src_ctx_t *ctx, src_listener_t listener, void *arg)
+{
+	ctx->listener.cb = listener;
+	ctx->listener.arg = arg;
 }
 
 static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
@@ -158,10 +180,12 @@ static decoder_t *src_estream(src_ctx_t *ctx, int index)
 	return ctx->estream;
 }
 
-static void src_destroy(src_ctx_t *src)
+static void src_destroy(src_ctx_t *ctx)
 {
-	close(src->fd);
-	free(src);
+	if (ctx->estream != NULL)
+		ctx->estream->ops->destroy(ctx->estream->ctx);
+	close(ctx->fd);
+	free(ctx);
 }
 
 const src_ops_t *src_file = &(src_ops_t)
@@ -169,6 +193,7 @@ const src_ops_t *src_file = &(src_ops_t)
 	.protocol = "file://",
 	.init = src_init,
 	.run = src_run,
+	.eventlistener = src_eventlistener,
 	.attach = src_attach,
 	.estream = src_estream,
 	.destroy = src_destroy,

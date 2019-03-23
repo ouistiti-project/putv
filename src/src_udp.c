@@ -41,6 +41,8 @@
 #include "player.h"
 #include "jitter.h"
 #include "demux.h"
+typedef enum event_e event_t;
+typedef void (*src_listener_t)(void *arg, event_t event, void *data);
 typedef struct src_ops_s src_ops_t;
 typedef struct src_ctx_s src_ctx_t;
 struct src_ctx_s
@@ -57,6 +59,11 @@ struct src_ctx_s
 	int addrlen;
 	const char *mime;
 	demux_t demux;
+	struct
+	{
+		src_listener_t cb;
+		void *arg;
+	} listener;
 };
 #define SRC_CTX
 #include "src.h"
@@ -74,7 +81,7 @@ struct src_ctx_s
 #define src_dbg(...)
 
 static const char *jitter_name = "udp socket";
-static src_ctx_t *src_init(player_ctx_t *player, const char *url)
+static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mime)
 {
 	int count = 2;
 
@@ -96,7 +103,6 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url)
 	if (port != NULL)
 		iport = atoi(port);
 
-	char *mime = NULL;
 	if (search != NULL)
 	{
 		mime = strstr(search, "mime=");
@@ -203,11 +209,13 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url)
 
 		ctx->player = player;
 		ctx->sock = sock;
+#ifdef DEMUX_RTP
 		if (rtp)
 		{
 			ctx->demux.ops = demux_rtp;
 		}
 		else
+#endif
 			ctx->demux.ops = demux_passthrough;
 		ctx->demux.ctx = ctx->demux.ops->init(player, search);
 		ctx->mime = utils_mime2mime(mime);
@@ -263,8 +271,9 @@ static void *src_thread(void *arg)
 	return NULL;
 }
 
-static int src_run(src_ctx_t *ctx)
+static int src_run(src_ctx_t *ctx, jitter_t *encoder)
 {
+	ctx->demux.ops->run(ctx->demux.ctx);
 	ctx->out = ctx->demux.ops->jitter(ctx->demux.ctx);
 	pthread_create(&ctx->thread, NULL, src_thread, ctx);
 	return 0;
@@ -273,6 +282,15 @@ static int src_run(src_ctx_t *ctx)
 static const char *src_mime(src_ctx_t *ctx, int index)
 {
 	return ctx->demux.ops->mime(ctx->demux.ctx, index);
+}
+
+static void src_eventlistener(src_ctx_t *ctx, src_listener_t listener, void *arg)
+{
+	ctx->listener.cb = listener;
+	ctx->listener.arg = arg;
+
+	const event_new_es_t event = {.pid = 0, .mime = ctx->mime};
+	ctx->listener.cb(ctx->listener.arg, SRC_EVENT_NEW_ES, &event);
 }
 
 static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
@@ -300,6 +318,7 @@ const src_ops_t *src_udp = &(src_ops_t)
 	.init = src_init,
 	.run = src_run,
 	.mime = src_mime,
+	.eventlistener = src_eventlistener,
 	.attach = src_attach,
 	.estream = src_estream,
 	.destroy = src_destroy,

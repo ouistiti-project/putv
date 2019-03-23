@@ -98,7 +98,7 @@ src_t *src_build(player_ctx_t *player, const char *url, const char *mime)
 				len = next - protocol;
 			if (!(strncmp(url, protocol, len)))
 			{
-				src_ctx = src_list[i]->init(player, url);
+				src_ctx = src_list[i]->init(player, url, mime);
 				src_default = src_list[i];
 				break;
 			}
@@ -116,7 +116,7 @@ src_t *src_build(player_ctx_t *player, const char *url, const char *mime)
 
 	if (src_ctx == NULL && src_default != NULL)
 	{
-		src_ctx = src_default->init(player, url);
+		src_ctx = src_default->init(player, url, mime);
 	}
 	if (src_ctx == NULL)
 	{
@@ -127,35 +127,5 @@ src_t *src_build(player_ctx_t *player, const char *url, const char *mime)
 	src->ops = src_default;
 	src->ctx = src_ctx;
 
-	if (src->ops->mime != NULL &&
-		(mime == NULL || mime[0] == '\0' || !strcmp(mime, mime_octetstream)))
-	{
-		int i = 0;
-		do
-		{
-			mime = src->ops->mime(src->ctx, i);
-			if (mime == NULL)
-				break;
-			decoder_t *decoder = NULL;
-			decoder = decoder_build(player, mime, player_filter(player));
-
-			src->ops->attach(src->ctx, i, decoder);
-			i++;
-		} while (i < MAX_ESTREAM);
-		mime = NULL;
-		if (src->ops->estream(src->ctx, 0) == NULL)
-		{
-			mime = mime_octetstream;
-			decoder_t *decoder = NULL;
-			decoder = decoder_build(player, mime, player_filter(player));
-			src->ops->attach(src->ctx, 0, decoder);
-		}
-	}
-	else
-	{
-		decoder_t *decoder = NULL;
-		decoder = decoder_build(player, mime, player_filter(player));
-		src->ops->attach(src->ctx, 0, decoder);
-	}
 	return src;
 }

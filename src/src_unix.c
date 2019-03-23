@@ -39,6 +39,8 @@
 
 #include "player.h"
 #include "jitter.h"
+typedef enum event_e event_t;
+typedef void (*src_listener_t)(void *arg, event_t event, void *data);
 typedef struct src_ops_s src_ops_t;
 typedef struct src_ctx_s src_ctx_t;
 struct src_ctx_s
@@ -51,6 +53,11 @@ struct src_ctx_s
 	jitter_t *out;
 	unsigned int samplerate;
 	decoder_t *estream;
+	struct
+	{
+		src_listener_t cb;
+		void *arg;
+	} listener;
 };
 #define SRC_CTX
 #include "src.h"
@@ -68,7 +75,7 @@ struct src_ctx_s
 #define src_dbg(...)
 
 static const char *jitter_name = "unix socket";
-static src_ctx_t *src_init(player_ctx_t *player, const char *url)
+static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mime)
 {
 	int count = 2;
 	int ret;
@@ -132,7 +139,7 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url)
 	src_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->player = player;
 	ctx->handle = handle;
-	ctx->mime = utils_getmime(path);
+	ctx->mime = mime;
 	if (ctx->mime == mime_octetstream)
 	{
 #ifdef DECODER_LAME
@@ -185,9 +192,13 @@ static void *src_thread(void *arg)
 	return NULL;
 }
 
-static int src_run(src_ctx_t *ctx)
+static int src_run(src_ctx_t *ctx, jitter_t *encoder)
 {
-	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx);
+	if (ctx->estream)
+	{
+		ctx->estream->ops->run(ctx->estream->ctx, encoder);
+		ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx);
+	}
 	pthread_create(&ctx->thread, NULL, src_thread, ctx);
 	return 0;
 }
@@ -197,6 +208,14 @@ static const char *src_mime(src_ctx_t *ctx, int index)
 	if (index > 0)
 		return NULL;
 	return ctx->mime;
+}
+
+static void src_eventlistener(src_ctx_t *ctx, src_listener_t listener, void *arg)
+{
+	ctx->listener.cb = listener;
+	ctx->listener.arg = arg;
+	const event_new_es_t event = {.pid = 0, .mime = ctx->mime};
+	ctx->listener.cb(ctx->listener.arg, SRC_EVENT_NEW_ES, &event);
 }
 
 static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
@@ -213,6 +232,8 @@ static decoder_t *src_estream(src_ctx_t *ctx, int index)
 
 static void src_destroy(src_ctx_t *ctx)
 {
+	if (ctx->estream != NULL)
+		ctx->estream->ops->destroy(ctx->estream->ctx);
 	if (ctx->thread)
 		pthread_join(ctx->thread, NULL);
 	close(ctx->handle);
@@ -225,6 +246,7 @@ const src_ops_t *src_unix = &(src_ops_t)
 	.init = src_init,
 	.run = src_run,
 	.mime = src_mime,
+	.eventlistener = src_eventlistener,
 	.attach = src_attach,
 	.estream = src_estream,
 	.destroy = src_destroy,

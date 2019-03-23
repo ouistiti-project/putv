@@ -207,16 +207,17 @@ enum mad_flow error(void *data,
 		return MAD_FLOW_BREAK;
 	}
 }
-void header(void *data, struct mad_header const *header)
+enum mad_flow header(void *data, struct mad_header const *header)
 {
 	decoder_ctx_t *ctx = (decoder_ctx_t *)data;
 	decoder_dbg("decoder mad: audio header mpeg1layer%d, samplerate %d", header->layer, header->samplerate);
 }
 /// MAD_BUFFER_MDLEN is too small on ARM device
-#define BUFFERSIZE 752
+#define BUFFERSIZE 2881
+//#define BUFFERSIZE MAD_BUFFER_MDLEN
 
 /// NBBUFFER must be at least 3 otherwise the decoder block on the end of the source
-#define NBUFFER 6
+#define NBUFFER 3
 
 static const char *jitter_name = "mad decoder";
 static decoder_ctx_t *mad_init(player_ctx_t *player, const filter_t *filter)

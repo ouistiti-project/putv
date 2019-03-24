@@ -242,8 +242,11 @@ static void _player_listener(void *arg, event_t event, void *eventarg)
 		decoder_t *decoder = NULL;
 
 		decoder = decoder_build(player, event_data->mime, player_filter(player));
-		src->ops->attach(src->ctx, event_data->pid, decoder);
-		decoder->ops->run(decoder->ctx, player->audioout);
+		if (decoder != NULL)
+		{
+			src->ops->attach(src->ctx, event_data->pid, decoder);
+			decoder->ops->run(decoder->ctx, player->audioout);
+		}
 	}
 }
 

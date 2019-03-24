@@ -37,8 +37,7 @@
 #include <curl/curl.h>
 
 #include "player.h"
-typedef enum event_e event_t;
-typedef void (*src_listener_t)(void *arg, event_t event, void *data);
+#include "event.h"
 typedef struct src_ops_s src_ops_t;
 typedef struct src_ctx_s src_ctx_t;
 struct src_ctx_s
@@ -51,11 +50,11 @@ struct src_ctx_s
 	size_t outlen;
 	pthread_t thread;
 	CURL *curl;
-	char *mime;
+	const char *mime;
 	decoder_t *estream;
 	struct
 	{
-		src_listener_t cb;
+		event_listener_t cb;
 		void *arg;
 	} listener;
 };
@@ -174,12 +173,12 @@ static const char *src_mime(src_ctx_t *ctx, int index)
 	{
 		CURLcode ret = curl_easy_getinfo(ctx->curl, CURLINFO_CONTENT_TYPE, &mime);
 		if (ret == CURLE_OK)
-			ctx->mime = (char *)mime;
+			ctx->mime = utils_mime2mime(mime);
 	}
 	return mime;
 }
 
-static void src_eventlistener(src_ctx_t *ctx, src_listener_t listener, void *arg)
+static void src_eventlistener(src_ctx_t *ctx, event_listener_t listener, void *arg)
 {
 	ctx->listener.cb = listener;
 	ctx->listener.arg = arg;
@@ -208,8 +207,6 @@ static void src_destroy(src_ctx_t *ctx)
 	if (ctx->dumpfd > 0)
 		close(ctx->dumpfd);
 #endif
-	if (ctx->mime)
-		free(ctx->mime);
 	curl_easy_cleanup(ctx->curl);
 	free(ctx);
 }

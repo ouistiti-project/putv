@@ -37,8 +37,7 @@
 #include <pwd.h>
 
 #include "player.h"
-typedef enum event_e event_t;
-typedef void (*src_listener_t)(void *arg, event_t event, void *data);
+#include "event.h"
 typedef struct src_ops_s src_ops_t;
 typedef struct src_ctx_s src_ctx_t;
 struct src_ctx_s
@@ -51,7 +50,7 @@ struct src_ctx_s
 	decoder_t *estream;
 	struct
 	{
-		src_listener_t cb;
+		event_listener_t cb;
 		void *arg;
 	} listener;
 };
@@ -150,11 +149,11 @@ static src_ctx_t *src_init(player_ctx_t *ctx, const char *url, const char *mime)
 static int src_run(src_ctx_t *ctx)
 {
 	const event_new_es_t event = {.pid = 0, .mime = ctx->mime};
-	ctx->listener.cb(ctx->listener.arg, SRC_EVENT_NEW_ES, &event);
+	ctx->listener.cb(ctx->listener.arg, SRC_EVENT_NEW_ES, (void *)&event);
 	return 0;
 }
 
-static void src_eventlistener(src_ctx_t *ctx, src_listener_t listener, void *arg)
+static void src_eventlistener(src_ctx_t *ctx, event_listener_t listener, void *arg)
 {
 	ctx->listener.cb = listener;
 	ctx->listener.arg = arg;

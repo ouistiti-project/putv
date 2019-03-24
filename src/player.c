@@ -265,7 +265,6 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 			src->ops->eventlistener(src->ctx, _player_listener, data);
 		else
 		{
-err("attach mime %s", mime);
 			decoder_t *decoder = NULL;
 			decoder = decoder_build(player, mime, player_filter(player));
 

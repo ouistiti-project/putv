@@ -39,8 +39,7 @@
 
 #include "player.h"
 #include "jitter.h"
-typedef enum event_e event_t;
-typedef void (*src_listener_t)(void *arg, event_t event, void *data);
+#include "event.h"
 typedef struct src_ops_s src_ops_t;
 typedef struct src_ctx_s src_ctx_t;
 struct src_ctx_s
@@ -55,7 +54,7 @@ struct src_ctx_s
 	decoder_t *estream;
 	struct
 	{
-		src_listener_t cb;
+		event_listener_t cb;
 		void *arg;
 	} listener;
 };
@@ -205,12 +204,12 @@ static const char *src_mime(src_ctx_t *ctx, int index)
 	return ctx->mime;
 }
 
-static void src_eventlistener(src_ctx_t *ctx, src_listener_t listener, void *arg)
+static void src_eventlistener(src_ctx_t *ctx, event_listener_t listener, void *arg)
 {
 	ctx->listener.cb = listener;
 	ctx->listener.arg = arg;
 	const event_new_es_t event = {.pid = 0, .mime = ctx->mime};
-	ctx->listener.cb(ctx->listener.arg, SRC_EVENT_NEW_ES, &event);
+	ctx->listener.cb(ctx->listener.arg, SRC_EVENT_NEW_ES, (void *)&event);
 }
 
 static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)

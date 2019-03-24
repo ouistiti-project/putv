@@ -217,7 +217,7 @@ enum mad_flow header(void *data, struct mad_header const *header)
 //#define BUFFERSIZE MAD_BUFFER_MDLEN
 
 /// NBBUFFER must be at least 3 otherwise the decoder block on the end of the source
-#define NBUFFER 3
+#define NBUFFER 6
 
 static const char *jitter_name = "mad decoder";
 static decoder_ctx_t *mad_init(player_ctx_t *player, const filter_t *filter)

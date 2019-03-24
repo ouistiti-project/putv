@@ -37,6 +37,7 @@
 
 #include "player.h"
 #include "decoder.h"
+#include "event.h"
 typedef struct demux_s demux_t;
 typedef struct demux_ops_s demux_ops_t;
 
@@ -48,17 +49,22 @@ struct demux_out_s
 	jitter_t *jitter;
 	char *data;
 	const char *mime;
+	short cc;
+	demux_out_t *next;
 };
 
 typedef struct demux_ctx_s demux_ctx_t;
 struct demux_ctx_s
 {
-	demux_out_t out[1];
-	int outn;
-	int outlast;
+	demux_out_t out;
 	jitter_t *in;
 	const char *mime;
 	pthread_t thread;
+	struct
+	{
+		event_listener_t cb;
+		void *arg;
+	} listener;
 };
 #define DEMUX_CTX
 #include "demux.h"
@@ -130,17 +136,21 @@ int demux_parseheader(demux_ctx_t *ctx, char *input, int len)
 	warn("\tnb counter:\t%d", header->b.cc);
 	warn("\tpadding:\t%d", header->b.p);
 #endif
-	if (header->b.pt == 14)
+	demux_out_t *out = ctx->out;
+	while (out != NULL && out->ssrc != header->ssrc)
+		out = out->next;
+	if (out == NULL)
 	{
-		demux_out_t *out = &ctx->out[ctx->outn];
-		int ssrc = header->ssrc;
-		if (out->ssrc == 0)
-		{
-			out->ssrc = ssrc;
+		out = calloc(1, sizeof(*out));
+		out->ssrc = header->ssrc;
+		out->cc = header->b.cc;
+		if (header->b.pt == 14)
 			out->mime = mime_audiomp3;
-		}
-		if (out->ssrc != ssrc)
-			return 0;
+		out->next = ctx->out;
+		ctx->out = out;
+	}
+	if (out->mime != NULL)
+	{
 		if (out->data == NULL)
 			out->data = out->jitter->ops->pull(out->jitter->ctx);
 		len -= sizeof(*header);
@@ -195,12 +205,16 @@ static int demux_run(demux_ctx_t *ctx)
 
 static const char *demux_mime(demux_ctx_t *ctx, int index)
 {
-	if (index > 0)
-		return NULL;
 	if (ctx->mime)
 		return ctx->mime;
-	if (ctx->out[index].mime)
-		return ctx->out[index].mime;
+	demux_out_t *out = ctx->out;
+	while (out != NULL && index > 0)
+	{
+		out = out->next;
+		index--;
+	}
+	if (ctx->out != NULL)
+		return ctx->out->mime;
 #ifdef DECODER_MAD
 	return mime_audiomp3;
 #elif defined(DECODER_FLAC)
@@ -210,7 +224,13 @@ static const char *demux_mime(demux_ctx_t *ctx, int index)
 #endif
 }
 
-static int demux_attach(demux_ctx_t *ctx, int index, decoder_t *decoder)
+sstatic void demux_eventlistener(demux_ctx_t *ctx, event_listener_t listener, void *arg)
+{
+	ctx->listener.cb = listener;
+	ctx->listener.arg = arg;
+}
+
+tatic int demux_attach(demux_ctx_t *ctx, int index, decoder_t *decoder)
 {
 	if (index > 0)
 		return -1;
@@ -237,6 +257,7 @@ const demux_ops_t *demux_rtp = &(demux_ops_t)
 	.init = demux_init,
 	.jitter = demux_jitter,
 	.run = demux_run,
+	.eventlistener = demux_eventlistener,
 	.attach = demux_attach,
 	.estream = demux_estream,
 	.mime = demux_mime,

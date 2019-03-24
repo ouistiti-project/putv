@@ -1,6 +1,8 @@
 #ifndef __DEMUX_H__
 #define __DEMUX_H__
 
+#include "event.h"
+
 typedef struct player_ctx_s player_ctx_t;
 
 #ifndef DEMUX_CTX
@@ -13,6 +15,7 @@ struct demux_ops_s
 	jitter_t *(*jitter)(demux_ctx_t *ctx);
 	int (*run)(demux_ctx_t *ctx);
 	const char *(*mime)(demux_ctx_t *ctx, int index);
+	void (*eventlistener)(demux_ctx_t *ctx, event_listener_t listener, void *arg);
 	int (*attach)(demux_ctx_t *ctx, int index, decoder_t *decoder);
 	decoder_t *(*estream)(demux_ctx_t *ctx, int index);
 	void (*destroy)(demux_ctx_t *ctx);

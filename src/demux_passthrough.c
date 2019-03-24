@@ -35,15 +35,20 @@
 
 #include "player.h"
 #include "decoder.h"
+#include "event.h"
 typedef struct demux_s demux_t;
 typedef struct demux_ops_s demux_ops_t;
 typedef struct demux_ctx_s demux_ctx_t;
 struct demux_ctx_s
 {
 	player_ctx_t *ctx;
-	jitter_t *inout;
 	decoder_t *estream;
 	const char *mime;
+	struct
+	{
+		event_listener_t cb;
+		void *arg;
+	} listener;
 };
 #define DEMUX_CTX
 #include "demux.h"
@@ -100,6 +105,12 @@ static const char *demux_mime(demux_ctx_t *ctx, int index)
 #endif
 }
 
+static void demux_eventlistener(demux_ctx_t *ctx, event_listener_t listener, void *arg)
+{
+	ctx->listener.cb = listener;
+	ctx->listener.arg = arg;
+}
+
 static int demux_attach(demux_ctx_t *ctx, int index, decoder_t *decoder)
 {
 	if (index > 0)
@@ -122,6 +133,7 @@ const demux_ops_t *demux_passthrough = &(demux_ops_t)
 	.init = demux_init,
 	.jitter = demux_jitter,
 	.run = demux_run,
+	.eventlistener = demux_eventlistener,
 	.attach = demux_attach,
 	.estream = demux_estream,
 	.mime = demux_mime,

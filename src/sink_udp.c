@@ -33,6 +33,7 @@
 #include <net/if.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <ifaddrs.h>
 #include <sys/ioctl.h>
 
 #define __USE_GNU
@@ -93,6 +94,7 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 	char *port = NULL;
 	char *path = NULL;
 	char *search = NULL;
+	in_addr_t if_addr = INADDR_ANY;
 
 	char *value = utils_parseurl(url, &protocol, &host, &port, &path, &search);
 
@@ -106,6 +108,31 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 	if (port != NULL)
 		iport = atoi(port);
 
+	if (search != NULL)
+	{
+		char *nif;
+		nif = strstr(search, "if=");
+		if (nif != NULL)
+		{
+			nif += 3;
+			struct ifaddrs *ifa_list;
+			struct ifaddrs *ifa_main;
+
+			if (getifaddrs(&ifa_list) == 0)
+			{
+				for (ifa_main = ifa_list; ifa_main != NULL; ifa_main = ifa_main->ifa_next)
+				{
+					if ((nif != NULL) && strcmp(nif, ifa_main->ifa_name) != 0)
+						continue;
+				}
+				if (ifa_main != NULL)
+				{
+					if_addr = ((struct sockaddr_in *)ifa_main->ifa_addr)->sin_addr.s_addr;
+				}
+			}
+		}
+	}
+
 	int count = 2;
 	jitter_format_t format = SINK_BITSSTREAM;
 	sink_ctx_t *ctx = NULL;
@@ -118,7 +145,7 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 	memset(&saddr, 0, sizeof(struct in_addr));
 	saddr.sin_family = PF_INET;
 	saddr.sin_port = htons(0); // Use the first free port
-	saddr.sin_addr.s_addr = htonl(INADDR_ANY); // bind socket to any interface
+	saddr.sin_addr.s_addr = htonl(if_addr); // bind socket to any interface
 
 	ret = bind(sock, (struct sockaddr *)&saddr, sizeof(saddr));
 
@@ -137,11 +164,15 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 			if (ret == 0)
 			{
 				ret = ioctl(sock, SIOCGIFFLAGS, &ifr);
-				if (!ret && (ifr.ifr_flags & IFF_LOOPBACK))
+				if (ret)
+					continue;
+				if ((ifr.ifr_flags & IFF_LOOPBACK))
 				{
 					continue;
 				}
-				if (!ret && (ifr.ifr_flags & IFF_RUNNING))
+				if (IN_MULTICAST(longaddress) && !(ifr.ifr_flags & IFF_MULTICAST))
+					continue;
+				if (!(ifr.ifr_flags & IFF_RUNNING))
 				{
 					break;
 				}
@@ -168,27 +199,27 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 			struct in_addr iaddr;
 			// set content of struct saddr and imreq to zero
 			memset(&iaddr, 0, sizeof(struct in_addr));
-			iaddr.s_addr = INADDR_ANY; // use DEFAULT interface
+			iaddr.s_addr = if_addr;
 
 			// Set the outgoing interface to DEFAULT
 			ret = setsockopt(sock, IPPROTO_IP, IP_MULTICAST_IF, &iaddr,
 							sizeof(struct in_addr));
+			if (ret != 0)
+				warn("sink: not allowed to change interface");
 
-			if (ret == 0)
-			{
-				unsigned char ttl = 3;
-				// Set multicast packet TTL to 3; default TTL is 1
-				ret = setsockopt(sock, IPPROTO_IP, IP_MULTICAST_TTL, &ttl,
-								sizeof(unsigned char));
-			}
+			unsigned char ttl = 3;
+			// Set multicast packet TTL to 3; default TTL is 1
+			ret = setsockopt(sock, IPPROTO_IP, IP_MULTICAST_TTL, &ttl,
+							sizeof(unsigned char));
+			if (ret != 0)
+				warn("sink: not allowed to set TTL");
 
-			if (ret == 0)
-			{
-				unsigned char one = 1;
-				// send multicast traffic to myself too
-				ret = setsockopt(sock, IPPROTO_IP, IP_MULTICAST_LOOP, &one,
-								sizeof(unsigned char));
-			}
+			unsigned char one = 1;
+			// send multicast traffic to myself too
+			ret = setsockopt(sock, IPPROTO_IP, IP_MULTICAST_LOOP, &one,
+							sizeof(unsigned char));
+			if (ret != 0)
+				warn("sink: not allowed to make a loop on data sending");
 		}
 
 		saddr.sin_family = PF_INET;

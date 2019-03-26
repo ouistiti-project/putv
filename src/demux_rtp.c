@@ -41,6 +41,19 @@
 typedef struct demux_s demux_t;
 typedef struct demux_ops_s demux_ops_t;
 
+#define NB_LOOPS 5
+#define NB_BUFFERS 4
+#define BUFFERSIZE 1500
+
+typedef struct demux_reorder_s demux_reorder_t;
+struct demux_reorder_s
+{
+	char buffer[BUFFERSIZE];
+	size_t len;
+	char id;
+	char ready;
+};
+
 typedef struct demux_out_s demux_out_t;
 struct demux_out_s
 {
@@ -56,8 +69,9 @@ struct demux_out_s
 typedef struct demux_ctx_s demux_ctx_t;
 struct demux_ctx_s
 {
-	demux_out_t out;
+	demux_out_t *out;
 	jitter_t *in;
+	demux_reorder_t reorder[NB_BUFFERS];
 	const char *mime;
 	pthread_t thread;
 	struct
@@ -112,7 +126,7 @@ static demux_ctx_t *demux_init(player_ctx_t *player, const char *search)
 
 	demux_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->mime = utils_mime2mime(mime);
-	ctx->in = jitter_scattergather_init(jitter_name, 6, 1500);
+	ctx->in = jitter_scattergather_init(jitter_name, 6, BUFFERSIZE);
 	ctx->in->format = SINK_BITSSTREAM;
 	ctx->in->ctx->thredhold = 3;
 	return ctx;
@@ -144,30 +158,68 @@ int demux_parseheader(demux_ctx_t *ctx, char *input, int len)
 		out = calloc(1, sizeof(*out));
 		out->ssrc = header->ssrc;
 		out->cc = header->b.cc;
+		out->mime = mime_octetstream;
 		if (header->b.pt == 14)
+		{
 			out->mime = mime_audiomp3;
+		}
+		const event_new_es_t event = {.pid = out->ssrc, .mime = out->mime};
+		ctx->listener.cb(ctx->listener.arg, SRC_EVENT_NEW_ES, (void *)&event);
 		out->next = ctx->out;
 		ctx->out = out;
 	}
-	if (out->mime != NULL)
+	demux_reorder_t *reorder = &ctx->reorder[header->b.sequence % NB_BUFFERS];
+	int id = header->b.sequence % (NB_BUFFERS * NB_LOOPS);
+
+	if (out->jitter != NULL && reorder->ready && reorder->id != id)
 	{
 		if (out->data == NULL)
 			out->data = out->jitter->ops->pull(out->jitter->ctx);
-		len -= sizeof(*header);
-		input += sizeof(*header);
+		char *buffer = reorder->buffer;
+		size_t len = reorder->len;
 		while (len > out->jitter->ctx->size)
 		{
-			memcpy(out->data, input, out->jitter->ctx->size);
+			memcpy(out->data, buffer, out->jitter->ctx->size);
 			out->jitter->ops->push(out->jitter->ctx, out->jitter->ctx->size, NULL);
 			len -= out->jitter->ctx->size;
-			input += out->jitter->ctx->size;
+			buffer += out->jitter->ctx->size;
 		}
-		memcpy(out->data, input, len);
+		memcpy(out->data, buffer, len);
 		out->jitter->ops->push(out->jitter->ctx, len, NULL);
 		out->data = NULL;
-		return len;
+		reorder->ready = 0;
 	}
-	return 0;
+	if (!reorder->ready)
+	{
+		input += sizeof(*header);
+		len -= sizeof(*header);
+		if (header->b.cc)
+		{
+			warn("CSCR:");
+			input += header->b.cc * sizeof(long);
+			len -= header->b.cc * sizeof(long);
+		}
+		if (header->b.x)
+		{
+			warn("rtp extension:");
+			short *extid = (short *)input;
+			input += 2;
+			len -= 2;
+			short *extlength = (short *)input;
+			input += 2;
+			len -= 2;
+
+			input += *extlength;
+			len -= *extlength;
+		}
+		if (len > 0)
+		{
+			memcpy(reorder->buffer, input, len);
+			reorder->ready = 1;
+			reorder->id = id;
+		}
+	}
+	return len;
 }
 
 static void *demux_thread(void *arg)
@@ -177,7 +229,7 @@ static void *demux_thread(void *arg)
 	do
 	{
 		char *input;
-		demux_out_t *out = &ctx->out[ctx->outn];
+		int len = 0;
 		input = ctx->in->ops->peer(ctx->in->ctx);
 		if (input == NULL)
 		{
@@ -185,15 +237,19 @@ static void *demux_thread(void *arg)
 		}
 		else
 		{
-			int len;
 			len = ctx->in->ops->length(ctx->in->ctx);
 			if ( demux_parseheader(ctx, input, len) < 0)
 				run = 0;
 		}
 		ctx->in->ops->pop(ctx->in->ctx, len);
 	} while (run);
-	if (out->data != NULL)
-		out->jitter->ops->push(out->jitter->ctx, 0, NULL);
+	demux_out_t *out = ctx->out;
+	while (out != NULL)
+	{
+		if (out->data != NULL)
+			out->jitter->ops->push(out->jitter->ctx, 0, NULL);
+		out = out->next;
+	}
 	return NULL;
 }
 
@@ -224,31 +280,45 @@ static const char *demux_mime(demux_ctx_t *ctx, int index)
 #endif
 }
 
-sstatic void demux_eventlistener(demux_ctx_t *ctx, event_listener_t listener, void *arg)
+static void demux_eventlistener(demux_ctx_t *ctx, event_listener_t listener, void *arg)
 {
 	ctx->listener.cb = listener;
 	ctx->listener.arg = arg;
 }
 
-tatic int demux_attach(demux_ctx_t *ctx, int index, decoder_t *decoder)
+static int demux_attach(demux_ctx_t *ctx, int index, decoder_t *decoder)
 {
-	if (index > 0)
-		return -1;
-	demux_out_t *out = &ctx->out[index];
-	out->estream = decoder;
-	out->jitter = out->estream->ops->jitter(out->estream->ctx);
-	if (index >= ctx->outlast)
-		ctx->outlast = index + 1;
+	demux_out_t *out = ctx->out;
+	while (out != NULL && out->ssrc != index)
+		out = out->next;
+	if (out != NULL)
+	{
+		out->estream = decoder;
+		out->jitter = out->estream->ops->jitter(out->estream->ctx);
+	}
 }
 
 static decoder_t *demux_estream(demux_ctx_t *ctx, int index)
 {
-	if (index < ctx->outlast)
-		return ctx->out[index].estream;
+	demux_out_t *out = ctx->out;
+	while (out != NULL)
+	{
+		if (index == out->ssrc)
+			return out->estream;
+		out = out->next;
+	}
+	return NULL;
 }
 
 static void demux_destroy(demux_ctx_t *ctx)
 {
+	demux_out_t *out = ctx->out;
+	while (out != NULL)
+	{
+		demux_out_t *old = out;
+		out = out->next;
+		free(old);
+	}
 	free(ctx);
 }
 

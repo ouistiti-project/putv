@@ -42,6 +42,7 @@
 #include <poll.h>
 
 #include "player.h"
+#include "mux.h"
 #include "jitter.h"
 #include "unix_server.h"
 typedef struct sink_s sink_t;
@@ -59,6 +60,9 @@ struct sink_ctx_s
 	int nchannels;
 	int sock;
 	int counter;
+#ifdef MUX
+	mux_t *mux;
+#endif
 };
 #define SINK_CTX
 #include "sink.h"
@@ -207,6 +211,9 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 		jitter->ctx->thredhold = 3;
 		jitter->format = format;
 		ctx->in = jitter;
+#ifdef MUX
+		ctx->mux = mux_build(player, mime_octetstream);
+#endif
 	}
 
 	return ctx;
@@ -214,7 +221,11 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 
 static jitter_t *sink_jitter(sink_ctx_t *ctx)
 {
+#ifdef MUX
+	return ctx->mux->ops->jitter(ctx->mux->ctx, 0);
+#else
 	return ctx->in;
+#endif
 }
 
 static void *sink_thread(void *arg)
@@ -256,6 +267,9 @@ static void *sink_thread(void *arg)
 static int sink_run(sink_ctx_t *ctx)
 {
 	pthread_create(&ctx->thread, NULL, sink_thread, ctx);
+#ifdef MUX
+	ctx->mux->ops->run(ctx->mux->ctx, ctx->in);
+#endif
 
 	return 0;
 }

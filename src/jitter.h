@@ -38,7 +38,7 @@ struct jitter_ops_s
 	int (*wait)(jitter_ctx_t *);
 };
 
-typedef enum
+typedef enum jitter_format_e
 {
 	PCM_16bits_LE_mono,
 	PCM_16bits_LE_stereo,

@@ -4,6 +4,7 @@
 #define RANDOM_DEVICE "/dev/hwrng"
 
 typedef struct player_ctx_s player_ctx_t;
+#include "jitter.h"
 
 extern const char const *mime_octetstream;
 extern const char const *mime_audiomp3;
@@ -19,6 +20,7 @@ char *utils_parseurl(const char *url,
 								char **path,
 								char **search);
 const char *utils_mime2mime(const char *mime);
+const char *utils_format2mime(jitter_format_t format);
 
 typedef struct media_ctx_s media_ctx_t;
 

@@ -164,6 +164,32 @@ const char *utils_mime2mime(const char *mime)
 	return mime2;
 }
 
+const char *utils_format2mime(jitter_format_t format)
+{
+	switch (format)
+	{
+	case PCM_16bits_LE_mono:
+	case PCM_16bits_LE_stereo:
+	case PCM_24bits3_LE_stereo:
+	case PCM_24bits4_LE_stereo:
+	case PCM_32bits_LE_stereo:
+	case PCM_32bits_BE_stereo:
+		return mime_audiopcm;
+	case MPEG2_3_MP3:
+		return mime_audiomp3;
+	case FLAC:
+		return mime_audioflac;
+	case MPEG2_1:
+	case MPEG2_2:
+		return mime_octetstream;
+	case DVB_frame:
+	case SINK_BITSSTREAM:
+	default:
+		break;
+	}
+	return mime_octetstream;
+}
+
 static char *current_path;
 media_t *media_build(player_ctx_t *player, const char *url)
 {

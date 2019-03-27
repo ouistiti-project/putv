@@ -84,6 +84,7 @@ struct demux_ctx_s
 #include "demux.h"
 #include "media.h"
 #include "jitter.h"
+#include "rtp.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -92,23 +93,6 @@ struct demux_ctx_s
 #else
 #define dbg(...)
 #endif
-
-struct rtpbits {
-    int     sequence:16;     // sequence number: random
-    int     pt:7;            // payload type: 14 for MPEG audio
-    int     m:1;             // marker: 0
-    int     cc:4;            // number of CSRC identifiers: 0
-    int     x:1;             // number of extension headers: 0
-    int     p:1;             // is there padding appended: 0
-    int     v:2;             // version: 2
-};
-
-struct rtpheader {           // in network byte order
-    struct rtpbits b;
-    int     timestamp;       // start: random
-    int     ssrc;            // random
-    int     iAudioHeader;    // =0?!
-};
 
 static const char *jitter_name = "rtp demux";
 
@@ -139,12 +123,12 @@ static jitter_t *demux_jitter(demux_ctx_t *ctx)
 
 int demux_parseheader(demux_ctx_t *ctx, char *input, int len)
 {
-	struct rtpheader *header = (struct rtpheader *)input;
+	rtpheader_t *header = (rtpheader_t *)input;
 #ifdef DEBUG
 	warn("rtp header:");
 	warn("\theader:\t%d", header->iAudioHeader);
 	warn("\ttimestamp:\t%d", header->timestamp);
-	warn("\tseq:\t%d", header->b.sequence);
+	warn("\tseq:\t%d", header->b.seqnum);
 	warn("\tssrc:\t%d", header->ssrc);
 	warn("\ttype:\t%d", header->b.pt);
 	warn("\tnb counter:\t%d", header->b.cc);
@@ -163,13 +147,17 @@ int demux_parseheader(demux_ctx_t *ctx, char *input, int len)
 		{
 			out->mime = mime_audiomp3;
 		}
+		if (header->b.pt == 11)
+		{
+			out->mime = mime_audiopcm;
+		}
 		const event_new_es_t event = {.pid = out->ssrc, .mime = out->mime};
 		ctx->listener.cb(ctx->listener.arg, SRC_EVENT_NEW_ES, (void *)&event);
 		out->next = ctx->out;
 		ctx->out = out;
 	}
-	demux_reorder_t *reorder = &ctx->reorder[header->b.sequence % NB_BUFFERS];
-	int id = header->b.sequence % (NB_BUFFERS * NB_LOOPS);
+	demux_reorder_t *reorder = &ctx->reorder[header->b.seqnum % NB_BUFFERS];
+	int id = header->b.seqnum % (NB_BUFFERS * NB_LOOPS);
 
 	if (out->jitter != NULL && reorder->ready && reorder->id != id)
 	{

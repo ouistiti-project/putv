@@ -90,15 +90,36 @@ static int encoder_lame_init(encoder_ctx_t *ctx)
 		lame_close(ctx->encoder);
 	ctx->encoder = lame_init();
 
-	lame_set_out_samplerate(ctx->encoder, DEFAULT_SAMPLERATE);
 	lame_set_in_samplerate(ctx->encoder, ctx->samplerate);
 	lame_set_num_channels(ctx->encoder, ctx->nchannels);
+	// this value change the complexity and the time of compression
+	// nothing else
 	lame_set_quality(ctx->encoder, 5);
 	lame_set_mode(ctx->encoder, STEREO);
 	//lame_set_mode(encoder->encoder, JOINT_STEREO);
 	lame_set_errorf(ctx->encoder, error_report);
+
+	// for CBR encoding
+	// 44100Hz the output buffer is between 1252 and 1254 for brate to 128
+	// 48000Hz the output buffer is between 1536 and 1152 for brate to 128
+	// 48000Hz the output buffer is between 1008 and 1344 for brate to 112
+	lame_set_out_samplerate(ctx->encoder, DEFAULT_SAMPLERATE);
+#ifdef ENCODER_VBR
+	lame_set_VBR(ctx->encoder, vbr_default);
+#if DEFAULT_SAMPLERATE == 48000
+	lame_set_VBR_q(ctx->encoder, 7);
+#else
+	lame_set_VBR_q(ctx->encoder, 4);
+#endif
+#else
 	lame_set_VBR(ctx->encoder, vbr_off);
-	//lame_set_VBR(encoder->encoder, vbr_default);
+#if DEFAULT_SAMPLERATE == 48000
+	lame_set_brate(ctx->encoder, 112);
+#else
+	lame_set_brate(ctx->encoder, 128);
+#endif
+#endif
+
 	lame_set_disable_reservoir(ctx->encoder, 1);
 	lame_init_params(ctx->encoder);
 	return 0;
@@ -127,7 +148,6 @@ static encoder_ctx_t *encoder_init(player_ctx_t *player)
 	jitter_t *jitter = jitter_scattergather_init(jitter_name, NB_BUFFERS,
 				ctx->samplesframe * ctx->samplesize * ctx->nchannels);
 	ctx->nsamplesperbeat = NB_BUFFERS * ctx->samplesframe * 2 / 3;
-	err("ctx->nsamplesperbeat %ld %d", ctx->nsamplesperbeat, ctx->samplerate);
 	ctx->in = jitter;
 	jitter->format = PCM_16bits_LE_stereo;
 	jitter->ctx->frequence = 0;
@@ -164,6 +184,8 @@ static void *lame_thread(void *arg)
 	lame_set_debugf(ctx->encoder, encoder_message);
 	lame_set_msgf(ctx->encoder, encoder_message);
 #endif
+	if (ctx->out->ctx->frequence == 0)
+		ctx->out->ctx->frequence = lame_get_brate(ctx->encoder);
 	while (run)
 	{
 		int ret = 0;

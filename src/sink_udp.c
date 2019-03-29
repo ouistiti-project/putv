@@ -244,7 +244,7 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 
 		unsigned int size = mtu;
 		jitter_t *jitter = jitter_scattergather_init(jitter_name, 6, size);
-		jitter->ctx->frequence = DEFAULT_SAMPLERATE;
+		jitter->ctx->frequence = 0;
 		jitter->ctx->thredhold = 3;
 		jitter->format = format;
 		ctx->in = jitter;

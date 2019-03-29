@@ -119,9 +119,11 @@ static cmds_ctx_t *cmds_tinysvcmdns_init(player_ctx_t *player, sink_t *sink, voi
 		if (ifa_main->ifa_addr && ifa_main->ifa_addr->sa_family == AF_INET)
 		{
 			if (svr == NULL)
+			{
 				svr = mdnsd_start(&((struct sockaddr_in *)ifa_main->ifa_addr)->sin_addr);
+			}
 			if (svr == NULL) {
-				err("mdnsd_start() error\n");
+				err("tinysvcmdns: start error %s\n", strerror(errno));
 				return NULL;
 			}
 

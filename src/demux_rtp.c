@@ -121,17 +121,16 @@ static jitter_t *demux_jitter(demux_ctx_t *ctx)
 	return ctx->in;
 }
 
-int demux_parseheader(demux_ctx_t *ctx, char *input, int len)
+int demux_parseheader(demux_ctx_t *ctx, char *input, size_t len)
 {
 	rtpheader_t *header = (rtpheader_t *)input;
-#ifdef DEBUG
+#ifdef DEBUG_0
 	warn("rtp header:");
-	warn("\theader:\t%d", header->iAudioHeader);
 	warn("\ttimestamp:\t%d", header->timestamp);
 	warn("\tseq:\t%d", header->b.seqnum);
 	warn("\tssrc:\t%d", header->ssrc);
 	warn("\ttype:\t%d", header->b.pt);
-	warn("\tnb counter:\t%d", header->b.cc);
+	warn("\tnb csrc:\t%d", header->b.cc);
 	warn("\tpadding:\t%d", header->b.p);
 #endif
 	demux_out_t *out = ctx->out;
@@ -151,11 +150,12 @@ int demux_parseheader(demux_ctx_t *ctx, char *input, int len)
 		{
 			out->mime = mime_audiopcm;
 		}
-		const event_new_es_t event = {.pid = out->ssrc, .mime = out->mime};
-		ctx->listener.cb(ctx->listener.arg, SRC_EVENT_NEW_ES, (void *)&event);
 		out->next = ctx->out;
 		ctx->out = out;
+		const event_new_es_t event = {.pid = out->ssrc, .mime = out->mime};
+		ctx->listener.cb(ctx->listener.arg, SRC_EVENT_NEW_ES, (void *)&event);
 	}
+#ifdef DEMUX_RTC_REORDER
 	demux_reorder_t *reorder = &ctx->reorder[header->b.seqnum % NB_BUFFERS];
 	int id = header->b.seqnum % (NB_BUFFERS * NB_LOOPS);
 
@@ -236,7 +236,7 @@ static void *demux_thread(void *arg)
 	do
 	{
 		char *input;
-		int len = 0;
+		size_t len = 0;
 		input = ctx->in->ops->peer(ctx->in->ctx);
 		if (input == NULL)
 		{

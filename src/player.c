@@ -232,13 +232,12 @@ struct _player_play_s
 
 static void _player_listener(void *arg, event_t event, void *eventarg)
 {
-	struct _player_play_s *data = (struct _player_play_s *)arg;
-	player_ctx_t *player = data->ctx;
+	player_ctx_t *player = (player_ctx_t *)arg;
 	if (event == SRC_EVENT_NEW_ES)
 	{
 		
 		event_new_es_t *event_data = (event_new_es_t *)eventarg;
-		const src_t *src = data->dec->src;
+		const src_t *src = player->current->src;
 		decoder_t *decoder = NULL;
 
 		decoder = decoder_build(player, event_data->mime, player_filter(player));
@@ -265,7 +264,7 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 		data->dec->src = src;
 
 		if (src->ops->eventlistener)
-			src->ops->eventlistener(src->ctx, _player_listener, data);
+			src->ops->eventlistener(src->ctx, _player_listener, player);
 		else
 		{
 			decoder_t *decoder = NULL;
@@ -365,7 +364,8 @@ int player_run(player_ctx_t *ctx)
 				else if (ctx->media->ops->end)
 					ctx->media->ops->end(ctx->media->ctx);
 			}
-			else {
+			else
+			{
 				if (player.dec != NULL)
 				{
 					ctx->current = player.dec;

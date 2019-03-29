@@ -52,14 +52,14 @@ mux_t *mux_build(player_ctx_t *player, const char *protocol)
 	const mux_ops_t *ops = NULL;
 	mux_ctx_t *ctx = NULL;
 #ifdef MUX_RTP
-	if (mime && !strcmp(mime, mux_rtp->protocol(NULL)))
+	if (protocol && !strcmp(protocol, mux_rtp->protocol))
 	{
 		ops = mux_rtp;
 	}
 	else
 #endif
 #ifdef MUX_DVB
-	if (mime && !strcmp(mime, mux_dvb->protocol(NULL)))
+	if (protocol && !strcmp(protocol, mux_dvb->protocol))
 	{
 		ops = mux_dvb;
 	}

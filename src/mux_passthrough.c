@@ -105,5 +105,6 @@ const mux_ops_t *mux_passthrough = &(mux_ops_t)
 	.jitter = mux_jitter,
 	.run = mux_run,
 	.mime = mux_mime,
+	.protocol = "udp",
 	.destroy = mux_destroy,
 };

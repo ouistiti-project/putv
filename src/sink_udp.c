@@ -98,7 +98,13 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 
 	char *value = utils_parseurl(url, &protocol, &host, &port, &path, &search);
 
-	if (protocol == NULL || strcmp(protocol, "udp"))
+	if (protocol == NULL)
+	{
+		free(value);
+		return NULL;
+	}
+	int rtp = !strcmp(protocol, "rtp");
+	if (!rtp && strcmp(protocol, "udp"))
 	{
 		free(value);
 		return NULL;
@@ -243,9 +249,10 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 		jitter->format = format;
 		ctx->in = jitter;
 #ifdef MUX
-		ctx->mux = mux_build(player, mime_octetstream);
+		ctx->mux = mux_build(player, protocol);
 #endif
 	}
+	free(value);
 
 	return ctx;
 }

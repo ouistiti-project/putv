@@ -11,6 +11,7 @@ typedef void mux_ctx_t;
 typedef struct mux_ops_s mux_ops_t;
 struct mux_ops_s
 {
+	const char *protocol;
 	mux_ctx_t *(*init)(player_ctx_t *player, const char *arg);
 	jitter_t *(*jitter)(mux_ctx_t *ctx, int index);
 	int (*run)(mux_ctx_t *ctx, jitter_t *sink_jitter);

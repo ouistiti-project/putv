@@ -319,6 +319,11 @@ static void *src_thread(void *arg)
 
 static int src_run(src_ctx_t *ctx)
 {
+	if (ctx->listener.cb)
+	{
+		const event_new_es_t event = {.pid = 0, .mime = mime_audiopcm};
+		ctx->listener.cb(ctx->listener.arg, SRC_EVENT_NEW_ES, (void *)&event);
+	}
 	pthread_create(&ctx->thread, NULL, src_thread, ctx);
 	return 0;
 }
@@ -334,8 +339,6 @@ static void src_eventlistener(src_ctx_t *ctx, event_listener_t listener, void *a
 {
 	ctx->listener.cb = listener;
 	ctx->listener.arg = arg;
-	const event_new_es_t event = {.pid = 0, .mime = mime_audiopcm};
-	ctx->listener.cb(ctx->listener.arg, SRC_EVENT_NEW_ES, (void *)&event);
 }
 
 static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
@@ -366,6 +369,7 @@ const src_ops_t *src_alsa = &(src_ops_t)
 	.protocol = "pcm://",
 	.init = src_init,
 	.run = src_run,
+	.eventlistener = src_eventlistener,
 	.attach = src_attach,
 	.estream = src_estream,
 	.destroy = src_destroy,

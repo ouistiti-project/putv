@@ -87,6 +87,8 @@ static jitter_t *demux_jitter(demux_ctx_t *ctx)
 
 static int demux_run(demux_ctx_t *ctx)
 {
+	const event_new_es_t event = {.pid = 0, .mime = ctx->mime};
+	ctx->listener.cb(ctx->listener.arg, SRC_EVENT_NEW_ES, (void *)&event);
 	return 0;
 }
 
@@ -109,9 +111,6 @@ static void demux_eventlistener(demux_ctx_t *ctx, event_listener_t listener, voi
 {
 	ctx->listener.cb = listener;
 	ctx->listener.arg = arg;
-
-	const event_new_es_t event = {.pid = 0, .mime = ctx->mime};
-	ctx->listener.cb(ctx->listener.arg, SRC_EVENT_NEW_ES, (void *)&event);
 }
 
 static int demux_attach(demux_ctx_t *ctx, long index, decoder_t *decoder)

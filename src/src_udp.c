@@ -130,6 +130,7 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 	int sock = socket(af, SOCK_DGRAM, IPPROTO_IP);
 	if (sock == 0)
 	{
+		err("src: udp socket error");
 		return NULL;
 	}
 
@@ -280,6 +281,9 @@ static int src_run(src_ctx_t *ctx)
 #ifdef DEMUX_PASSTHROUGH
 	ctx->demux.ops->run(ctx->demux.ctx);
 	ctx->out = ctx->demux.ops->jitter(ctx->demux.ctx);
+#else
+	const event_new_es_t event = {.pid = 0, .mime = ctx->mime};
+	ctx->listener.cb(ctx->listener.arg, SRC_EVENT_NEW_ES, (void *)&event);
 #endif
 	pthread_create(&ctx->thread, NULL, src_thread, ctx);
 	return 0;
@@ -301,9 +305,6 @@ static void src_eventlistener(src_ctx_t *ctx, event_listener_t listener, void *a
 #else
 	ctx->listener.cb = listener;
 	ctx->listener.arg = arg;
-
-	const event_new_es_t event = {.pid = 0, .mime = ctx->mime};
-	ctx->listener.cb(ctx->listener.arg, SRC_EVENT_NEW_ES, (void *)&event);
 #endif
 }
 

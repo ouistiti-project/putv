@@ -235,16 +235,20 @@ static void _player_listener(void *arg, event_t event, void *eventarg)
 	player_ctx_t *player = (player_ctx_t *)arg;
 	if (event == SRC_EVENT_NEW_ES)
 	{
-		
 		event_new_es_t *event_data = (event_new_es_t *)eventarg;
+		if (player->current == NULL)
+		{
+			err("player: source is null");
+			return;
+		}
 		const src_t *src = player->current->src;
 		decoder_t *decoder = NULL;
 
 		decoder = decoder_build(player, event_data->mime, player_filter(player));
 		if (decoder != NULL)
 		{
-			src->ops->attach(src->ctx, event_data->pid, decoder);
 			decoder->ops->run(decoder->ctx, player->audioout);
+			src->ops->attach(src->ctx, event_data->pid, decoder);
 		}
 	}
 }
@@ -264,7 +268,9 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 		data->dec->src = src;
 
 		if (src->ops->eventlistener)
+		{
 			src->ops->eventlistener(src->ctx, _player_listener, player);
+		}
 		else
 		{
 			decoder_t *decoder = NULL;

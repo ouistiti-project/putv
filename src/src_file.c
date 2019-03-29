@@ -148,8 +148,11 @@ static src_ctx_t *src_init(player_ctx_t *ctx, const char *url, const char *mime)
 
 static int src_run(src_ctx_t *ctx)
 {
-	const event_new_es_t event = {.pid = 0, .mime = ctx->mime};
-	ctx->listener.cb(ctx->listener.arg, SRC_EVENT_NEW_ES, (void *)&event);
+	if (ctx->listener.cb)
+	{
+		const event_new_es_t event = {.pid = 0, .mime = ctx->mime};
+		ctx->listener.cb(ctx->listener.arg, SRC_EVENT_NEW_ES, (void *)&event);
+	}
 	return 0;
 }
 

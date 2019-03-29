@@ -12,6 +12,7 @@ extern const char const *mime_audioflac;
 extern const char const *mime_audioalac;
 extern const char const *mime_audiopcm;
 
+void utils_srandom();
 const char *utils_getmime(const char *path);
 const char *utils_getpath(const char *url, const char *proto);
 char *utils_parseurl(const char *url,

@@ -579,19 +579,6 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url,...)
 		ctx->options |= OPTION_INOTIFY;
 #endif
 	}
-	unsigned int seed;
-	if (!access(RANDOM_DEVICE, R_OK))
-	{
-		int fd = open(RANDOM_DEVICE, O_RDONLY);
-		pthread_yield();
-		read(fd, &seed, sizeof(seed));
-		close(fd);
-	}
-	else
-	{
-		seed = time(NULL);
-	}
-	srandom(seed);
 	return ctx;
 }
 

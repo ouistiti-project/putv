@@ -28,6 +28,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <time.h>
+#include <pthread.h>
 
 #include "media.h"
 #include "decoder.h"
@@ -46,6 +52,23 @@ const char const *mime_audiomp3 = "audio/mp3";
 const char const *mime_audioflac = "audio/flac";
 const char const *mime_audioalac = "audio/alac";
 const char const *mime_audiopcm = "audio/pcm";
+
+void utils_srandom()
+{
+	unsigned int seed;
+	if (!access(RANDOM_DEVICE, R_OK))
+	{
+		int fd = open(RANDOM_DEVICE, O_RDONLY);
+		pthread_yield();
+		read(fd, &seed, sizeof(seed));
+		close(fd);
+	}
+	else
+	{
+		seed = time(NULL);
+	}
+	srandom(seed);
+}
 
 const char *utils_getmime(const char *path)
 {

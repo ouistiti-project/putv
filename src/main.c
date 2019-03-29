@@ -184,6 +184,7 @@ int main(int argc, char **argv)
 		}
 		return 0;
 	}
+	utils_srandom();
 
 	if (logfile != NULL && logfile[0] != '\0')
 	{

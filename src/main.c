@@ -298,6 +298,17 @@ int main(int argc, char **argv)
 	cmds[nbcmds].ops = cmds_tinysvcmdns;
 	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, sink, txt);
 	nbcmds++;
+#ifdef NETIF2
+	const char *txt2[] =
+	{
+		"path="INDEX_HTML,
+		"if="NETIF2,
+		NULL,
+	};
+	cmds[nbcmds].ops = cmds_tinysvcmdns;
+	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, sink, txt2);
+	nbcmds++;
+#endif
 #endif
 #ifdef JSONRPC
 	char socketpath[256];

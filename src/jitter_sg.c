@@ -32,6 +32,7 @@
 #include <pthread.h>
 
 #include "jitter.h"
+#include "heartbeat.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -234,10 +235,14 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 		{
 			private->out->state = SCATTER_POP;
 			int tlen = 0;
-			if (private->out->beat && jitter->heart != NULL)
+#ifdef HEARTBEAT
+			if (private->out->beat && jitter->heartbeat != NULL)
 			{
-				jitter->heart(jitter->heart_ctx, private->out->beat);
+				heartbeat_t *heartbeat = jitter->heartbeat;
+				heartbeat->ops->wait(heartbeat->ctx, private->out->beat);
+				private->out->beat = NULL;
 			}
+#endif
 			do
 			{
 				int ret;
@@ -269,11 +274,13 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 		 * has to send an event to the consumer
 		 * that a new buffer is ready */
 		pthread_cond_broadcast(&private->condpeer);
-		if (jitter->heart != NULL)
+#ifdef HEARTBEAT
+		if (jitter->heartbeat != NULL)
 		{
 			if (private->in->beat)
 				pthread_yield();
 		}
+#endif
 	}
 	else if (private->state == JITTER_FILLING &&
 			private->level == jitter->thredhold)
@@ -357,16 +364,19 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter)
 	}
 	private->out->state = SCATTER_POP;
 	pthread_mutex_unlock(&private->mutex);
-	if (private->out->beat && jitter->heart != NULL)
+#ifdef HEARTBEAT
+	if (private->out->beat && jitter->heartbeat != NULL)
 	{
 		/**
 		 * The heartbeat is set by the producer.
 		 * The scatter gather releases the buffer to the consumer
 		 * when the heart beats
 		 */
-		jitter->heart(jitter->heart_ctx, private->out->beat);
+		heartbeat_t *heartbeat = jitter->heartbeat;
+		heartbeat->ops->wait(heartbeat->ctx, private->out->beat);
 		private->out->beat = NULL;
 	}
+#endif
 	return private->out->data;
 }
 

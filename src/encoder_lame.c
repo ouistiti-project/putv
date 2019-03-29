@@ -141,6 +141,13 @@ static jitter_t *encoder_jitter(encoder_ctx_t *ctx)
 	return ctx->in;
 }
 
+#ifdef DEBUG
+static void encoder_message(const char *format, va_list ap)
+{
+	 vfprintf(stderr, format, ap);
+}
+#endif
+
 static void *lame_thread(void *arg)
 {
 	int result = 0;
@@ -151,6 +158,11 @@ static void *lame_thread(void *arg)
 	clockid_t clockid = CLOCK_REALTIME;
 	struct timespec start = {0, 0};
 	clock_gettime(clockid, &start);
+#endif
+#ifdef DEBUG
+	lame_set_errorf(ctx->encoder, encoder_message);
+	lame_set_debugf(ctx->encoder, encoder_message);
+	lame_set_msgf(ctx->encoder, encoder_message);
 #endif
 	while (run)
 	{
@@ -194,9 +206,9 @@ static void *lame_thread(void *arg)
 		}
 		if (ret > 0)
 		{
-			heartbeat_samples_t *beat = NULL;
-#ifdef HEARTBEAT
 			encoder_dbg("encoder lame %d", ret);
+#ifdef HEARTBEAT
+			heartbeat_samples_t *beat = NULL;
 			int nsamples = lame_get_mf_samples_to_encode(ctx->encoder);
 
 			if (ctx->nsamples > nsamples)
@@ -218,7 +230,7 @@ static void *lame_thread(void *arg)
 		if (ret < 0)
 		{
 			if (ret == -1)
-				err("lame error %d, not enought memory %ld", ret, ctx->out->ctx->size);
+				err("lame error %d, too small buffer %ld", ret, ctx->out->ctx->size);
 			else
 				err("lame error %d", ret);
 			run = 0;
@@ -248,8 +260,7 @@ static int encoder_run(encoder_ctx_t *ctx, jitter_t *jitter)
 		ctx->heartbeat.ops = heartbeat_samples;
 		ctx->heartbeat.ctx = heartbeat_samples->init(ctx->samplerate, jitter->format, ctx->nchannels);
 		dbg("set heart %s", jitter->ctx->name);
-		jitter->ctx->heart = heartbeat_samples->wait;
-		jitter->ctx->heart_ctx = ctx->heartbeat.ctx;
+		jitter->ctx->heartbeat = &ctx->heartbeat;
 	}
 #endif
 	pthread_create(&ctx->thread, NULL, lame_thread, ctx);

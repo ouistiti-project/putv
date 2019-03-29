@@ -109,16 +109,19 @@ static void demux_eventlistener(demux_ctx_t *ctx, event_listener_t listener, voi
 {
 	ctx->listener.cb = listener;
 	ctx->listener.arg = arg;
+
+	const event_new_es_t event = {.pid = 0, .mime = ctx->mime};
+	ctx->listener.cb(ctx->listener.arg, SRC_EVENT_NEW_ES, (void *)&event);
 }
 
-static int demux_attach(demux_ctx_t *ctx, int index, decoder_t *decoder)
+static int demux_attach(demux_ctx_t *ctx, long index, decoder_t *decoder)
 {
 	if (index > 0)
 		return -1;
 	ctx->estream = decoder;
 }
 
-static decoder_t *demux_estream(demux_ctx_t *ctx, int index)
+static decoder_t *demux_estream(demux_ctx_t *ctx, long index)
 {
 	return ctx->estream;
 }

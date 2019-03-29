@@ -58,7 +58,7 @@ typedef struct demux_out_s demux_out_t;
 struct demux_out_s
 {
 	decoder_t *estream;
-	int ssrc;
+	uint32_t ssrc;
 	jitter_t *jitter;
 	char *data;
 	const char *mime;
@@ -184,18 +184,18 @@ int demux_parseheader(demux_ctx_t *ctx, char *input, int len)
 		if (header->b.cc)
 		{
 			warn("CSCR:");
-			input += header->b.cc * sizeof(long);
-			len -= header->b.cc * sizeof(long);
+			input += header->b.cc * sizeof(uint32_t);
+			len -= header->b.cc * sizeof(uint32_t);
 		}
 		if (header->b.x)
 		{
 			warn("rtp extension:");
-			short *extid = (short *)input;
-			input += 2;
-			len -= 2;
-			short *extlength = (short *)input;
-			input += 2;
-			len -= 2;
+			uint16_t *extid = (uint16_t *)input;
+			input += sizeof(uint16_t);
+			len -= sizeof(uint16_t);
+			uint16_t *extlength = (uint16_t *)input;
+			input += sizeof(uint16_t);
+			len -= sizeof(uint16_t);
 
 			input += *extlength;
 			len -= *extlength;
@@ -207,6 +207,25 @@ int demux_parseheader(demux_ctx_t *ctx, char *input, int len)
 			reorder->id = id;
 		}
 	}
+#else
+	if (out->jitter != NULL)
+	{
+		if (out->data == NULL)
+			out->data = out->jitter->ops->pull(out->jitter->ctx);
+		while (len > out->jitter->ctx->size)
+		{
+			memcpy(out->data, input, out->jitter->ctx->size);
+			out->jitter->ops->push(out->jitter->ctx, out->jitter->ctx->size, NULL);
+			len -= out->jitter->ctx->size;
+			input += out->jitter->ctx->size;
+		}
+		memcpy(out->data, input, len);
+		out->jitter->ops->push(out->jitter->ctx, len, NULL);
+		out->data = NULL;
+	}
+	else
+		exit(0);
+#endif
 	return len;
 }
 
@@ -274,11 +293,13 @@ static void demux_eventlistener(demux_ctx_t *ctx, event_listener_t listener, voi
 	ctx->listener.arg = arg;
 }
 
-static int demux_attach(demux_ctx_t *ctx, int index, decoder_t *decoder)
+static int demux_attach(demux_ctx_t *ctx, long index, decoder_t *decoder)
 {
 	demux_out_t *out = ctx->out;
-	while (out != NULL && out->ssrc != index)
+	while (out != NULL && out->ssrc != (uint32_t)index)
+	{
 		out = out->next;
+	}
 	if (out != NULL)
 	{
 		out->estream = decoder;
@@ -286,7 +307,7 @@ static int demux_attach(demux_ctx_t *ctx, int index, decoder_t *decoder)
 	}
 }
 
-static decoder_t *demux_estream(demux_ctx_t *ctx, int index)
+static decoder_t *demux_estream(demux_ctx_t *ctx, long index)
 {
 	demux_out_t *out = ctx->out;
 	while (out != NULL)

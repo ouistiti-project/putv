@@ -57,7 +57,11 @@ struct src_ctx_s
 	struct sockaddr *addr;
 	int addrlen;
 	const char *mime;
+#ifdef DEMUX_PASSTHROUGH
 	demux_t demux;
+#else
+	decoder_t *estream;
+#endif
 	struct
 	{
 		event_listener_t cb;
@@ -208,6 +212,7 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 
 		ctx->player = player;
 		ctx->sock = sock;
+#ifdef DEMUX_PASSTHROUGH
 #ifdef DEMUX_RTP
 		if (rtp)
 		{
@@ -217,6 +222,7 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 #endif
 			ctx->demux.ops = demux_passthrough;
 		ctx->demux.ctx = ctx->demux.ops->init(player, search);
+#endif
 		ctx->mime = utils_mime2mime(mime);
 	}
 	if (ctx == NULL)
@@ -231,7 +237,6 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 static void *src_thread(void *arg)
 {
 	src_ctx_t *ctx = (src_ctx_t *)arg;
-	ctx->demux.ops->run(ctx->demux.ctx);
 
 	int ret;
 	while (ctx->state != STATE_ERROR)
@@ -272,41 +277,62 @@ static void *src_thread(void *arg)
 
 static int src_run(src_ctx_t *ctx)
 {
+#ifdef DEMUX_PASSTHROUGH
 	ctx->demux.ops->run(ctx->demux.ctx);
 	ctx->out = ctx->demux.ops->jitter(ctx->demux.ctx);
+#endif
 	pthread_create(&ctx->thread, NULL, src_thread, ctx);
 	return 0;
 }
 
 static const char *src_mime(src_ctx_t *ctx, int index)
 {
+#ifdef DEMUX_PASSTHROUGH
 	return ctx->demux.ops->mime(ctx->demux.ctx, index);
+#else
+	return mime_octetstream;
+#endif
 }
 
 static void src_eventlistener(src_ctx_t *ctx, event_listener_t listener, void *arg)
 {
+#ifdef DEMUX_PASSTHROUGH
+	ctx->demux.ops->eventlistener(ctx->demux.ctx, listener, arg);
+#else
 	ctx->listener.cb = listener;
 	ctx->listener.arg = arg;
 
 	const event_new_es_t event = {.pid = 0, .mime = ctx->mime};
 	ctx->listener.cb(ctx->listener.arg, SRC_EVENT_NEW_ES, (void *)&event);
+#endif
 }
 
 static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
 {
+#ifdef DEMUX_PASSTHROUGH
 	return ctx->demux.ops->attach(ctx->demux.ctx, index, decoder);
+#else
+	ctx->estream = decoder;
+	return 0;
+#endif
 }
 
 static decoder_t *src_estream(src_ctx_t *ctx, int index)
 {
+#ifdef DEMUX_PASSTHROUGH
 	return ctx->demux.ops->estream(ctx->demux.ctx, index);
+#else
+	return ctx->estream;
+#endif
 }
 
 static void src_destroy(src_ctx_t *ctx)
 {
 	if (ctx->thread)
 		pthread_join(ctx->thread, NULL);
+#ifdef DEMUX_PASSTHROUGH
 	ctx->demux.ops->destroy(ctx->demux.ctx);
+#endif
 	close(ctx->sock);
 	free(ctx);
 }

@@ -1,5 +1,5 @@
 /*****************************************************************************
- * src_alsa.c
+ * src_unix.c
  * this file is part of https://github.com/ouistiti-project/putv
  *****************************************************************************
  * Copyright (C) 2016-2017
@@ -31,6 +31,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/ioctl.h>
@@ -43,7 +44,7 @@ typedef struct src_ctx_s src_ctx_t;
 struct src_ctx_s
 {
 	player_ctx_t *player;
-	const src_ops_t *ops;
+	const char *mime;
 	int handle;
 	state_t state;
 	pthread_t thread;
@@ -52,6 +53,7 @@ struct src_ctx_s
 };
 #define SRC_CTX
 #include "src.h"
+#include "media.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -63,51 +65,79 @@ struct src_ctx_s
 
 #define src_dbg(...)
 
-static const char *jitter_name = "unxi socket";
+static const char *jitter_name = "unix socket";
 static src_ctx_t *src_init(player_ctx_t *player, const char *url)
 {
 	int count = 2;
-	src_ctx_t *ctx = calloc(1, sizeof(*ctx));
-	const char *path = NULL;
-
-	if (strstr(url, "://") != NULL)
-	{
-		path = strstr(url, "file://") + 7;
-	}
-	else
-	{
-		path = url;
-	}
-	if (path[0] == '~')
-	{
-		struct passwd *pw = NULL;
-		pw = getpwuid(geteuid());
-		chdir(pw->pw_dir);
-		path++;
-		if (path[0] == '/')
-			path++;
-	}
-
-	ctx->ops = src_unix;
-	ctx->player = player;
-
-	ctx->handle = socket(AF_UNIX, SOCK_STREAM, 0);
-	if (ctx->handle == 0)
-	{
-		free(ctx);
-		return NULL;
-	}
+	int ret;
 	struct sockaddr_un addr;
 	memset(&addr, 0, sizeof(struct sockaddr_un));
 	addr.sun_family = AF_UNIX;
-	strncpy(addr.sun_path, path, sizeof(addr.sun_path) - 1);
 
-	int ret = connect(ctx->handle, (struct sockaddr *) &addr, sizeof(addr));
+	char *protocol = NULL;
+	char *path = NULL;
+	char *value = utils_parseurl(url, &protocol, NULL, NULL, &path, NULL);
+	if (protocol && strcmp(protocol, "unix") != 0)
+	{
+		free(value);
+		return NULL;
+	}
+	if (path != NULL)
+	{
+		if (path[0] == '~')
+		{
+			struct passwd *pw = NULL;
+			pw = getpwuid(geteuid());
+			chdir(pw->pw_dir);
+			path++;
+			if (path[0] == '/')
+				path++;
+		}
+		struct stat filestat;
+		ret = stat(path, &filestat);
+		if (ret != 0 || !S_ISSOCK(filestat.st_mode))
+		{
+			err("error: %s is not a socket", path);
+			free(value);
+			return NULL;
+		}
+		strncpy(addr.sun_path, path, sizeof(addr.sun_path) - 1);
+	}
+	else
+	{
+		free(value);
+		return NULL;
+	}
+	free(value);
+
+
+
+	int handle = socket(AF_UNIX, SOCK_STREAM, 0);
+	if (handle == 0)
+	{
+		err("connection error on socket %s", path);
+		return NULL;
+	}
+
+	ret = connect(handle, (struct sockaddr *) &addr, sizeof(addr));
 	if (ret < 0)
 	{
-		close(ctx->handle);
-		free(ctx);
+		err("connection error on socket %s", path);
+		close(handle);
 		return NULL;
+	}
+
+	src_ctx_t *ctx = calloc(1, sizeof(*ctx));
+	ctx->player = player;
+	ctx->handle = handle;
+	ctx->mime = utils_getmime(path);
+	if (ctx->mime == mime_octetstream)
+	{
+#ifdef DECODER_LAME
+		ctx->mime = mime_audiomp3;
+#elif defined(DECODER_FLAC)
+		ctx->mime = mime_audioflac;
+#endif
 	}
 	return ctx;
 }
@@ -139,7 +169,9 @@ static void *src_thread(void *arg)
 		}
 		else if (ret == 0)
 		{
+			ctx->out->ops->push(ctx->out->ctx, 0, NULL);
 			ctx->out->ops->flush(ctx->out->ctx);
+			break;
 		}
 		else
 		{
@@ -158,6 +190,11 @@ static int src_run(src_ctx_t *ctx, jitter_t *jitter)
 	return 0;
 }
 
+static const char *src_mime(src_ctx_t *ctx)
+{
+	return ctx->mime;
+}
+
 static void src_destroy(src_ctx_t *ctx)
 {
 	if (ctx->thread)
@@ -168,8 +205,9 @@ static void src_destroy(src_ctx_t *ctx)
 
 const src_ops_t *src_unix = &(src_ops_t)
 {
-	.protocol = "unix://",
+	.protocol = "unix://|file://",
 	.init = src_init,
 	.run = src_run,
+	.mime = src_mime,
 	.destroy = src_destroy,
 };

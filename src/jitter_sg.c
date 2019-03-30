@@ -269,6 +269,11 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 		 * has to send an event to the consumer
 		 * that a new buffer is ready */
 		pthread_cond_broadcast(&private->condpeer);
+		if (jitter->heart != NULL)
+		{
+			if (private->in->beat)
+				pthread_yield();
+		}
 	}
 	else if (private->state == JITTER_FILLING &&
 			private->level == jitter->thredhold)
@@ -298,27 +303,34 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter)
 			 * consume buffer. In this case the producer runs inside
 			 * the consumer thread.
 			 */
-			int len = 0;
 			do
 			{
-				int ret;
-				ret = jitter->produce(jitter->producter, 
-					private->in->data + len, jitter->size - len);
-				if (ret > 0)
-					len += ret;
-				if (ret <= 0)
+				/**
+				 * The producer must push enougth data to start
+				 * the running, otherwise the peer will block.
+				 */
+				int len = 0;
+				do
 				{
-					len = ret;
-					break;
+					int ret;
+					ret = jitter->produce(jitter->producter,
+						private->in->data + len, jitter->size - len);
+					if (ret > 0)
+						len += ret;
+					if (ret <= 0)
+					{
+						len = ret;
+						break;
+					}
+				} while (len < jitter->size);
+				if (len > 0)
+					jitter_push(jitter, len, NULL);
+				else
+				{
+					dbg("produce nothing");
+					return NULL;
 				}
-			} while (len < jitter->size);
-			if (len > 0)
-				jitter_push(jitter, len, NULL);
-			else
-			{
-				dbg("produce nothing");
-				return NULL;
-			}
+			} while (private->state == JITTER_FILLING);
 			/**
 			 * The end of the producer and returns to the standard case.
 			 */
@@ -353,6 +365,7 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter)
 		 * when the heart beats
 		 */
 		jitter->heart(jitter->heart_ctx, private->out->beat);
+		private->out->beat = NULL;
 	}
 	return private->out->data;
 }

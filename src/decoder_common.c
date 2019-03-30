@@ -46,25 +46,29 @@
 
 #define decoder_dbg(...)
 
-decoder_t *decoder_build(player_ctx_t *player, const char *mime, filter_t *filter)
+decoder_t *decoder_build(player_ctx_t *player, const char *mime, const filter_t *filter)
 {
 	decoder_t *decoder = NULL;
 	const decoder_ops_t *ops = NULL;
 	decoder_ctx_t *ctx = NULL;
 #ifdef DECODER_MAD
-	if (mime && !strcmp(mime, decoder_mad->mime))
+	if (mime && !strcmp(mime, decoder_mad->mime(NULL)))
 	{
 		ops = decoder_mad;
 	}
 #endif
 #ifdef DECODER_FLAC
-	if (mime && !strcmp(mime, decoder_flac->mime))
+	if (mime && !strcmp(mime, decoder_flac->mime(NULL)))
 	{
 		ops = decoder_flac;
 	}
 #endif
-	if (ops == NULL)
-		ops = DECODER;
+#ifdef DECODER_PASSTHROUGH
+	if (mime && !strcmp(mime, decoder_passthrough->mime(NULL)))
+	{
+		ops = decoder_passthrough;
+	}
+#endif
 
 	if (ops != NULL)
 	{

@@ -49,10 +49,12 @@ struct src_ctx_s
 	size_t outlen;
 	pthread_t thread;
 	CURL *curl;
+	char *mime;
 };
 #define SRC_CTX
 #include "src.h"
 #include "jitter.h"
+#include "media.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -152,6 +154,18 @@ static int src_run(src_ctx_t *ctx, jitter_t *out)
 	return ret;
 }
 
+static const char *src_mime(src_ctx_t *ctx)
+{
+	const char *mime = mime_octetstream;
+	if (ctx->mime == NULL)
+	{
+		CURLcode ret = curl_easy_getinfo(ctx->curl, CURLINFO_CONTENT_TYPE, &mime);
+		if (ret == CURLE_OK)
+			ctx->mime = (char *)mime;
+	}
+	return mime;
+}
+
 static void src_destroy(src_ctx_t *ctx)
 {
 	if (ctx->thread)
@@ -160,6 +174,8 @@ static void src_destroy(src_ctx_t *ctx)
 	if (ctx->dumpfd > 0)
 		close(ctx->dumpfd);
 #endif
+	if (ctx->mime)
+		free(ctx->mime);
 	curl_easy_cleanup(ctx->curl);
 	free(ctx);
 }
@@ -169,5 +185,7 @@ const src_ops_t *src_curl = &(src_ops_t)
 	.protocol = "http://|https://|file://",
 	.init = src_init,
 	.run = src_run,
+	.mime = src_mime,
 	.destroy = src_destroy,
+	.mime = NULL,
 };

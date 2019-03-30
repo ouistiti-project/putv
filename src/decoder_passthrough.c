@@ -30,6 +30,8 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 
 #include "player.h"
 typedef struct decoder_s decoder_t;
@@ -43,6 +45,7 @@ struct decoder_ctx_s
 };
 #define DECODER_CTX
 #include "decoder.h"
+#include "media.h"
 #include "jitter.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -53,7 +56,7 @@ struct decoder_ctx_s
 #define dbg(...)
 #endif
 
-static decoder_ctx_t *decoder_init(player_ctx_t *player)
+static decoder_ctx_t *decoder_init(player_ctx_t *player, const filter_t *filter)
 {
 	decoder_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->ops = decoder_passthrough;
@@ -72,9 +75,21 @@ static int decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 	return 0;
 }
 
-static int decoder_check(char *path)
+static int decoder_check(const char *path)
 {
-	return 0;
+	if (!strncmp(path, "pcm://", 6))
+		return 0;
+	char *ext = strrchr(path, '.');
+	if (ext && !strcmp(ext, ".wav"))
+		return 0;
+	if (ext && !strcmp(ext, ".pcm"))
+		return 0;
+	return 1;
+}
+
+static const char *decoder_mime(decoder_ctx_t *ctx)
+{
+	return mime_audiopcm;
 }
 
 static void decoder_destroy(decoder_ctx_t *ctx)
@@ -88,6 +103,6 @@ const decoder_ops_t *decoder_passthrough = &(decoder_ops_t)
 	.init = decoder_init,
 	.jitter = decoder_jitter,
 	.run = decoder_run,
+	.mime = decoder_mime,
 	.destroy = decoder_destroy,
-	.mime = "octet/stream",
 };

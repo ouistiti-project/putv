@@ -52,11 +52,11 @@ struct decoder_ctx_s
 	jitter_t *out;
 	unsigned char *outbuffer;
 	size_t outbufferlen;
-	filter_t *filter;
+	const filter_t *filter;
 };
 #define DECODER_CTX
 #include "decoder.h"
-#include "decoder.h"
+#include "media.h"
 #include "jitter.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -213,10 +213,10 @@ enum mad_flow error(void *data,
 #define BUFFERSIZE (40*LATENCE)
 
 /// NBBUFFER must be at least 3 otherwise the decoder block on the end of the source
-#define NBUFFER 3
+#define NBUFFER 6
 
 static const char *jitter_name = "mad decoder";
-static decoder_ctx_t *mad_init(player_ctx_t *player, filter_t *filter)
+static decoder_ctx_t *mad_init(player_ctx_t *player, const filter_t *filter)
 {
 	decoder_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->ops = decoder_mad;
@@ -230,6 +230,7 @@ static decoder_ctx_t *mad_init(player_ctx_t *player, filter_t *filter)
 	//jitter_t *jitter = jitter_ringbuffer_init(jitter_name, NBUFFER, BUFFERSIZE);
 	ctx->in = jitter;
 	jitter->format = MPEG2_3_MP3;
+	jitter->ctx->thredhold = 3;
 
 	return ctx;
 }
@@ -244,7 +245,9 @@ static void *mad_thread(void *arg)
 	int result = 0;
 	decoder_ctx_t *ctx = (decoder_ctx_t *)arg;
 	/* start decoding */
+	dbg("decoder: start running");
 	result = mad_decoder_run(&ctx->decoder, MAD_DECODER_MODE_SYNC);
+	dbg("decoder: stop running");
 	/**
 	 * push the last buffer to the encoder, otherwise the next
 	 * decoder will begins with a pull buffer
@@ -273,6 +276,11 @@ static int decoder_check(const char *path)
 	return -1;
 }
 
+static const char *mad_mime(decoder_ctx_t *ctx)
+{
+	return mime_audiomp3;
+}
+
 static void mad_destroy(decoder_ctx_t *ctx)
 {
 	if (ctx->thread > 0)
@@ -283,13 +291,13 @@ static void mad_destroy(decoder_ctx_t *ctx)
 	free(ctx);
 }
 
-const decoder_ops_t *decoder_mad = &(decoder_ops_t)
+const decoder_ops_t *decoder_mad = &(const decoder_ops_t)
 {
 	.check = decoder_check,
 	.init = mad_init,
 	.jitter = mad_jitter,
 	.run = mad_run,
 	.destroy = mad_destroy,
-	.mime = "audio/mp3",
+	.mime = mad_mime,
 };
 

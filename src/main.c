@@ -34,6 +34,8 @@
 #include <signal.h>
 
 #include <pthread.h>
+#include <string.h>
+#include <errno.h>
 
 /**
  * user database access
@@ -46,6 +48,10 @@
 # include <sys/stat.h>
 # include <sys/types.h>
 # include <unistd.h>
+/**
+ * file access
+ */
+# include <fcntl.h>
 
 #include "player.h"
 #include "encoder.h"
@@ -114,11 +120,12 @@ int main(int argc, char **argv)
 	const char *user = NULL;
 	const char *pidfile = NULL;
 	const char *filtername = "pcm_stereo";
+	const char *logfile = NULL;
 
 	int opt;
 	do
 	{
-		opt = getopt(argc, argv, "R:m:o:u:p:f:hDVxalr");
+		opt = getopt(argc, argv, "R:m:o:u:p:f:hDVxalrL:");
 		switch (opt)
 		{
 			case 'R':
@@ -157,6 +164,9 @@ int main(int argc, char **argv)
 			case 'r':
 				mode |= RANDOM;
 			break;
+			case 'L':
+				logfile = optarg;
+			break;
 		}
 	} while(opt != -1);
 
@@ -172,6 +182,19 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
+	if (logfile != NULL && logfile[0] != '\0')
+	{
+		int logfd = open(logfile, O_WRONLY | O_CREAT | O_TRUNC, 00644);
+		if (logfd > 0)
+		{
+			dup2(logfd, 1);
+			dup2(logfd, 2);
+			close(logfd);
+		}
+		else
+			err("log file error %s", strerror(errno));
+	}
+
 	player_ctx_t *player = player_init(filtername);
 	player_change(player, mediapath, (mode & RANDOM), (mode & LOOP));
 
@@ -179,7 +202,7 @@ int main(int argc, char **argv)
 	{
 		player_state(player, STATE_PLAY);
 #ifdef USE_TIMER
-		if (player_mediaid(player) != 0)
+		if (player_mediaid(player) < 0)
 		{
 			int ret;
 			struct sigevent event;
@@ -227,14 +250,30 @@ int main(int argc, char **argv)
 
 	cmds_t cmds[3];
 	int nbcmds = 0;
-#ifdef CMDLINE
 	if (!(mode & DAEMONIZE))
 	{
+#ifdef CMDLINE
 		cmds[nbcmds].ops = cmds_line;
 		cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, sink, NULL);
 		nbcmds++;
-	}
 #endif
+	}
+	else
+	{
+#ifndef DEBUG
+		int nullfd = open("/dev/null", O_WRONLY);
+		if (nullfd > 0)
+		{
+			dup2(nullfd, 0);
+			if (logfile == NULL)
+			{
+				dup2(nullfd, 1);
+				dup2(nullfd, 2);
+			}
+			close(nullfd);
+		}
+#endif
+	}
 #ifdef CMDINPUT
 	cmds[nbcmds].ops = cmds_input;
 	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, sink, CMDINPUT_PATH);
@@ -256,6 +295,9 @@ int main(int argc, char **argv)
 	for (i = 0; i < nbcmds; i++)
 		cmds[i].ops->run(cmds[i].ctx);
 
+	/**
+	 * the sink must to run before to start the encoder
+	 */
 	sink->ops->run(sink->ctx);
 	jitter_t *sink_jitter = NULL;
 	sink_jitter = sink->ops->jitter(sink->ctx);

@@ -6,9 +6,18 @@
 typedef struct player_ctx_s player_ctx_t;
 
 extern const char const *mime_octetstream;
+extern const char const *mime_audiomp3;
+extern const char const *mime_audioflac;
+extern const char const *mime_audiopcm;
 
 const char *utils_getmime(const char *path);
 const char *utils_getpath(const char *url, const char *proto);
+char *utils_parseurl(const char *url,
+								char **protocol,
+								char **host,
+								char **port,
+								char **path,
+								char **search);
 
 typedef struct media_ctx_s media_ctx_t;
 

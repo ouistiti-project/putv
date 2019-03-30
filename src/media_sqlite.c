@@ -827,7 +827,7 @@ static int _media_execute(media_ctx_t *ctx, sqlite3_stmt *statement, media_parse
 #ifdef MEDIA_SQLITE_EXT
 		if (info != NULL)
 		{
-			free(info);
+			free((char *)info);
 		}
 #endif
 

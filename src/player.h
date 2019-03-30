@@ -22,6 +22,7 @@ typedef struct decoder_s decoder_t;
 typedef struct encoder_s encoder_t;
 typedef struct sink_s sink_t;
 typedef struct media_s media_t;
+typedef struct filter_s filter_t;
 
 typedef struct player_ctx_s player_ctx_t;
 typedef void (*player_event_cb_t)(void *ctx, player_ctx_t *, state_t);
@@ -37,5 +38,6 @@ void player_next(player_ctx_t *ctx);
 void player_removeevent(player_ctx_t *ctx, int id);
 int player_onchange(player_ctx_t *ctx, player_event_cb_t callback, void *cbctx);
 int player_mediaid(player_ctx_t *ctx);
+const filter_t *player_filter(player_ctx_t *ctx);
 
 #endif

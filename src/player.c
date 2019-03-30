@@ -119,7 +119,12 @@ void player_next(player_ctx_t *ctx)
 {
 	if (ctx->media != NULL)
 	{
-		ctx->media->ops->next(ctx->media->ctx);
+		/**
+		 * next command just request the main loop to complete
+		 * the current entry to jump to the next one.
+		 * The main loop will set the next one long time before
+		 * than somebody request the jump to the next one.
+		 */
 		player_state(ctx, STATE_CHANGE);
 	}
 }
@@ -230,11 +235,9 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 	struct _player_play_s *data = (struct _player_play_s *)arg;
 	player_ctx_t *player = data->ctx;
 	src_t *src = NULL;
-	decoder_t *decoder = NULL;
 
-	dbg("player: prepare %d %s", id, url);
-	decoder = decoder_build(player, mime, player->filter);
-	src = src_build(player, url, decoder);
+	dbg("player: prepare %d %s %s", id, url, mime);
+	src = src_build(player, url, mime);
 	if (src != NULL)
 	{
 		data->dec = calloc(1, sizeof(*data->dec));
@@ -287,7 +290,9 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 			break;
 		pthread_mutex_unlock(&ctx->mutex);
 		if (ctx->media->ops->next)
+		{
 			ctx->media->ops->next(ctx->media->ctx);
+		}
 
 		do
 		{
@@ -306,10 +311,16 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 				ctx->current = player.dec;
 				dbg("player: play");
 				ctx->state = STATE_PLAY;
-				ctx->current->decoder->ops->run(ctx->current->decoder->ctx, encoder_jitter);
+				/**
+				 * the src needs to be ready before the decoder
+				 * to set a producer if it's needed
+				 */
 				ctx->current->src->ops->run(ctx->current->src->ctx, ctx->current->decoder->ops->jitter(ctx->current->decoder->ctx));
+				ctx->current->decoder->ops->run(ctx->current->decoder->ctx, encoder_jitter);
 				if (ctx->media->ops->next)
+				{
 					ctx->media->ops->next(ctx->media->ctx);
+				}
 				else if (ctx->media->ops->end)
 					ctx->media->ops->end(ctx->media->ctx);
 			}
@@ -340,4 +351,9 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 		ctx->filter = NULL;
 	}
 	return 0;
+}
+
+const filter_t *player_filter(player_ctx_t *ctx)
+{
+	return ctx->filter;
 }

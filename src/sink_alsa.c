@@ -67,7 +67,13 @@ struct sink_ctx_s
 #define sink_dbg(...)
 
 #define LATENCE_MS 50
-#define NB_BUFFER 6
+#define NB_BUFFER 3
+
+#ifdef USE_REALTIME
+// REALTIME_SCHED is set from the Makefile to SCHED_RR
+#define SINK_POLICY REALTIME_SCHED
+#define SINK_PRIORITY 65
+#endif
 
 #ifdef SINK_ALSA_MIXER
 void _mixer_setvolume(sink_ctx_t *ctx, unsigned int volume)
@@ -190,11 +196,18 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 	{
 		int dir = 0;
 		periodsize = *size;
-		buffersize = *size * NB_BUFFER;
+		buffersize = (*size * NB_BUFFER) / (ctx->samplesize * ctx->nchannels);// in number of frames
 		ret = snd_pcm_hw_params_set_buffer_size_near(ctx->playback_handle, hw_params, &buffersize);
 		if (ret < 0)
 		{
 			err("sink: buffer_size");
+			goto error;
+		}
+
+		ret = snd_pcm_hw_params_set_periods(ctx->playback_handle, hw_params, NB_BUFFER, 0);
+		if (ret < 0)
+		{
+			err("sink: periods");
 			goto error;
 		}
 
@@ -226,8 +239,10 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 		rate,
 		ctx->samplesize,
 		ctx->nchannels);
-	ctx->buffersize = periodsize;
-	*size = periodsize;
+	ctx->buffersize = periodsize * ctx->samplesize * ctx->nchannels;
+	*size = periodsize * ctx->samplesize * ctx->nchannels;
+	ctx->buffersize = (buffersize * ctx->samplesize * ctx->nchannels) / NB_BUFFER;
+	*size = ctx->buffersize;
 
 	ret = snd_pcm_prepare(ctx->playback_handle);
 	if (ret < 0) {
@@ -378,7 +393,7 @@ static void *alsa_thread(void *arg)
 			_alsa_checksamplerate(ctx);
 			//snd_pcm_mmap_begin
 			ret = snd_pcm_writei(ctx->playback_handle, buff, length / divider);
-			sink_dbg("sink  alsa : write %d %d", ret * divider, length);
+			sink_dbg("sink  alsa : write %d/%d %d/%d %d", ret * divider, length, ret, length / divider, divider);
 			if (ret == -EPIPE)
 			{
 				warn("pcm recover");
@@ -402,7 +417,41 @@ static void *alsa_thread(void *arg)
 
 static int alsa_run(sink_ctx_t *ctx)
 {
+#ifdef USE_REALTIME
+	int ret;
+
+	pthread_attr_t attr;
+	struct sched_param params;
+
+	pthread_attr_init(&attr);
+
+	ret = pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+	if (ret < 0)
+		err("setdetachstate error %s", strerror(errno));
+	ret = pthread_attr_setscope(&attr, PTHREAD_SCOPE_PROCESS);
+	if (ret < 0)
+		err("setscope error %s", strerror(errno));
+	ret = pthread_attr_setschedpolicy(&attr, SINK_POLICY);
+	if (ret < 0)
+		err("setschedpolicy error %s", strerror(errno));
+	params.sched_priority = SINK_PRIORITY;
+	ret = pthread_attr_setschedparam(&attr, &params);
+	if (ret < 0)
+		err("setschedparam error %s", strerror(errno));
+	if (getuid() == 0)
+		ret = pthread_attr_setinheritsched(&attr, PTHREAD_EXPLICIT_SCHED);
+	else
+	{
+		warn("run server as root to use realtime");
+		ret = pthread_attr_setinheritsched(&attr, PTHREAD_INHERIT_SCHED);
+	}
+	if (ret < 0)
+		err("setinheritsched error %s", strerror(errno));
+	pthread_create(&ctx->thread, &attr, sink_thread, ctx);
+	pthread_attr_destroy(&attr);
+#else
 	pthread_create(&ctx->thread, NULL, alsa_thread, ctx);
+#endif
 	return 0;
 }
 

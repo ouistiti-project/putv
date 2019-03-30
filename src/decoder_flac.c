@@ -51,10 +51,11 @@ struct decoder_ctx_s
 	jitter_t *out;
 	unsigned char *outbuffer;
 	size_t outbufferlen;
-	filter_t *filter;
+	const filter_t *filter;
 };
 #define DECODER_CTX
 #include "decoder.h"
+#include "media.h"
 #include "jitter.h"
 #include "filter.h"
 
@@ -73,7 +74,7 @@ struct decoder_ctx_s
 #define NBUFFER 3
 
 static const char *jitter_name = "flac decoder";
-static decoder_ctx_t *decoder_init(player_ctx_t *player, filter_t *filter)
+static decoder_ctx_t *decoder_init(player_ctx_t *player, const filter_t *filter)
 {
 	decoder_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->ops = decoder_flac;
@@ -244,6 +245,11 @@ static int decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 	return 0;
 }
 
+static const char *decoder_mime(decoder_ctx_t *ctx)
+{
+	return mime_audioflac;
+}
+
 static void decoder_destroy(decoder_ctx_t *ctx)
 {
 	if (ctx->thread > 0)
@@ -260,6 +266,6 @@ const decoder_ops_t *decoder_flac = &(decoder_ops_t)
 	.init = decoder_init,
 	.jitter = decoder_jitter,
 	.run = decoder_run,
+	.mime = decoder_mime,
 	.destroy = decoder_destroy,
-	.mime = "audio/flac",
 };

@@ -233,22 +233,22 @@ media_t *media_build(player_ctx_t *player, const char *url)
 		NULL
 	};
 
-	char *oldpath = media_path;
-	media_path = strdup(url);
+	char *oldpath = current_path;
+	current_path = strdup(url);
 
 	int i = 0;
 	media_ctx_t *media_ctx = NULL;
 	while (media_list[i] != NULL)
 	{
-		media_ctx = media_list[i]->init(player, media_path);
+		media_ctx = media_list[i]->init(player, current_path);
 		if (media_ctx != NULL)
 			break;
 		i++;
 	}
 	if (media_ctx == NULL)
 	{
-		free(media_path);
-		media_path = oldpath;
+		free(current_path);
+		current_path = oldpath;
 		err("media not found %s", url);
 		return NULL;
 	}

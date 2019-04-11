@@ -79,8 +79,6 @@ struct sink_ctx_s
 
 #define sink_dbg(...)
 
-#define SERVER_POLICY REALTIME_SCHED
-#define SERVER_PRIORITY 45
 #define SINK_POLICY REALTIME_SCHED
 #define SINK_PRIORITY 65
 
@@ -192,6 +190,7 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 		//check if the addrese is for broadcast diffusion
 		if (longaddress == INADDR_BROADCAST)
 		{
+			warn("sink: udp broadcasting");
 			ret = setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &value, sizeof(value));
 			if (! ifr.ifr_flags & IFF_BROADCAST)
 				err("sync: udp broadcast interface not supported");
@@ -199,6 +198,7 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 		// check if the address is for multicast diffusion
 		else if (IN_MULTICAST(longaddress))
 		{
+			warn("sink: udp multicasting");
 			if (! ifr.ifr_flags & IFF_MULTICAST)
 				err("sync: udp multicast interface not supported");
 
@@ -304,7 +304,41 @@ static void *sink_thread(void *arg)
 
 static int sink_run(sink_ctx_t *ctx)
 {
+#ifdef USE_REALTIME
+	int ret;
+
+	pthread_attr_t attr;
+	struct sched_param params;
+
+	pthread_attr_init(&attr);
+
+	ret = pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+	if (ret < 0)
+		err("setdetachstate error %s", strerror(errno));
+	ret = pthread_attr_setscope(&attr, PTHREAD_SCOPE_PROCESS);
+	if (ret < 0)
+		err("setscope error %s", strerror(errno));
+	ret = pthread_attr_setschedpolicy(&attr, SINK_POLICY);
+	if (ret < 0)
+		err("setschedpolicy error %s", strerror(errno));
+	params.sched_priority = SINK_PRIORITY;
+	ret = pthread_attr_setschedparam(&attr, &params);
+	if (ret < 0)
+		err("setschedparam error %s", strerror(errno));
+	if (getuid() == 0)
+		ret = pthread_attr_setinheritsched(&attr, PTHREAD_EXPLICIT_SCHED);
+	else
+	{
+		warn("run server as root to use realtime");
+		ret = pthread_attr_setinheritsched(&attr, PTHREAD_INHERIT_SCHED);
+	}
+	if (ret < 0)
+		err("setinheritsched error %s", strerror(errno));
+	pthread_create(&ctx->thread, &attr, sink_thread, ctx);
+	pthread_attr_destroy(&attr);
+#else
 	pthread_create(&ctx->thread, NULL, sink_thread, ctx);
+#endif
 #ifdef MUX
 	ctx->mux->ops->run(ctx->mux->ctx, ctx->in);
 #endif

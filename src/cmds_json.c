@@ -862,6 +862,17 @@ static int method_capabilities(json_t *json_params, json_t **result, void *userd
 	value = json_string(protocol);
 	json_array_append(aprotocol, value);
 #endif
+#ifdef SRC_UDP
+	protocol = src_udp->protocol;
+	while ((off = strchr(protocol, ',')) > 0)
+	{
+		value = json_stringn(protocol, off - protocol);
+		protocol = off + 1;
+		json_array_append(aprotocol, value);
+	}
+	value = json_string(protocol);
+	json_array_append(aprotocol, value);
+#endif
 	json_object_set(input, "protocol", aprotocol);
 	json_object_set(*result, "input", input);
 	return 0;

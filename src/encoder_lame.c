@@ -186,6 +186,9 @@ static void *lame_thread(void *arg)
 #endif
 	if (ctx->out->ctx->frequence == 0)
 		ctx->out->ctx->frequence = lame_get_brate(ctx->encoder);
+#ifdef HEARTBEAT
+	ctx->heartbeat.ops->start(ctx->heartbeat.ctx);
+#endif
 	while (run)
 	{
 		int ret = 0;
@@ -229,8 +232,8 @@ static void *lame_thread(void *arg)
 		if (ret > 0)
 		{
 			encoder_dbg("encoder lame %d", ret);
-#ifdef HEARTBEAT
 			heartbeat_samples_t *beat = NULL;
+#ifdef HEARTBEAT
 			int nsamples = lame_get_mf_samples_to_encode(ctx->encoder);
 
 			if (ctx->nsamples > nsamples)
@@ -282,7 +285,7 @@ static int encoder_run(encoder_ctx_t *ctx, jitter_t *jitter)
 		ctx->heartbeat.ops = heartbeat_samples;
 		ctx->heartbeat.ctx = heartbeat_samples->init(ctx->samplerate, jitter->format, ctx->nchannels);
 		dbg("set heart %s", jitter->ctx->name);
-		jitter->ctx->heartbeat = &ctx->heartbeat;
+		jitter->ops->heartbeat(jitter->ctx, &ctx->heartbeat);
 	}
 #endif
 	pthread_create(&ctx->thread, NULL, lame_thread, ctx);

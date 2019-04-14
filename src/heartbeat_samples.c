@@ -30,6 +30,7 @@
 #include <string.h>
 #include <time.h>
 #include <pthread.h>
+#include <errno.h>
 
 #include "jitter.h"
 typedef struct heartbeat_ctx_s heartbeat_ctx_t;
@@ -85,6 +86,13 @@ void heartbeat_destroy(heartbeat_ctx_t *ctx)
 {
 	pthread_mutex_destroy(&ctx->mutex);
 	free(ctx);
+}
+
+void heartbeat_start(heartbeat_ctx_t *ctx)
+{
+	pthread_mutex_lock(&ctx->mutex);
+	clock_gettime(clockid, &ctx->clock);
+	pthread_mutex_unlock(&ctx->mutex);
 }
 
 static int heartbeat_wait(heartbeat_ctx_t *ctx, void *arg)
@@ -153,6 +161,7 @@ static int heartbeat_unlock(heartbeat_ctx_t *ctx)
 const heartbeat_ops_t *heartbeat_samples = &(heartbeat_ops_t)
 {
 	.init = heartbeat_init,
+	.start = heartbeat_start,
 	.wait = heartbeat_wait,
 	.lock = heartbeat_lock,
 	.unlock = heartbeat_unlock,

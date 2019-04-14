@@ -85,7 +85,7 @@ enum mad_flow input(void *data,
 		len = stream->next_frame - ctx->inbuffer;
 	ctx->in->ops->pop(ctx->in->ctx, len);
 
-	ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx);
+	ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx, NULL);
 
 	len = ctx->in->ops->length(ctx->in->ctx);
 	if (ctx->inbuffer == NULL)

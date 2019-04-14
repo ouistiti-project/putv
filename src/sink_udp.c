@@ -277,7 +277,7 @@ static void *sink_thread(void *arg)
 	dbg("sink: thread run");
 	while (run)
 	{
-		unsigned char *buff = ctx->in->ops->peer(ctx->in->ctx);
+		unsigned char *buff = ctx->in->ops->peer(ctx->in->ctx, NULL);
 		if (buff == NULL)
 		{
 			run = 0;

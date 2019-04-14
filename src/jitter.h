@@ -26,10 +26,11 @@ struct jitter_ctx_s
 typedef struct jitter_ops_s jitter_ops_t;
 struct jitter_ops_s
 {
+	heartbeat_t *(*heartbeat)(jitter_ctx_t *, heartbeat_t *new);
 	void (*reset)(jitter_ctx_t *);
 	unsigned char *(*pull)(jitter_ctx_t *);
 	void (*push)(jitter_ctx_t *, size_t len, void *beat);
-	unsigned char *(*peer)(jitter_ctx_t *);
+	unsigned char *(*peer)(jitter_ctx_t *, void **beat);
 	void (*pop)(jitter_ctx_t *, size_t len);
 	void (*flush)(jitter_ctx_t *);
 	size_t (*length)(jitter_ctx_t*);

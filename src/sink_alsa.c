@@ -386,7 +386,7 @@ static void *sink_thread(void *arg)
 			}
 		}
 
-		unsigned char *buff = ctx->in->ops->peer(ctx->in->ctx);
+		unsigned char *buff = ctx->in->ops->peer(ctx->in->ctx, NULL);
 		if (buff != NULL)
 		{
 			int length = ctx->in->ops->length(ctx->in->ctx);

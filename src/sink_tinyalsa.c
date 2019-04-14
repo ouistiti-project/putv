@@ -120,7 +120,7 @@ static void *alsa_thread(void *arg)
 			if (player_state(ctx->player, STATE_UNKNOWN) == STATE_ERROR)
 				ctx->state = STATE_ERROR;
 		}
-		unsigned char *buff = ctx->in->ops->peer(ctx->in->ctx);
+		unsigned char *buff = ctx->in->ops->peer(ctx->in->ctx, NULL);
 		dbg("sink: play %ld", ctx->in->ctx->size);
 		ret = pcm_writei(ctx->playback_handle, buff, ctx->in->ctx->size);
 		ctx->in->ops->pop(ctx->in->ctx, ret);

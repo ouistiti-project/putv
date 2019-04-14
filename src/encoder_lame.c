@@ -193,7 +193,7 @@ static void *lame_thread(void *arg)
 	{
 		int ret = 0;
 
-		ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx);
+		ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx, NULL);
 		unsigned int inlength = ctx->in->ops->length(ctx->in->ctx);
 		inlength /= ctx->samplesize * ctx->nchannels;
 		ctx->nsamples += inlength;

@@ -107,7 +107,7 @@ input(const FLAC__StreamDecoder *decoder,
 	decoder_ctx_t *ctx = (decoder_ctx_t *)data;
 	size_t len = ctx->in->ctx->size;
 
-	ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx);
+	ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx, NULL);
 	if (ctx->inbuffer == NULL)
 	{
 		*bytes = 0;

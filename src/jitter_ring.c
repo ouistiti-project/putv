@@ -50,7 +50,7 @@
 
 static unsigned char *jitter_pull(jitter_ctx_t *jitter);
 static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat);
-static unsigned char *jitter_peer(jitter_ctx_t *jitter);
+static unsigned char *jitter_peer(jitter_ctx_t *jitter, void **beat);
 static void jitter_pop(jitter_ctx_t *jitter, size_t len);
 static void jitter_reset(jitter_ctx_t *jitter);
 
@@ -139,6 +139,14 @@ static void _jitter_init(jitter_ctx_t *jitter)
 	private->state = JITTER_FILLING;
 }
 
+static heartbeat_t *jitter_heartbeat(jitter_ctx_t *ctx, heartbeat_t *new)
+{
+	heartbeat_t *old = ctx->heartbeat;
+	if (new != NULL)
+		ctx->heartbeat = new;
+	return old;
+}
+
 static unsigned char *jitter_pull(jitter_ctx_t *jitter)
 {
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
@@ -220,7 +228,7 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 	}
 }
 
-static unsigned char *jitter_peer(jitter_ctx_t *jitter)
+static unsigned char *jitter_peer(jitter_ctx_t *jitter, void **beat)
 {
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
 
@@ -398,6 +406,7 @@ static int jitter_empty(jitter_ctx_t *jitter)
 
 static const jitter_ops_t *jitter_ringbuffer = &(jitter_ops_t)
 {
+	.heartbeat = jitter_heartbeat,
 	.reset = jitter_reset,
 	.pull = jitter_pull,
 	.push = jitter_push,

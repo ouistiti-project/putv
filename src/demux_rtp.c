@@ -237,7 +237,7 @@ static void *demux_thread(void *arg)
 	{
 		char *input;
 		size_t len = 0;
-		input = ctx->in->ops->peer(ctx->in->ctx);
+		input = ctx->in->ops->peer(ctx->in->ctx, NULL);
 		if (input == NULL)
 		{
 			run = 0;

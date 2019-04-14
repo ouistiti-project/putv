@@ -84,7 +84,7 @@ struct jitter_private_s
 
 static unsigned char *jitter_pull(jitter_ctx_t *jitter);
 static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat);
-static unsigned char *jitter_peer(jitter_ctx_t *jitter);
+static unsigned char *jitter_peer(jitter_ctx_t *jitter, void **beat);
 static void jitter_pop(jitter_ctx_t *jitter, size_t len);
 static void jitter_reset(jitter_ctx_t *jitter);
 
@@ -165,6 +165,14 @@ static void _jitter_init(jitter_ctx_t *jitter)
 		private->state = JITTER_RUNNING;
 	else
 		private->state = JITTER_FILLING;
+}
+
+static heartbeat_t *jitter_heartbeat(jitter_ctx_t *ctx, heartbeat_t *new)
+{
+	heartbeat_t *old = ctx->heartbeat;
+	if (new != NULL)
+		ctx->heartbeat = new;
+	return old;
 }
 
 static unsigned char *jitter_pull(jitter_ctx_t *jitter)
@@ -293,7 +301,7 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 	}
 }
 
-static unsigned char *jitter_peer(jitter_ctx_t *jitter)
+static unsigned char *jitter_peer(jitter_ctx_t *jitter, void **beat)
 {
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
 
@@ -365,15 +373,24 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter)
 	private->out->state = SCATTER_POP;
 	pthread_mutex_unlock(&private->mutex);
 #ifdef HEARTBEAT
-	if (private->out->beat && jitter->heartbeat != NULL)
+	while (private->out->beat && jitter->heartbeat != NULL)
 	{
+		if (beat != NULL)
+		{
+			*beat = private->out->beat;
+			private->out->beat = NULL;
+			break;
+		}
 		/**
 		 * The heartbeat is set by the producer.
 		 * The scatter gather releases the buffer to the consumer
 		 * when the heart beats
 		 */
+		int ret;
 		heartbeat_t *heartbeat = jitter->heartbeat;
-		heartbeat->ops->wait(heartbeat->ctx, private->out->beat);
+		ret = heartbeat->ops->wait(heartbeat->ctx, private->out->beat);
+		if (ret == -1)
+			heartbeat->ops->start(heartbeat->ctx);
 		private->out->beat = NULL;
 	}
 #endif
@@ -505,6 +522,7 @@ static int jitter_empty(jitter_ctx_t *jitter)
 
 static const jitter_ops_t *jitter_scattergather = &(jitter_ops_t)
 {
+	.heartbeat = jitter_heartbeat,
 	.reset = jitter_reset,
 	.pull = jitter_pull,
 	.push = jitter_push,

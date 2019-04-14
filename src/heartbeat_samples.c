@@ -55,6 +55,8 @@ struct heartbeat_ctx_s
 
 #define heartbeat_dbg(...)
 
+static clockid_t clockid = CLOCK_REALTIME;
+
 heartbeat_ctx_t *heartbeat_init(unsigned int samplerate, jitter_format_t format, unsigned int nchannels)
 {
 	heartbeat_ctx_t *ctx = calloc(1, sizeof(*ctx));
@@ -98,8 +100,10 @@ void heartbeat_start(heartbeat_ctx_t *ctx)
 static int heartbeat_wait(heartbeat_ctx_t *ctx, void *arg)
 {
 	heartbeat_samples_t *beat = (heartbeat_samples_t *)arg;
-	clockid_t clockid = CLOCK_REALTIME;
 	if (ctx->samplerate == 0)
+		return -1;
+
+	if (ctx->clock.tv_sec == 0 && ctx->clock.tv_nsec == 0)
 		return -1;
 
 	pthread_mutex_lock(&ctx->mutex);
@@ -108,8 +112,6 @@ static int heartbeat_wait(heartbeat_ctx_t *ctx, void *arg)
 	int divider = ctx->samplerate / 100;
 	usec /= divider;
 	usec *= 10;
-	if (ctx->clock.tv_sec == 0 && ctx->clock.tv_nsec == 0)
-		clock_gettime(clockid, &ctx->clock);
 	ctx->clock.tv_nsec += (usec % 1000000) * 1000;
 	ctx->clock.tv_sec += usec / 1000000;
 	if (ctx->clock.tv_nsec > 1000000000)
@@ -117,31 +119,20 @@ static int heartbeat_wait(heartbeat_ctx_t *ctx, void *arg)
 		ctx->clock.tv_nsec -= 1000000000;
 		ctx->clock.tv_sec += 1;
 	}
-	struct timespec now = {0, 0};
-	clock_gettime(clockid, &now);
-	if (now.tv_sec > ctx->clock.tv_sec ||
-		(now.tv_sec == ctx->clock.tv_sec && now.tv_nsec > ctx->clock.tv_nsec))
-	{
-		now.tv_sec -= ctx->clock.tv_sec;
-		now.tv_nsec -= ctx->clock.tv_nsec;
-		if (now.tv_nsec < 0)
-		{
-			now.tv_nsec += 1000000000;
-			now.tv_sec -= 1;
-		}
-		heartbeat_dbg("heartbeat to late %lu.%09lu", now.tv_sec, now.tv_nsec);
-		clock_gettime(clockid, &ctx->clock);
-		pthread_mutex_unlock(&ctx->mutex);
-		return -1;
-	}
 	int flags = TIMER_ABSTIME;
-	struct timespec rest = {0};
-	while (clock_nanosleep(clockid, flags, &ctx->clock, &rest) != 0)
+	while (clock_nanosleep(clockid, flags, &ctx->clock, NULL) != 0)
 	{
-		err("heartbeat hook");
+		if (errno == EINTR)
+			continue;
+		else
+		{
+			if (errno == EFAULT)
+				heartbeat_dbg("heartbeat to late %lu.%09lu", ctx->clock.tv_sec, ctx->clock.tv_nsec);
+			pthread_mutex_unlock(&ctx->mutex);
+			return -1;
+		}
 	}
 	heartbeat_dbg("heartbeat: boom %ld.%06ld", usec / 1000000, usec % 1000000);
-	clock_gettime(clockid, &ctx->clock);
 	//beat->nsamples = 0;
 
 	pthread_mutex_unlock(&ctx->mutex);

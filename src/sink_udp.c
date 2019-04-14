@@ -188,10 +188,12 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 		int value=1;
 		setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &value, sizeof(value));
 		//check if the addrese is for broadcast diffusion
-		if (longaddress == INADDR_BROADCAST)
+		if (longaddress > 0xff000000)
 		{
 			warn("sink: udp broadcasting");
 			ret = setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &value, sizeof(value));
+			if (ret != -1)
+				err("sync: udp broadcast error %s", strerror(errno));
 			if (! ifr.ifr_flags & IFF_BROADCAST)
 				err("sync: udp broadcast interface not supported");
 		}
@@ -289,6 +291,7 @@ static void *sink_thread(void *arg)
 				(struct sockaddr *)&ctx->saddr, sizeof(ctx->saddr));
 		if (ret < 0)
 		{
+			err("sink: udp send error %s", strerror(errno));
 			close(ctx->sock);
 			run = 0;
 		}

@@ -250,7 +250,11 @@ static void *src_thread(void *arg)
 				continue;
 			}
 		}
-
+		if (ctx->out == NULL)
+		{
+			player_state(ctx->player, STATE_PAUSE);
+			continue;
+		}
 		unsigned char *buff = ctx->out->ops->pull(ctx->out->ctx);
 		ret = recvfrom(ctx->sock, buff, ctx->out->ctx->size,
 				MSG_NOSIGNAL, ctx->addr, &ctx->addrlen);
@@ -280,7 +284,6 @@ static int src_run(src_ctx_t *ctx)
 {
 #ifdef DEMUX_PASSTHROUGH
 	ctx->demux.ops->run(ctx->demux.ctx);
-	ctx->out = ctx->demux.ops->jitter(ctx->demux.ctx);
 #else
 	const event_new_es_t event = {.pid = 0, .mime = ctx->mime};
 	ctx->listener.cb(ctx->listener.arg, SRC_EVENT_NEW_ES, (void *)&event);
@@ -310,12 +313,14 @@ static void src_eventlistener(src_ctx_t *ctx, event_listener_t listener, void *a
 
 static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
 {
+	int ret = 0;
 #ifdef DEMUX_PASSTHROUGH
-	return ctx->demux.ops->attach(ctx->demux.ctx, index, decoder);
+	ret = ctx->demux.ops->attach(ctx->demux.ctx, index, decoder);
 #else
 	ctx->estream = decoder;
-	return 0;
 #endif
+	ctx->out = decoder->ops->jitter(decoder->ctx);
+	return ret;
 }
 
 static decoder_t *src_estream(src_ctx_t *ctx, int index)

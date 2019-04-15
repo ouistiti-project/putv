@@ -250,6 +250,8 @@ static void _player_listener(void *arg, event_t event, void *eventarg)
 			decoder->ops->run(decoder->ctx, player->audioout);
 			src->ops->attach(src->ctx, event_data->pid, decoder);
 		}
+		else
+			err("player: decoder not found for %s", event_data->mime);
 	}
 }
 

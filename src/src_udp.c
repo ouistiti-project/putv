@@ -240,6 +240,9 @@ static void *src_thread(void *arg)
 	src_ctx_t *ctx = (src_ctx_t *)arg;
 
 	int ret;
+#ifdef UDP_MARKER
+	warn("src: udp marker is ON");
+#endif
 	while (ctx->state != STATE_ERROR)
 	{
 		if (player_waiton(ctx->player, STATE_PAUSE) < 0)
@@ -255,6 +258,12 @@ static void *src_thread(void *arg)
 			player_state(ctx->player, STATE_PAUSE);
 			continue;
 		}
+#ifdef UDP_MARKER
+		unsigned long marker = 0;
+		ret = recvfrom(ctx->sock, (char *)&marker, sizeof(marker),
+				MSG_NOSIGNAL, ctx->addr, &ctx->addrlen);
+		dbg("udp: marker %lx", marker);
+#endif
 		unsigned char *buff = ctx->out->ops->pull(ctx->out->ctx);
 		ret = recvfrom(ctx->sock, buff, ctx->out->ctx->size,
 				MSG_NOSIGNAL, ctx->addr, &ctx->addrlen);
@@ -264,7 +273,7 @@ static void *src_thread(void *arg)
 		if (ret < 0)
 		{
 			ctx->state = STATE_ERROR;
-			err("sink: error write pcm %d", ret);
+			err("src: error write pcm %d", ret);
 		}
 		else if (ret == 0)
 		{
@@ -272,11 +281,11 @@ static void *src_thread(void *arg)
 		}
 		else
 		{
-			src_dbg("sink: play %d", ret);
+			src_dbg("src: play %d", ret);
 			ctx->out->ops->push(ctx->out->ctx, ret, NULL);
 		}
 	}
-	dbg("sink: thread end");
+	dbg("src: thread end");
 	return NULL;
 }
 

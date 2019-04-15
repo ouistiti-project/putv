@@ -275,6 +275,9 @@ static void *sink_thread(void *arg)
 
 	/* start decoding */
 	dbg("sink: thread run");
+#ifdef UDP_MARKER
+	warn("sink: udp marker is ON");
+#endif
 	while (run)
 	{
 		unsigned char *buff = ctx->in->ops->peer(ctx->in->ctx, NULL);
@@ -287,16 +290,33 @@ static void *sink_thread(void *arg)
 		size_t length = ctx->in->ops->length(ctx->in->ctx);
 
 		int ret;
-		ret = sendto(ctx->sock, buff, length, MSG_NOSIGNAL| MSG_DONTWAIT,
+#ifdef UDP_MARKER
+		static unsigned long marker = 0;
+		ret = sendto(ctx->sock, (char *)&marker, sizeof(marker), MSG_NOSIGNAL,
 				(struct sockaddr *)&ctx->saddr, sizeof(ctx->saddr));
-		if (ret < 0)
+		dbg("send %lx", marker);
+		marker++;
+#endif
+		ret = 0;
+		size_t len = length;
+		while (len > 0)
 		{
-			err("sink: udp send error %s", strerror(errno));
-			close(ctx->sock);
-			run = 0;
+			ret = sendto(ctx->sock, buff, len, MSG_NOSIGNAL| MSG_DONTWAIT,
+					(struct sockaddr *)&ctx->saddr, sizeof(ctx->saddr));
+			if (ret < 0)
+			{
+				err("sink: udp send error %s", strerror(errno));
+				close(ctx->sock);
+				run = 0;
+			}
+			len -= ret;
+			buff += ret;
 		}
-		else
+		if (len == 0)
+		{
+			sink_dbg("sink: udp play %d", ret);
 			ctx->counter++;
+		}
 
 		sink_dbg("sink: boom %d", ctx->counter);
 		ctx->in->ops->pop(ctx->in->ctx, length);

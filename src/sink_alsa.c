@@ -78,6 +78,8 @@ struct sink_ctx_s
 #ifdef SINK_ALSA_MIXER
 void _mixer_setvolume(sink_ctx_t *ctx, unsigned int volume)
 {
+	if (ctx->mixerchannel == NULL)
+		return;
     long min, max;
     snd_mixer_selem_get_playback_volume_range(ctx->mixerchannel, &min, &max);
 	if (volume > 100)
@@ -87,6 +89,9 @@ void _mixer_setvolume(sink_ctx_t *ctx, unsigned int volume)
 
 unsigned int _mixer_getvolume(sink_ctx_t *ctx)
 {
+	if (ctx->mixerchannel == NULL)
+		return 0;
+
 	long volume;
     long min, max;
 

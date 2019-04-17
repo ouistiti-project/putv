@@ -79,6 +79,12 @@ static int mux_run(mux_ctx_t *ctx, jitter_t *sink_jitter)
 	return 0;
 }
 
+static int mux_attach(mux_ctx_t *ctx, const char *mime)
+{
+	ctx->mime = mime;
+	return 0;
+}
+
 static const char *mux_mime(mux_ctx_t *ctx, int index)
 {
 	if (index > 0)
@@ -104,6 +110,7 @@ const mux_ops_t *mux_passthrough = &(mux_ops_t)
 	.init = mux_init,
 	.jitter = mux_jitter,
 	.run = mux_run,
+	.attach = mux_attach,
 	.mime = mux_mime,
 	.protocol = "udp",
 	.destroy = mux_destroy,

@@ -333,7 +333,7 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 	return ctx;
 }
 
-static jitter_t *alsa_jitter(sink_ctx_t *ctx)
+static jitter_t *alsa_jitter(sink_ctx_t *ctx, int index)
 {
 	return ctx->in;
 }
@@ -420,6 +420,11 @@ static void *sink_thread(void *arg)
 	return NULL;
 }
 
+static int sink_attach(sink_ctx_t *ctx, const char *mime)
+{
+	return 0;
+}
+
 static int alsa_run(sink_ctx_t *ctx)
 {
 #ifdef USE_REALTIME
@@ -488,6 +493,7 @@ const sink_ops_t *sink_alsa_mixer = &(sink_ops_t)
 {
 	.init = alsa_init,
 	.jitter = alsa_jitter,
+	.attach = sink_attach,
 	.run = alsa_run,
 	.destroy = alsa_destroy,
 

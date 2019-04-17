@@ -259,10 +259,19 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 	return ctx;
 }
 
-static jitter_t *sink_jitter(sink_ctx_t *ctx)
+static int sink_attach(sink_ctx_t *ctx, const char *mime)
 {
 #ifdef MUX
-	return ctx->mux->ops->jitter(ctx->mux->ctx, 0);
+	return ctx->mux->ops->attach(ctx->mux->ctx, mime);
+#else
+	return 0;
+#endif
+}
+
+static jitter_t *sink_jitter(sink_ctx_t *ctx, int index)
+{
+#ifdef MUX
+	return ctx->mux->ops->jitter(ctx->mux->ctx, index);
 #else
 	return ctx->in;
 #endif
@@ -292,7 +301,7 @@ static void *sink_thread(void *arg)
 		int ret;
 #ifdef UDP_MARKER
 		static unsigned long marker = 0;
-		ret = sendto(ctx->sock, (char *)&marker, sizeof(marker), MSG_NOSIGNAL,
+		ret = sendto(ctx->sock, (char *)&marker, sizeof(marker), MSG_NOSIGNAL| MSG_DONTWAIT,
 				(struct sockaddr *)&ctx->saddr, sizeof(ctx->saddr));
 		dbg("send %lx", marker);
 		marker++;
@@ -381,6 +390,7 @@ const sink_ops_t *sink_udp = &(sink_ops_t)
 {
 	.init = sink_init,
 	.jitter = sink_jitter,
+	.attach = sink_attach,
 	.run = sink_run,
 	.destroy = sink_destroy,
 };

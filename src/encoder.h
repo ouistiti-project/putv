@@ -14,6 +14,7 @@ struct encoder_s
 	encoder_ctx_t *(*init)(player_ctx_t *);
 	jitter_t *(*jitter)(encoder_ctx_t *encoder);
 	int (*run)(encoder_ctx_t *, jitter_t *);
+	const char *(*mime)(encoder_ctx_t *);
 	void (*destroy)(encoder_ctx_t *);
 };
 

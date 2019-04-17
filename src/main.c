@@ -87,15 +87,18 @@ static void _autostart(union sigval arg)
 }
 #endif
 
-static int run_player(player_ctx_t *player, jitter_t *sink_jitter)
+static int run_player(player_ctx_t *player, sink_t *sink)
 {
 	int ret;
 	const encoder_t *encoder;
 	encoder_ctx_t *encoder_ctx;
 	jitter_t *encoder_jitter = NULL;
+	jitter_t *sink_jitter;
 
 	encoder = ENCODER;
 	encoder_ctx = encoder->init(player);
+	int index = sink->ops->attach(sink->ctx, encoder->mime(encoder_ctx));
+	sink_jitter = sink->ops->jitter(sink->ctx, index);
 	encoder->run(encoder_ctx, sink_jitter);
 	encoder_jitter = encoder->jitter(encoder_ctx);
 
@@ -327,20 +330,17 @@ int main(int argc, char **argv)
 		if(cmds[i].ctx != NULL)
 			cmds[i].ops->run(cmds[i].ctx);
 
-	/**
-	 * the sink must to run before to start the encoder
-	 */
-	sink->ops->run(sink->ctx);
-	jitter_t *sink_jitter = NULL;
-	sink_jitter = sink->ops->jitter(sink->ctx);
-
 #ifdef USE_REALTIME
 	struct sched_param params;
 	params.sched_priority = 50;
 	sched_setscheduler(0, REALTIME_SCHED, &params);
 #endif
 
-	run_player(player, sink_jitter);
+	/**
+	 * the sink must to run before to start the encoder
+	 */
+	sink->ops->run(sink->ctx);
+	run_player(player, sink);
 
 	sink->ops->destroy(sink->ctx);
 	player_destroy(player);

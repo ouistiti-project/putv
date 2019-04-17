@@ -145,7 +145,12 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 	return ctx;
 }
 
-static jitter_t *sink_jitter(sink_ctx_t *ctx)
+static int sink_attach(sink_ctx_t *ctx, const char *mime)
+{
+	return 0;
+}
+
+static jitter_t *sink_jitter(sink_ctx_t *ctx, int index)
 {
 	return ctx->in;
 }
@@ -410,6 +415,7 @@ const sink_ops_t *sink_unix = &(sink_ops_t)
 {
 	.init = sink_init,
 	.jitter = sink_jitter,
+	.attach = sink_attach,
 	.run = sink_run,
 	.destroy = sink_destroy,
 };

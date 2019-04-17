@@ -103,7 +103,12 @@ error:
 	return NULL;
 }
 
-static jitter_t *alsa_jitter(sink_ctx_t *ctx)
+static int sink_attach(sink_ctx_t *ctx, const char *mime)
+{
+	return 0;
+}
+
+static jitter_t *alsa_jitter(sink_ctx_t *ctx, int index)
 {
 	return ctx->in;
 }
@@ -153,6 +158,7 @@ const sink_ops_t *sink_tinyalsa = &(sink_ops_t)
 {
 	.init = alsa_init,
 	.jitter = alsa_jitter,
+	.attach = sink_attach,
 	.run = alsa_run,
 	.destroy = alsa_destroy,
 };

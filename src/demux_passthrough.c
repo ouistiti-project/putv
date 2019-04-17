@@ -65,13 +65,13 @@ struct demux_ctx_s
 
 static demux_ctx_t *demux_init(player_ctx_t *player, const char *search)
 {
-	char *mime = NULL;
+	const char *mime = mime_audiomp3;
 	if (search != NULL)
 	{
-		mime = strstr(search, "mime=");
-		if (mime != NULL)
+		char *tmime = strstr(search, "mime=");
+		if (tmime != NULL)
 		{
-			mime += 5;
+			mime = tmime + 5;
 		}
 	}
 

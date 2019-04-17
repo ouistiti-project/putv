@@ -11,7 +11,8 @@ typedef struct sink_ops_s sink_ops_t;
 struct sink_ops_s
 {
 	sink_ctx_t *(*init)(player_ctx_t *, const char *soundcard);
-	jitter_t *(*jitter)(sink_ctx_t *);
+	int (*attach)(sink_ctx_t *, const char *mime);
+	jitter_t *(*jitter)(sink_ctx_t *, int index);
 	int (*run)(sink_ctx_t *);
 	void (*destroy)(sink_ctx_t *);
 

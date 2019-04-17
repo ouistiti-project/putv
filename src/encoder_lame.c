@@ -40,6 +40,7 @@
 #include "player.h"
 #include "jitter.h"
 #include "heartbeat.h"
+#include "media.h"
 
 typedef struct encoder_s encoder_t;
 typedef struct encoder_ctx_s encoder_ctx_t;
@@ -238,7 +239,7 @@ static void *lame_thread(void *arg)
 
 			if (ctx->nsamples > nsamples)
 			{
-				ctx->heartbeat.ops->lock(&ctx->heartbeat.ctx);
+				//ctx->heartbeat.ops->lock(&ctx->heartbeat.ctx);
 				if (ctx->nsamples > ctx->nsamplesperbeat)
 				{
 					ctx->beat.nsamples = ctx->nsamples;
@@ -246,7 +247,7 @@ static void *lame_thread(void *arg)
 					beat = &ctx->beat;
 					ctx->nsamples = 0;
 				}
-				ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
+				//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
 			}
 #endif
 			ctx->out->ops->push(ctx->out->ctx, ret, beat);
@@ -292,6 +293,11 @@ static int encoder_run(encoder_ctx_t *ctx, jitter_t *jitter)
 	return 0;
 }
 
+static const char *encoder_mime(encoder_ctx_t *encoder)
+{
+	return mime_audiomp3;
+}
+
 static void encoder_destroy(encoder_ctx_t *ctx)
 {
 #ifdef LAME_DUMP
@@ -311,6 +317,7 @@ const encoder_t *encoder_lame = &(encoder_t)
 	.init = encoder_init,
 	.jitter = encoder_jitter,
 	.run = encoder_run,
+	.mime = encoder_mime,
 	.destroy = encoder_destroy,
 };
 

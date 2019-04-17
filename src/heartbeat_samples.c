@@ -57,7 +57,7 @@ struct heartbeat_ctx_s
 
 static clockid_t clockid = CLOCK_REALTIME;
 
-heartbeat_ctx_t *heartbeat_init(unsigned int samplerate, jitter_format_t format, unsigned int nchannels)
+static heartbeat_ctx_t *heartbeat_init(unsigned int samplerate, jitter_format_t format, unsigned int nchannels)
 {
 	heartbeat_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->samplerate = samplerate;
@@ -84,13 +84,13 @@ heartbeat_ctx_t *heartbeat_init(unsigned int samplerate, jitter_format_t format,
 	return ctx;
 }
 
-void heartbeat_destroy(heartbeat_ctx_t *ctx)
+static void heartbeat_destroy(heartbeat_ctx_t *ctx)
 {
 	pthread_mutex_destroy(&ctx->mutex);
 	free(ctx);
 }
 
-void heartbeat_start(heartbeat_ctx_t *ctx)
+static void heartbeat_start(heartbeat_ctx_t *ctx)
 {
 	pthread_mutex_lock(&ctx->mutex);
 	clock_gettime(clockid, &ctx->clock);
@@ -132,7 +132,11 @@ static int heartbeat_wait(heartbeat_ctx_t *ctx, void *arg)
 			return -1;
 		}
 	}
-	heartbeat_dbg("heartbeat: boom %ld.%06ld", usec / 1000000, usec % 1000000);
+#ifdef DEBUG
+	struct timespec now;
+	clock_gettime(clockid, &now);
+	heartbeat_dbg("heartbeat: boom %lu.%09lu %ld.%06ld", now.tv_sec, now.tv_nsec, usec / 1000000, usec % 1000000);
+#endif
 	//beat->nsamples = 0;
 
 	pthread_mutex_unlock(&ctx->mutex);

@@ -71,6 +71,8 @@ struct demux_ctx_s
 {
 	demux_out_t *out;
 	jitter_t *in;
+	unsigned short seqnum;
+	unsigned long missing;
 	demux_reorder_t reorder[NB_BUFFERS];
 	const char *mime;
 	pthread_t thread;
@@ -93,6 +95,8 @@ struct demux_ctx_s
 #else
 #define dbg(...)
 #endif
+
+#define demux_dbg(...)
 
 static const char *jitter_name = "rtp demux";
 
@@ -121,10 +125,16 @@ static jitter_t *demux_jitter(demux_ctx_t *ctx)
 	return ctx->in;
 }
 
-int demux_parseheader(demux_ctx_t *ctx, char *input, size_t len)
+static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 {
 	rtpheader_t *header = (rtpheader_t *)input;
+	demux_dbg("demux: rtp seqnum %d", header->b.seqnum);
 #ifdef DEBUG_0
+	int i;
+	fprintf(stderr, "header: ");
+	for (i = 0; i < sizeof(*header); i++)
+		fprintf(stderr, "%.2x ", input[i]);
+	fprintf(stderr, "\n");
 	warn("rtp header:");
 	warn("\ttimestamp:\t%d", header->timestamp);
 	warn("\tseq:\t%d", header->b.seqnum);
@@ -155,7 +165,28 @@ int demux_parseheader(demux_ctx_t *ctx, char *input, size_t len)
 		const event_new_es_t event = {.pid = out->ssrc, .mime = out->mime};
 		ctx->listener.cb(ctx->listener.arg, SRC_EVENT_NEW_ES, (void *)&event);
 	}
-#ifdef DEMUX_RTC_REORDER
+	input += sizeof(*header);
+	len -= sizeof(*header);
+	if (header->b.cc)
+	{
+		warn("CSCR:");
+		input += header->b.cc * sizeof(uint32_t);
+		len -= header->b.cc * sizeof(uint32_t);
+	}
+	if (header->b.x)
+	{
+		warn("rtp extension:");
+		uint16_t *extid = (uint16_t *)input;
+		input += sizeof(uint16_t);
+		len -= sizeof(uint16_t);
+		uint16_t *extlength = (uint16_t *)input;
+		input += sizeof(uint16_t);
+		len -= sizeof(uint16_t);
+
+		input += *extlength;
+		len -= *extlength;
+	}
+#ifdef DEMUX_RTP_REORDER
 	demux_reorder_t *reorder = &ctx->reorder[header->b.seqnum % NB_BUFFERS];
 	int id = header->b.seqnum % (NB_BUFFERS * NB_LOOPS);
 
@@ -179,27 +210,6 @@ int demux_parseheader(demux_ctx_t *ctx, char *input, size_t len)
 	}
 	if (!reorder->ready)
 	{
-		input += sizeof(*header);
-		len -= sizeof(*header);
-		if (header->b.cc)
-		{
-			warn("CSCR:");
-			input += header->b.cc * sizeof(uint32_t);
-			len -= header->b.cc * sizeof(uint32_t);
-		}
-		if (header->b.x)
-		{
-			warn("rtp extension:");
-			uint16_t *extid = (uint16_t *)input;
-			input += sizeof(uint16_t);
-			len -= sizeof(uint16_t);
-			uint16_t *extlength = (uint16_t *)input;
-			input += sizeof(uint16_t);
-			len -= sizeof(uint16_t);
-
-			input += *extlength;
-			len -= *extlength;
-		}
 		if (len > 0)
 		{
 			memcpy(reorder->buffer, input, len);
@@ -210,6 +220,20 @@ int demux_parseheader(demux_ctx_t *ctx, char *input, size_t len)
 #else
 	if (out->jitter != NULL)
 	{
+		if (ctx->seqnum == 0)
+			ctx->seqnum = header->b.seqnum - 1;
+		ctx->seqnum++;
+		while (ctx->seqnum < header->b.seqnum)
+		{
+			if (out->data == NULL)
+				out->data = out->jitter->ops->pull(out->jitter->ctx);
+			memset(out->data, 0, out->jitter->ctx->size);
+			out->jitter->ops->push(out->jitter->ctx, out->jitter->ctx->size, NULL);
+			out->data = NULL;
+			ctx->missing++;
+			warn("demux: packet missing %ld", ctx->missing);
+			ctx->seqnum++;
+		}
 		if (out->data == NULL)
 			out->data = out->jitter->ops->pull(out->jitter->ctx);
 		while (len > out->jitter->ctx->size)
@@ -220,6 +244,7 @@ int demux_parseheader(demux_ctx_t *ctx, char *input, size_t len)
 			input += out->jitter->ctx->size;
 		}
 		memcpy(out->data, input, len);
+		demux_dbg("demux: push %ld", len);
 		out->jitter->ops->push(out->jitter->ctx, len, NULL);
 		out->data = NULL;
 	}

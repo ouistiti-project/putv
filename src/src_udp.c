@@ -228,6 +228,7 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 	}
 	if (ctx == NULL)
 	{
+		dbg("src: udp error %s", strerror(errno));
 		close(sock);
 	}
 
@@ -253,36 +254,46 @@ static void *src_thread(void *arg)
 				continue;
 			}
 		}
-		if (ctx->out == NULL)
-		{
-			player_state(ctx->player, STATE_PAUSE);
+		fd_set rfds;
+		int maxfd = ctx->sock;
+		FD_ZERO(&rfds);
+		FD_SET(ctx->sock, &rfds);
+		ret = select(maxfd + 1, &rfds, NULL, NULL, NULL);
+		if (ret != 1)
 			continue;
-		}
 #ifdef UDP_MARKER
-		unsigned long marker = 0;
-		ret = recvfrom(ctx->sock, (char *)&marker, sizeof(marker),
-				MSG_NOSIGNAL, ctx->addr, &ctx->addrlen);
-		dbg("udp: marker %lx", marker);
-#endif
-		unsigned char *buff = ctx->out->ops->pull(ctx->out->ctx);
-		ret = recvfrom(ctx->sock, buff, ctx->out->ctx->size,
-				MSG_NOSIGNAL, ctx->addr, &ctx->addrlen);
-		if (ret == -EPIPE)
+		int length;
+		ret = ioctl(ctx->sock, FIONREAD, &length);
+		//dbg("src: fionread %d", length);
+		if (length == 4)
 		{
-		}
-		if (ret < 0)
-		{
-			ctx->state = STATE_ERROR;
-			err("src: error write pcm %d", ret);
-		}
-		else if (ret == 0)
-		{
-			ctx->out->ops->flush(ctx->out->ctx);
+			unsigned long marker = 0;
+			ret = recvfrom(ctx->sock, (char *)&marker, sizeof(marker),
+					0, ctx->addr, &ctx->addrlen);
+			dbg("udp: marker %lx", marker);
 		}
 		else
+#endif
 		{
+			unsigned char *buff = ctx->out->ops->pull(ctx->out->ctx);
+			ret = recvfrom(ctx->sock, buff, ctx->out->ctx->size,
+					0, ctx->addr, &ctx->addrlen);
 			src_dbg("src: play %d", ret);
-			ctx->out->ops->push(ctx->out->ctx, ret, NULL);
+			if (ret < 0)
+			{
+				ctx->state = STATE_ERROR;
+				err("src: udp reception error %s", strerror(errno));
+			}
+			else if (ret == 0)
+			{
+				warn("src: udp end of stream");
+				ctx->out->ops->flush(ctx->out->ctx);
+			}
+			else
+			{
+				src_dbg("src: play %d", ret);
+				ctx->out->ops->push(ctx->out->ctx, ret, NULL);
+			}
 		}
 	}
 	dbg("src: thread end");
@@ -293,6 +304,7 @@ static int src_run(src_ctx_t *ctx)
 {
 #ifdef DEMUX_PASSTHROUGH
 	ctx->demux.ops->run(ctx->demux.ctx);
+	ctx->out = ctx->demux.ops->jitter(ctx->demux.ctx);
 #else
 	const event_new_es_t event = {.pid = 0, .mime = ctx->mime};
 	ctx->listener.cb(ctx->listener.arg, SRC_EVENT_NEW_ES, (void *)&event);
@@ -327,8 +339,9 @@ static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
 	ret = ctx->demux.ops->attach(ctx->demux.ctx, index, decoder);
 #else
 	ctx->estream = decoder;
-#endif
+	dbg("src: attach");
 	ctx->out = decoder->ops->jitter(decoder->ctx);
+#endif
 	return ret;
 }
 

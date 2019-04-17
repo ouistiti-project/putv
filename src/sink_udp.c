@@ -310,13 +310,24 @@ static void *sink_thread(void *arg)
 		size_t len = length;
 		while (len > 0)
 		{
-			ret = sendto(ctx->sock, buff, len, MSG_NOSIGNAL| MSG_DONTWAIT,
-					(struct sockaddr *)&ctx->saddr, sizeof(ctx->saddr));
+			int maxfd = ctx->sock;
+			fd_set wfds;
+			FD_ZERO(&wfds);
+			FD_SET(ctx->sock, &wfds);
+			ret = select(maxfd + 1, NULL, &wfds, NULL, NULL);
+			if (ret == 1 && FD_ISSET(ctx->sock, &wfds))
+			{
+				ret = sendto(ctx->sock, buff, len, MSG_NOSIGNAL| MSG_DONTWAIT,
+						(struct sockaddr *)&ctx->saddr, sizeof(ctx->saddr));
+			}
 			if (ret < 0)
 			{
+				if (errno == EAGAIN)
+					continue;
 				err("sink: udp send error %s", strerror(errno));
 				close(ctx->sock);
 				run = 0;
+				break;
 			}
 			len -= ret;
 			buff += ret;
@@ -327,7 +338,11 @@ static void *sink_thread(void *arg)
 			ctx->counter++;
 		}
 
-		sink_dbg("sink: boom %d", ctx->counter);
+#ifdef DEBUG
+		struct timespec now;
+		clock_gettime(CLOCK_REALTIME, &now);
+		sink_dbg("sink: boom %d %lu.%09lu", ctx->counter, now.tv_sec, now.tv_nsec);
+#endif
 		ctx->in->ops->pop(ctx->in->ctx, length);
 	}
 	dbg("sink: thread end");

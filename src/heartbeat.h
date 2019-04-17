@@ -8,6 +8,12 @@ struct heartbeat_samples_s
 	unsigned int nsamples;
 };
 
+typedef struct heartbeat_bitrate_s heartbeat_bitrate_t;
+struct heartbeat_bitrate_s
+{
+	unsigned long length;
+};
+
 #ifndef HEARTBEAT_CTX
 typedef void heartbeat_ctx_t;
 #endif
@@ -31,7 +37,9 @@ struct heartbeat_s
 
 #ifdef HEARTBEAT
 extern const heartbeat_ops_t *heartbeat_samples;
+extern const heartbeat_ops_t *heartbeat_bitrate;
 #else
 const heartbeat_ops_t *heartbeat_samples = NULL;
+const heartbeat_ops_t *heartbeat_bitrate = NULL;
 #endif
 #endif

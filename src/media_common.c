@@ -34,6 +34,7 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <pthread.h>
+#include <sched.h>
 
 #include "media.h"
 #include "decoder.h"
@@ -59,7 +60,7 @@ void utils_srandom()
 	if (!access(RANDOM_DEVICE, R_OK))
 	{
 		int fd = open(RANDOM_DEVICE, O_RDONLY);
-		pthread_yield();
+		sched_yield();
 		read(fd, &seed, sizeof(seed));
 		close(fd);
 	}

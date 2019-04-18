@@ -50,6 +50,8 @@
 #define dbg(...)
 #endif
 
+typedef void *(*__start_routine_t) (void *);
+
 typedef enum
 {
 	NONE,
@@ -249,7 +251,7 @@ int main(int argc, char **argv)
 	sprintf(socketpath, "%s/%s", root, socketname);
 	if (client_unix(socketpath, &data.client) > 0)
 	{
-		pthread_create(&thread, NULL, client_loop, (void *)&data);
+		pthread_create(&thread, NULL, (__start_routine_t)client_loop, (void *)&data);
 	}
 	json_t *params;
 	int nbitems = 0;

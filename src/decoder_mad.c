@@ -38,6 +38,8 @@
 #endif
 
 #include "player.h"
+#include "jitter.h"
+#include "heartbeat.h"
 #include "filter.h"
 typedef struct decoder_s decoder_t;
 typedef struct decoder_ops_s decoder_ops_t;
@@ -47,17 +49,23 @@ struct decoder_ctx_s
 	const decoder_ops_t *ops;
 	struct mad_decoder decoder;
 	pthread_t thread;
+
 	jitter_t *in;
 	unsigned char *inbuffer;
+
 	jitter_t *out;
 	unsigned char *outbuffer;
 	size_t outbufferlen;
+
 	const filter_t *filter;
+
+	heartbeat_t heartbeat;
+	heartbeat_samples_t beat;
+	unsigned long nsamples;
 };
 #define DECODER_CTX
 #include "decoder.h"
 #include "media.h"
-#include "jitter.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -138,7 +146,6 @@ enum mad_flow output(void *data,
 	}
 	decoder_dbg("decoder mad: audio frame %d Hz, %d channels, %d samples", audio.samplerate, audio.nchannels, audio.nsamples);
 
-	unsigned int nsamples;
 	if (audio.nchannels == 1)
 		audio.samples[1] = audio.samples[0];
 
@@ -155,9 +162,23 @@ enum mad_flow output(void *data,
 				ctx->out->ctx->size - ctx->outbufferlen);
 		if (ctx->outbufferlen >= ctx->out->ctx->size)
 		{
-			ctx->out->ops->push(ctx->out->ctx, ctx->out->ctx->size, NULL);
+			if (ctx->outbufferlen > ctx->out->ctx->size)
+				err("decoder: out %d %d", ctx->outbufferlen, ctx->out->ctx->size);
+			heartbeat_samples_t *beat = NULL;
+			ctx->beat.nsamples = ctx->nsamples;
+			ctx->beat.nsamples += pcm->length - audio.nsamples;
+			ctx->nsamples = 0;
+#ifdef HEARTBEAT
+			beat = &ctx->beat;
+			warn("decoder: heart boom %d", ctx->beat.nsamples);
+#endif
+			ctx->out->ops->push(ctx->out->ctx, ctx->out->ctx->size, beat);
 			ctx->outbuffer = NULL;
 			ctx->outbufferlen = 0;
+		}
+		else
+		{
+			ctx->nsamples += pcm->length;
 		}
 	}
 
@@ -268,6 +289,15 @@ static int mad_run(decoder_ctx_t *ctx, jitter_t *jitter)
 {
 	ctx->out = jitter;
 	ctx->filter->ops->set(ctx->filter->ctx, NULL, jitter->ctx->frequence);
+#ifdef HEARTBEAT
+	if (heartbeat_samples)
+	{
+		ctx->heartbeat.ops = heartbeat_samples;
+		ctx->heartbeat.ctx = heartbeat_samples->init(jitter->ctx->frequence, jitter->format, 0);
+		dbg("set heart %s", jitter->ctx->name);
+		jitter->ops->heartbeat(jitter->ctx, &ctx->heartbeat);
+	}
+#endif
 	pthread_create(&ctx->thread, NULL, mad_thread, ctx);
 	return 0;
 }
@@ -291,6 +321,9 @@ static void mad_destroy(decoder_ctx_t *ctx)
 		pthread_join(ctx->thread, NULL);
 	/* release the decoder */
 	mad_decoder_finish(&ctx->decoder);
+#ifdef HEARTBEAT
+	ctx->heartbeat.ops->destroy(ctx->heartbeat.ctx);
+#endif
 	JITTER_destroy(ctx->in);
 	free(ctx);
 }

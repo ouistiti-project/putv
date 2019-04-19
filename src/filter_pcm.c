@@ -217,6 +217,9 @@ static int filter_run(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *b
 		sample_t sample;
 		for (j = 0; j < ctx->nchannels; j++)
 		{
+			if (bufferlen >= size)
+				goto filter_exit;
+
 			if (j < audio->nchannels)
 				sample = audio->samples[(j % audio->nchannels)][i];
 			else
@@ -228,11 +231,7 @@ static int filter_run(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *b
 			int len = ctx->sampled(ctx, sample, audio->bitspersample,
 						buffer + bufferlen);
 			bufferlen += len;
-			if (bufferlen >= size)
-				goto filter_exit;
 		}
-		if (bufferlen >= size)
-			goto filter_exit;
 	}
 filter_exit:
 	audio->nsamples -= i;

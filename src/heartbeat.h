@@ -38,8 +38,5 @@ struct heartbeat_s
 #ifdef HEARTBEAT
 extern const heartbeat_ops_t *heartbeat_samples;
 extern const heartbeat_ops_t *heartbeat_bitrate;
-#else
-const heartbeat_ops_t *heartbeat_samples = NULL;
-const heartbeat_ops_t *heartbeat_bitrate = NULL;
 #endif
 #endif

@@ -61,9 +61,11 @@ static heartbeat_ctx_t *heartbeat_init(unsigned int samplerate, jitter_format_t 
 {
 	heartbeat_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->samplerate = samplerate;
+	ctx->nchannels = 2;
 	switch (format)
 	{
 	case PCM_16bits_LE_mono:
+		ctx->nchannels = 1;
 	case PCM_16bits_LE_stereo:
 		ctx->samplesize = 2;
 	break;
@@ -79,7 +81,9 @@ static heartbeat_ctx_t *heartbeat_init(unsigned int samplerate, jitter_format_t 
 		ctx->samplesize = 4;
 	break;
 	}
-	ctx->nchannels = nchannels;
+	if (nchannels != 0)
+		ctx->nchannels = nchannels;
+
 	pthread_mutex_init(&ctx->mutex, NULL);
 	return ctx;
 }
@@ -137,7 +141,7 @@ static int heartbeat_wait(heartbeat_ctx_t *ctx, void *arg)
 	clock_gettime(clockid, &now);
 	heartbeat_dbg("heartbeat: boom %lu.%09lu %ld.%06ld", now.tv_sec, now.tv_nsec, usec / 1000000, usec % 1000000);
 #endif
-	//beat->nsamples = 0;
+	beat->nsamples = 0;
 
 	pthread_mutex_unlock(&ctx->mutex);
 	return 0;

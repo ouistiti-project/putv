@@ -62,6 +62,7 @@ struct decoder_ctx_s
 	heartbeat_t heartbeat;
 	heartbeat_samples_t beat;
 	unsigned long nsamples;
+	unsigned int nloops;
 };
 #define DECODER_CTX
 #include "decoder.h"
@@ -163,16 +164,21 @@ enum mad_flow output(void *data,
 		if (ctx->outbufferlen >= ctx->out->ctx->size)
 		{
 			if (ctx->outbufferlen > ctx->out->ctx->size)
-				err("decoder: out %d %d", ctx->outbufferlen, ctx->out->ctx->size);
+				err("decoder: out %ld %ld", ctx->outbufferlen, ctx->out->ctx->size);
 			heartbeat_samples_t *beat = NULL;
-			ctx->beat.nsamples = ctx->nsamples;
-			ctx->beat.nsamples += pcm->length - audio.nsamples;
-			ctx->nsamples = 0;
-#ifdef HEARTBEAT
-			beat = &ctx->beat;
-			warn("decoder: heart boom %d", ctx->beat.nsamples);
+			ctx->nsamples += pcm->length - audio.nsamples;
+#ifdef DECODER_HEARTBEAT
+			if (ctx->nloops == ctx->out->ctx->count)
+			{
+				ctx->beat.nsamples = ctx->nsamples;
+				ctx->nsamples = 0;
+				ctx->nloops = 0;
+				beat = &ctx->beat;
+				decoder_dbg("decoder: heart boom %d", ctx->beat.nsamples);
+			}
 #endif
 			ctx->out->ops->push(ctx->out->ctx, ctx->out->ctx->size, beat);
+			ctx->nloops++;
 			ctx->outbuffer = NULL;
 			ctx->outbufferlen = 0;
 		}
@@ -270,6 +276,9 @@ static void *mad_thread(void *arg)
 	int result = 0;
 	decoder_ctx_t *ctx = (decoder_ctx_t *)arg;
 	/* start decoding */
+#ifdef DECODER_HEARTBEAT
+	ctx->heartbeat.ops->start(ctx->heartbeat.ctx);
+#endif
 	dbg("decoder: start running");
 	result = mad_decoder_run(&ctx->decoder, MAD_DECODER_MODE_SYNC);
 	dbg("decoder: stop running");
@@ -321,7 +330,7 @@ static void mad_destroy(decoder_ctx_t *ctx)
 		pthread_join(ctx->thread, NULL);
 	/* release the decoder */
 	mad_decoder_finish(&ctx->decoder);
-#ifdef HEARTBEAT
+#ifdef DECODER_HEARTBEAT
 	ctx->heartbeat.ops->destroy(ctx->heartbeat.ctx);
 #endif
 	JITTER_destroy(ctx->in);

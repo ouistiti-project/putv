@@ -60,9 +60,7 @@ struct encoder_ctx_s
 	jitter_t *out;
 	unsigned char *outbuffer;
 	heartbeat_t heartbeat;
-	heartbeat_samples_t beat;
-	unsigned long nsamples;
-	unsigned long nsamplesperbeat;
+	heartbeat_bitrate_t beat;
 };
 #define ENCODER_CTX
 #include "encoder.h"
@@ -77,7 +75,7 @@ struct encoder_ctx_s
 
 #define encoder_dbg(...)
 
-#define NB_BUFFERS 10
+#define NB_BUFFERS 6
 
 static const char *jitter_name = "lame encoder";
 void error_report(const char *format, va_list ap)
@@ -146,12 +144,20 @@ static encoder_ctx_t *encoder_init(player_ctx_t *player)
 	 */
 	ctx->samplesframe = lame_get_framesize(ctx->encoder) * 3;
 	//ctx->samplesframe = 576;
+	dbg("encoder config :\n" \
+		"\tbuffer size %lu\n" \
+		"\tsample rate %d\n" \
+		"\tsample size %d\n" \
+		"\tnchannels %u",
+		ctx->samplesframe * ctx->samplesize * ctx->nchannels,
+		ctx->samplerate,
+		ctx->samplesize,
+		ctx->nchannels);
 	jitter_t *jitter = jitter_scattergather_init(jitter_name, NB_BUFFERS,
 				ctx->samplesframe * ctx->samplesize * ctx->nchannels);
-	ctx->nsamplesperbeat = NB_BUFFERS * ctx->samplesframe * 2 / 3;
 	ctx->in = jitter;
 	jitter->format = PCM_16bits_LE_stereo;
-	jitter->ctx->frequence = 0;
+	jitter->ctx->frequence = DEFAULT_SAMPLERATE;
 	jitter->ctx->thredhold = 1;
 
 	return ctx;
@@ -185,8 +191,6 @@ static void *lame_thread(void *arg)
 	lame_set_debugf(ctx->encoder, encoder_message);
 	lame_set_msgf(ctx->encoder, encoder_message);
 #endif
-	if (ctx->out->ctx->frequence == 0)
-		ctx->out->ctx->frequence = lame_get_brate(ctx->encoder);
 #ifdef HEARTBEAT
 	ctx->heartbeat.ops->start(ctx->heartbeat.ctx);
 #endif
@@ -197,9 +201,8 @@ static void *lame_thread(void *arg)
 		ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx, NULL);
 		unsigned int inlength = ctx->in->ops->length(ctx->in->ctx);
 		inlength /= ctx->samplesize * ctx->nchannels;
-		ctx->nsamples += inlength;
 		if (inlength < ctx->samplesframe)
-			warn("encoder lame: frame too small %d %ld %ld", inlength, ctx->nsamples, ctx->in->ctx->size);
+			warn("encoder lame: frame too small %d %ld", inlength, ctx->in->ctx->size);
 		if (ctx->in->ctx->frequence != ctx->samplerate)
 		{
 			ctx->samplerate = ctx->in->ctx->frequence;
@@ -233,22 +236,12 @@ static void *lame_thread(void *arg)
 		if (ret > 0)
 		{
 			encoder_dbg("encoder lame %d", ret);
-			heartbeat_samples_t *beat = NULL;
+			heartbeat_bitrate_t *beat = NULL;
 #ifdef HEARTBEAT
-			int nsamples = lame_get_mf_samples_to_encode(ctx->encoder);
-
-			if (ctx->nsamples > nsamples)
-			{
-				//ctx->heartbeat.ops->lock(&ctx->heartbeat.ctx);
-				if (ctx->nsamples > ctx->nsamplesperbeat)
-				{
-					ctx->beat.nsamples = ctx->nsamples;
-					//ctx->beat.nsamples -= nsamples;
-					beat = &ctx->beat;
-					ctx->nsamples = 0;
-				}
-				//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
-			}
+			//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
+			ctx->beat.length = ret;
+			beat = &ctx->beat;
+			//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
 #endif
 			ctx->out->ops->push(ctx->out->ctx, ret, beat);
 			ctx->outbuffer = NULL;
@@ -281,13 +274,11 @@ static int encoder_run(encoder_ctx_t *ctx, jitter_t *jitter)
 {
 	ctx->out = jitter;
 #ifdef HEARTBEAT
-	if (heartbeat_samples)
-	{
-		ctx->heartbeat.ops = heartbeat_samples;
-		ctx->heartbeat.ctx = heartbeat_samples->init(ctx->samplerate, jitter->format, ctx->nchannels);
-		dbg("set heart %s", jitter->ctx->name);
-		jitter->ops->heartbeat(jitter->ctx, &ctx->heartbeat);
-	}
+	int ms = jitter->ctx->size * jitter->ctx->count * 8 / config.bitrate;
+	ctx->heartbeat.ops = heartbeat_bitrate;
+	ctx->heartbeat.ctx = heartbeat_bitrate->init(lame_get_brate(ctx->encoder), ms);
+	dbg("set heart %s %dms %dkbps", jitter->ctx->name, config.ms, config.bitrate);
+	jitter->ops->heartbeat(jitter->ctx, &ctx->heartbeat);
 #endif
 	pthread_create(&ctx->thread, NULL, lame_thread, ctx);
 	return 0;
@@ -307,6 +298,9 @@ static void encoder_destroy(encoder_ctx_t *ctx)
 	if (ctx->thread)
 		pthread_join(ctx->thread, NULL);
 	lame_close(ctx->encoder);
+#ifdef HEARTBEAT
+	ctx->heartbeat.ops->destroy(ctx->heartbeat.ctx);
+#endif
 	/* release the decoder */
 	jitter_scattergather_destroy(ctx->in);
 	free(ctx);

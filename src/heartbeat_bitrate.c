@@ -38,8 +38,11 @@
 typedef struct heartbeat_ctx_s heartbeat_ctx_t;
 struct heartbeat_ctx_s
 {
+	int run;
 	unsigned int bitrate;
+	unsigned int ms;
 	unsigned long length;
+	unsigned long previous;
 	unsigned long thredhold;
 	struct timespec clock;
 	pthread_mutex_t mutex;
@@ -78,6 +81,8 @@ static heartbeat_ctx_t *heartbeat_init(void *arg)
 
 static void heartbeat_destroy(heartbeat_ctx_t *ctx)
 {
+	ctx->run = 0;
+	pthread_join(ctx->thread, NULL);
 	pthread_mutex_destroy(&ctx->mutex);
 	pthread_cond_destroy(&ctx->cond);
 	free(ctx);
@@ -91,10 +96,14 @@ static void *_heartbeat_thread(void *arg)
 	struct timespec clock;
 	struct timespec rest;
 
-	clock.tv_sec = 0;
-	clock.tv_nsec = 500000000;
-	clock_nanosleep(clockid, flags, &clock, &rest);
-	pthread_cond_broadcast(&ctx->cond);
+	ctx->run = 1;
+	while (ctx->run)
+	{
+		clock.tv_sec = 0;
+		clock.tv_nsec = ctx->ms * 1000000;
+		clock_nanosleep(clockid, flags, &clock, &rest);
+		pthread_cond_broadcast(&ctx->cond);
+	}
 }
 
 static void heartbeat_start(heartbeat_ctx_t *ctx)
@@ -148,7 +157,17 @@ static int heartbeat_wait(heartbeat_ctx_t *ctx, void *arg)
 	pthread_mutex_lock(&ctx->mutex);
 
 	pthread_cond_wait(&ctx->cond, &ctx->mutex);
-	ctx->length = 0;
+#ifdef DEBUG
+	clockid_t clockid = CLOCK_REALTIME;
+	struct timespec now;
+	clock_gettime(clockid, &now);
+	heartbeat_dbg("heartbeat: boom %lu.%09lu %lu.%03lu %ld/%ld",
+			now.tv_sec, now.tv_nsec,
+			ctx->ms/1000, ctx->ms,
+			ctx->thredhold, ctx->length - ctx->previous);
+#endif
+	ctx->length -= ctx->thredhold;
+	ctx->previous = ctx->length;
 	pthread_mutex_unlock(&ctx->mutex);
 	return 0;
 }

@@ -60,7 +60,7 @@ struct encoder_ctx_s
 	jitter_t *out;
 	unsigned char *outbuffer;
 	heartbeat_t heartbeat;
-	heartbeat_bitrate_t beat;
+	beat_bitrate_t beat;
 };
 #define ENCODER_CTX
 #include "encoder.h"
@@ -236,7 +236,7 @@ static void *lame_thread(void *arg)
 		if (ret > 0)
 		{
 			encoder_dbg("encoder lame %d", ret);
-			heartbeat_bitrate_t *beat = NULL;
+			beat_bitrate_t *beat = NULL;
 #ifdef HEARTBEAT
 			//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
 			ctx->beat.length = ret;
@@ -274,9 +274,11 @@ static int encoder_run(encoder_ctx_t *ctx, jitter_t *jitter)
 {
 	ctx->out = jitter;
 #ifdef HEARTBEAT
-	int ms = jitter->ctx->size * jitter->ctx->count * 8 / config.bitrate;
+	heartbeat_bitrate_t config;
+	config.bitrate = lame_get_brate(ctx->encoder);
+	config.ms = jitter->ctx->size * jitter->ctx->count * 8 / config.bitrate;
 	ctx->heartbeat.ops = heartbeat_bitrate;
-	ctx->heartbeat.ctx = heartbeat_bitrate->init(lame_get_brate(ctx->encoder), ms);
+	ctx->heartbeat.ctx = heartbeat_bitrate->init(&config);
 	dbg("set heart %s %dms %dkbps", jitter->ctx->name, config.ms, config.bitrate);
 	jitter->ops->heartbeat(jitter->ctx, &ctx->heartbeat);
 #endif

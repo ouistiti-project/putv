@@ -62,12 +62,14 @@ struct heartbeat_ctx_s
 #define HEARTBEAT_POLICY REALTIME_SCHED
 #define HEARTBEAT_PRIORITY 65
 
-static heartbeat_ctx_t *heartbeat_init(unsigned int bitrate)
+static heartbeat_ctx_t *heartbeat_init(void *arg)
 {
+	heartbeat_bitrate_t *config = (heartbeat_bitrate_t *)arg;
 	heartbeat_ctx_t *ctx = calloc(1, sizeof(*ctx));
-	ctx->bitrate = bitrate;
-	// bitrate in kB/s, the alarm rings each 500 ms
-	ctx->thredhold = bitrate * 500;
+	ctx->bitrate = config->bitrate;
+	ctx->ms = config->ms;
+	// bitrate in kB/s, the alarm rings each around 500 ms
+	ctx->thredhold = ctx->bitrate * config->ms / 8;
 	pthread_mutex_init(&ctx->mutex, NULL);
 	pthread_cond_init(&ctx->cond, NULL);
 	
@@ -136,8 +138,7 @@ static void heartbeat_start(heartbeat_ctx_t *ctx)
 
 static int heartbeat_wait(heartbeat_ctx_t *ctx, void *arg)
 {
-	heartbeat_bitrate_t *beat = (heartbeat_bitrate_t *)arg;
-	clockid_t clockid = CLOCK_REALTIME;
+	beat_bitrate_t *beat = (beat_bitrate_t *)arg;
 	if (ctx->bitrate == 0)
 		return -1;
 

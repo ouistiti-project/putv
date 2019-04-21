@@ -57,12 +57,13 @@ struct heartbeat_ctx_s
 
 static clockid_t clockid = CLOCK_REALTIME;
 
-static heartbeat_ctx_t *heartbeat_init(unsigned int samplerate, jitter_format_t format, unsigned int nchannels)
+static heartbeat_ctx_t *heartbeat_init(void *arg)
 {
+	heartbeat_samples_t *config = (heartbeat_samples_t *)arg;
 	heartbeat_ctx_t *ctx = calloc(1, sizeof(*ctx));
-	ctx->samplerate = samplerate;
+	ctx->samplerate = config->samplerate;
 	ctx->nchannels = 2;
-	switch (format)
+	switch (config->format)
 	{
 	case PCM_16bits_LE_mono:
 		ctx->nchannels = 1;
@@ -81,8 +82,8 @@ static heartbeat_ctx_t *heartbeat_init(unsigned int samplerate, jitter_format_t 
 		ctx->samplesize = 4;
 	break;
 	}
-	if (nchannels != 0)
-		ctx->nchannels = nchannels;
+	if (config->nchannels != 0)
+		ctx->nchannels = config->nchannels;
 
 	pthread_mutex_init(&ctx->mutex, NULL);
 	return ctx;
@@ -103,7 +104,7 @@ static void heartbeat_start(heartbeat_ctx_t *ctx)
 
 static int heartbeat_wait(heartbeat_ctx_t *ctx, void *arg)
 {
-	heartbeat_samples_t *beat = (heartbeat_samples_t *)arg;
+	beat_samples_t *beat = (beat_samples_t *)arg;
 	if (ctx->samplerate == 0)
 		return -1;
 

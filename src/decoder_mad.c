@@ -60,7 +60,7 @@ struct decoder_ctx_s
 	const filter_t *filter;
 
 	heartbeat_t heartbeat;
-	heartbeat_samples_t beat;
+	beat_samples_t beat;
 	unsigned long nsamples;
 	unsigned int nloops;
 };
@@ -165,7 +165,7 @@ enum mad_flow output(void *data,
 		{
 			if (ctx->outbufferlen > ctx->out->ctx->size)
 				err("decoder: out %ld %ld", ctx->outbufferlen, ctx->out->ctx->size);
-			heartbeat_samples_t *beat = NULL;
+			beat_samples_t *beat = NULL;
 			ctx->nsamples += pcm->length - audio.nsamples;
 #ifdef DECODER_HEARTBEAT
 			if (ctx->nloops == ctx->out->ctx->count)
@@ -298,11 +298,17 @@ static int mad_run(decoder_ctx_t *ctx, jitter_t *jitter)
 {
 	ctx->out = jitter;
 	ctx->filter->ops->set(ctx->filter->ctx, NULL, jitter->ctx->frequence);
-#ifdef HEARTBEAT
+#ifdef DECODER_HEARTBEAT
 	if (heartbeat_samples)
 	{
+		heartbeat_samples_t config =
+		{
+			.samplerate = jitter->ctx->frequence,
+			.format = jitter->format,
+			.nchannels = 0,
+		};
 		ctx->heartbeat.ops = heartbeat_samples;
-		ctx->heartbeat.ctx = heartbeat_samples->init(jitter->ctx->frequence, jitter->format, 0);
+		ctx->heartbeat.ctx = heartbeat_samples->init(&config);
 		dbg("set heart %s", jitter->ctx->name);
 		jitter->ops->heartbeat(jitter->ctx, &ctx->heartbeat);
 	}

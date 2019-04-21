@@ -248,6 +248,7 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 			{
 				heartbeat_t *heartbeat = jitter->heartbeat;
 				heartbeat->ops->wait(heartbeat->ctx, private->out->beat);
+				jitter_dbg("jitter %s boom", jitter->name);
 				private->out->beat = NULL;
 			}
 #endif
@@ -389,6 +390,7 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter, void **beat)
 		int ret;
 		heartbeat_t *heartbeat = jitter->heartbeat;
 		ret = heartbeat->ops->wait(heartbeat->ctx, private->out->beat);
+		jitter_dbg("jitter %s boom", jitter->name);
 		if (ret == -1)
 			heartbeat->ops->start(heartbeat->ctx);
 		private->out->beat = NULL;

@@ -32,6 +32,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
 
 #include <pthread.h>
 
@@ -41,8 +42,8 @@
 typedef struct demux_s demux_t;
 typedef struct demux_ops_s demux_ops_t;
 
-#define NB_LOOPS 5
-#define NB_BUFFERS 4
+#define NB_LOOPS 11
+#define NB_BUFFERS 10
 #define BUFFERSIZE 1500
 
 typedef struct demux_reorder_s demux_reorder_t;
@@ -98,6 +99,9 @@ struct demux_ctx_s
 
 #define demux_dbg(...)
 
+#define DEMUX_POLICY REALTIME_SCHED
+#define DEMUX_PRIORITY 75
+
 static const char *jitter_name = "rtp demux";
 
 static demux_ctx_t *demux_init(player_ctx_t *player, const char *search)
@@ -114,9 +118,9 @@ static demux_ctx_t *demux_init(player_ctx_t *player, const char *search)
 
 	demux_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->mime = utils_mime2mime(mime);
-	ctx->in = jitter_scattergather_init(jitter_name, 6, BUFFERSIZE);
+	ctx->in = jitter_scattergather_init(jitter_name, NB_BUFFERS, BUFFERSIZE);
 	ctx->in->format = SINK_BITSSTREAM;
-	ctx->in->ctx->thredhold = 3;
+	ctx->in->ctx->thredhold = NB_BUFFERS * 3 / 4;
 	return ctx;
 }
 
@@ -287,7 +291,41 @@ static void *demux_thread(void *arg)
 
 static int demux_run(demux_ctx_t *ctx)
 {
+#ifdef USE_REALTIME
+	int ret;
+
+	pthread_attr_t attr;
+	struct sched_param params;
+
+	pthread_attr_init(&attr);
+
+	ret = pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+	if (ret < 0)
+		err("setdetachstate error %s", strerror(errno));
+	ret = pthread_attr_setscope(&attr, PTHREAD_SCOPE_PROCESS);
+	if (ret < 0)
+		err("setscope error %s", strerror(errno));
+	ret = pthread_attr_setschedpolicy(&attr, DEMUX_POLICY);
+	if (ret < 0)
+		err("setschedpolicy error %s", strerror(errno));
+	params.sched_priority = DEMUX_PRIORITY;
+	ret = pthread_attr_setschedparam(&attr, &params);
+	if (ret < 0)
+		err("setschedparam error %s", strerror(errno));
+	if (getuid() == 0)
+		ret = pthread_attr_setinheritsched(&attr, PTHREAD_EXPLICIT_SCHED);
+	else
+	{
+		warn("run server as root to use realtime");
+		ret = pthread_attr_setinheritsched(&attr, PTHREAD_INHERIT_SCHED);
+	}
+	if (ret < 0)
+		err("setinheritsched error %s", strerror(errno));
+	pthread_create(&ctx->thread, &attr, demux_thread, ctx);
+	pthread_attr_destroy(&attr);
+#else
 	pthread_create(&ctx->thread, NULL, demux_thread, ctx);
+#endif
 	return 0;
 }
 

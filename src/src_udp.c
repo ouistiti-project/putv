@@ -83,6 +83,9 @@ struct src_ctx_s
 
 #define src_dbg(...)
 
+#define SRC_POLICY REALTIME_SCHED
+#define SRC_PRIORITY 65
+
 static const char *jitter_name = "udp socket";
 static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mime)
 {
@@ -309,7 +312,41 @@ static int src_run(src_ctx_t *ctx)
 	const event_new_es_t event = {.pid = 0, .mime = ctx->mime};
 	ctx->listener.cb(ctx->listener.arg, SRC_EVENT_NEW_ES, (void *)&event);
 #endif
+#ifdef USE_REALTIME
+	int ret;
+
+	pthread_attr_t attr;
+	struct sched_param params;
+
+	pthread_attr_init(&attr);
+
+	ret = pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+	if (ret < 0)
+		err("setdetachstate error %s", strerror(errno));
+	ret = pthread_attr_setscope(&attr, PTHREAD_SCOPE_PROCESS);
+	if (ret < 0)
+		err("setscope error %s", strerror(errno));
+	ret = pthread_attr_setschedpolicy(&attr, SRC_POLICY);
+	if (ret < 0)
+		err("setschedpolicy error %s", strerror(errno));
+	params.sched_priority = SRC_PRIORITY;
+	ret = pthread_attr_setschedparam(&attr, &params);
+	if (ret < 0)
+		err("setschedparam error %s", strerror(errno));
+	if (getuid() == 0)
+		ret = pthread_attr_setinheritsched(&attr, PTHREAD_EXPLICIT_SCHED);
+	else
+	{
+		warn("run server as root to use realtime");
+		ret = pthread_attr_setinheritsched(&attr, PTHREAD_INHERIT_SCHED);
+	}
+	if (ret < 0)
+		err("setinheritsched error %s", strerror(errno));
+	pthread_create(&ctx->thread, &attr, src_thread, ctx);
+	pthread_attr_destroy(&attr);
+#else
 	pthread_create(&ctx->thread, NULL, src_thread, ctx);
+#endif
 	return 0;
 }
 

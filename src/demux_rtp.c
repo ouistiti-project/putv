@@ -100,7 +100,7 @@ struct demux_ctx_s
 #define demux_dbg(...)
 
 #define DEMUX_POLICY REALTIME_SCHED
-#define DEMUX_PRIORITY 75
+#define DEMUX_PRIORITY 55
 
 static const char *jitter_name = "rtp demux";
 
@@ -166,6 +166,7 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 		}
 		out->next = ctx->out;
 		ctx->out = out;
+		warn("demux: new  rtp substream %d %s", out->ssrc, out->mime);
 		const event_new_es_t event = {.pid = out->ssrc, .mime = out->mime};
 		ctx->listener.cb(ctx->listener.arg, SRC_EVENT_NEW_ES, (void *)&event);
 	}
@@ -229,11 +230,13 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 		ctx->seqnum++;
 		while (ctx->seqnum < header->b.seqnum)
 		{
+#if 0
 			if (out->data == NULL)
 				out->data = out->jitter->ops->pull(out->jitter->ctx);
 			memset(out->data, 0, out->jitter->ctx->size);
 			out->jitter->ops->push(out->jitter->ctx, out->jitter->ctx->size, NULL);
 			out->data = NULL;
+#endif
 			ctx->missing++;
 			warn("demux: packet missing %ld", ctx->missing);
 			ctx->seqnum++;
@@ -242,10 +245,12 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 			out->data = out->jitter->ops->pull(out->jitter->ctx);
 		while (len > out->jitter->ctx->size)
 		{
+			err("demux: udp packet has not to overflow 1500 bytes (%ld)", len);
 			memcpy(out->data, input, out->jitter->ctx->size);
 			out->jitter->ops->push(out->jitter->ctx, out->jitter->ctx->size, NULL);
 			len -= out->jitter->ctx->size;
 			input += out->jitter->ctx->size;
+			out->data = out->jitter->ops->pull(out->jitter->ctx);
 		}
 		memcpy(out->data, input, len);
 		demux_dbg("demux: push %ld", len);

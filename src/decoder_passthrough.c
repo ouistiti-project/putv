@@ -40,7 +40,6 @@ typedef struct decoder_ctx_s decoder_ctx_t;
 struct decoder_ctx_s
 {
 	const decoder_ops_t *ops;
-	player_ctx_t *ctx;
 	jitter_t *inout;
 };
 #define DECODER_CTX

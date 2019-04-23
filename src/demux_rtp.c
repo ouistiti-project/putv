@@ -77,11 +77,7 @@ struct demux_ctx_s
 	demux_reorder_t reorder[NB_BUFFERS];
 	const char *mime;
 	pthread_t thread;
-	struct
-	{
-		event_listener_t cb;
-		void *arg;
-	} listener;
+	event_listener_t *listener;
 };
 #define DEMUX_CTX
 #include "demux.h"
@@ -167,8 +163,13 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 		out->next = ctx->out;
 		ctx->out = out;
 		warn("demux: new  rtp substream %d %s", out->ssrc, out->mime);
+		event_listener_t *listener = ctx->listener;
 		const event_new_es_t event = {.pid = out->ssrc, .mime = out->mime};
-		ctx->listener.cb(ctx->listener.arg, SRC_EVENT_NEW_ES, (void *)&event);
+		while (listener != NULL)
+		{
+			listener->cb(ctx->listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
+			listener = listener->next;
+		}
 	}
 	input += sizeof(*header);
 	len -= sizeof(*header);
@@ -355,10 +356,24 @@ static const char *demux_mime(demux_ctx_t *ctx, int index)
 #endif
 }
 
-static void demux_eventlistener(demux_ctx_t *ctx, event_listener_t listener, void *arg)
+static void demux_eventlistener(demux_ctx_t *ctx, event_listener_cb_t cb, void *arg)
 {
-	ctx->listener.cb = listener;
-	ctx->listener.arg = arg;
+	event_listener_t *listener = calloc(1, sizeof(*listener));
+	listener->cb = cb;
+	listener->arg = arg;
+	if (ctx->listener == NULL)
+		ctx->listener = listener;
+	else
+	{
+		/**
+		 * add listener to the end of the list. this allow to call
+		 * a new listener with the current event when the function is
+		 * called from a callback
+		 */
+		event_listener_t *previous = ctx->listener;
+		while (previous->next != NULL) previous = previous->next;
+		previous->next = listener;
+	}
 }
 
 static int demux_attach(demux_ctx_t *ctx, long index, decoder_t *decoder)
@@ -389,6 +404,13 @@ static decoder_t *demux_estream(demux_ctx_t *ctx, long index)
 
 static void demux_destroy(demux_ctx_t *ctx)
 {
+	event_listener_t *listener = ctx->listener;
+	while (listener)
+	{
+		event_listener_t *next = listener->next;
+		free(listener);
+		listener = next;
+	}
 	demux_out_t *out = ctx->out;
 	while (out != NULL)
 	{

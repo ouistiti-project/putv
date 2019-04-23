@@ -61,12 +61,8 @@ struct src_ctx_s
 	demux_t demux;
 #else
 	decoder_t *estream;
+	event_listener_t *listener;
 #endif
-	struct
-	{
-		event_listener_t cb;
-		void *arg;
-	} listener;
 };
 #define SRC_CTX
 #include "src.h"
@@ -310,7 +306,12 @@ static int src_run(src_ctx_t *ctx)
 	ctx->out = ctx->demux.ops->jitter(ctx->demux.ctx);
 #else
 	const event_new_es_t event = {.pid = 0, .mime = ctx->mime};
-	ctx->listener.cb(ctx->listener.arg, SRC_EVENT_NEW_ES, (void *)&event);
+	event_listener_t *listener = ctx->listener;
+	while (listener)
+	{
+		listener->cb(ctx->listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
+		listener = listener->next;
+	}
 #endif
 #ifdef USE_REALTIME
 	int ret;
@@ -359,13 +360,27 @@ static const char *src_mime(src_ctx_t *ctx, int index)
 #endif
 }
 
-static void src_eventlistener(src_ctx_t *ctx, event_listener_t listener, void *arg)
+static void src_eventlistener(src_ctx_t *ctx, event_listener_cb_t listener, void *arg)
 {
 #ifdef DEMUX_PASSTHROUGH
 	ctx->demux.ops->eventlistener(ctx->demux.ctx, listener, arg);
 #else
-	ctx->listener.cb = listener;
-	ctx->listener.arg = arg;
+	event_listener_t *listener = calloc(1, sizeof(*listener));
+	listener->cb = cb;
+	listener->arg = arg;
+	if (ctx->listener == NULL)
+		ctx->listener = listener;
+	else
+	{
+		/**
+		 * add listener to the end of the list. this allow to call
+		 * a new listener with the current event when the function is
+		 * called from a callback
+		 */
+		event_listener_t *previous = ctx->listener;
+		while (previous->next != NULL) previous = previous->next;
+		previous->next = listener;
+	}
 #endif
 }
 
@@ -397,6 +412,14 @@ static void src_destroy(src_ctx_t *ctx)
 		pthread_join(ctx->thread, NULL);
 #ifdef DEMUX_PASSTHROUGH
 	ctx->demux.ops->destroy(ctx->demux.ctx);
+#else
+	event_listener_t *listener = ctx->listener;
+	while (listener)
+	{
+		event_listener_t *next = listener->next;
+		free(listener);
+		listener = next;
+	}
 #endif
 	close(ctx->sock);
 	free(ctx);

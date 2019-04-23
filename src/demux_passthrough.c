@@ -44,11 +44,7 @@ struct demux_ctx_s
 	player_ctx_t *ctx;
 	decoder_t *estream;
 	const char *mime;
-	struct
-	{
-		event_listener_t cb;
-		void *arg;
-	} listener;
+	event_listener_t *listener;
 };
 #define DEMUX_CTX
 #include "demux.h"
@@ -88,7 +84,12 @@ static jitter_t *demux_jitter(demux_ctx_t *ctx)
 static int demux_run(demux_ctx_t *ctx)
 {
 	const event_new_es_t event = {.pid = 0, .mime = ctx->mime};
-	ctx->listener.cb(ctx->listener.arg, SRC_EVENT_NEW_ES, (void *)&event);
+	event_listener_t *listener = ctx->listener;
+	while (listener)
+	{
+		listener->cb(ctx->listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
+		listener = listener->next;
+	}
 	return 0;
 }
 
@@ -107,10 +108,24 @@ static const char *demux_mime(demux_ctx_t *ctx, int index)
 #endif
 }
 
-static void demux_eventlistener(demux_ctx_t *ctx, event_listener_t listener, void *arg)
+static void demux_eventlistener(demux_ctx_t *ctx, event_listener_cb_t cb, void *arg)
 {
-	ctx->listener.cb = listener;
-	ctx->listener.arg = arg;
+	event_listener_t *listener = calloc(1, sizeof(*listener));
+	listener->cb = cb;
+	listener->arg = arg;
+	if (ctx->listener == NULL)
+		ctx->listener = listener;
+	else
+	{
+		/**
+		 * add listener to the end of the list. this allow to call
+		 * a new listener with the current event when the function is
+		 * called from a callback
+		 */
+		event_listener_t *previous = ctx->listener;
+		while (previous->next != NULL) previous = previous->next;
+		previous->next = listener;
+	}
 }
 
 static int demux_attach(demux_ctx_t *ctx, long index, decoder_t *decoder)
@@ -127,6 +142,13 @@ static decoder_t *demux_estream(demux_ctx_t *ctx, long index)
 
 static void demux_destroy(demux_ctx_t *ctx)
 {
+	event_listener_t *listener = ctx->listener;
+	while (listener)
+	{
+		event_listener_t *next = listener->next;
+		free(listener);
+		listener = next;
+	}
 	free(ctx);
 }
 

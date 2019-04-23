@@ -52,11 +52,7 @@ struct src_ctx_s
 	int nchannels;
 	filter_t filter;
 	decoder_t *estream;
-	struct
-	{
-		event_listener_t cb;
-		void *arg;
-	} listener;
+	event_listener_t *listener;
 };
 #define SRC_CTX
 #include "src.h"
@@ -319,10 +315,12 @@ static void *src_thread(void *arg)
 
 static int src_run(src_ctx_t *ctx)
 {
-	if (ctx->listener.cb)
+	const event_new_es_t event = {.pid = 0, .mime = mime_audiopcm};
+	event_listener_t *listener = ctx->listener;
+	while (listener)
 	{
-		const event_new_es_t event = {.pid = 0, .mime = mime_audiopcm};
-		ctx->listener.cb(ctx->listener.arg, SRC_EVENT_NEW_ES, (void *)&event);
+		listener->cb(ctx->listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
+		listener = listener->next;
 	}
 	pthread_create(&ctx->thread, NULL, src_thread, ctx);
 	return 0;
@@ -335,10 +333,24 @@ static const char *src_mime(src_ctx_t *ctx, int index)
 	return mime_audiopcm;
 }
 
-static void src_eventlistener(src_ctx_t *ctx, event_listener_t listener, void *arg)
+static void src_eventlistener(src_ctx_t *ctx, event_listener_cb_t cb, void *arg)
 {
-	ctx->listener.cb = listener;
-	ctx->listener.arg = arg;
+	event_listener_t *listener = calloc(1, sizeof(*listener));
+	listener->cb = cb;
+	listener->arg = arg;
+	if (ctx->listener == NULL)
+		ctx->listener = listener;
+	else
+	{
+		/**
+		 * add listener to the end of the list. this allow to call
+		 * a new listener with the current event when the function is
+		 * called from a callback
+		 */
+		event_listener_t *previous = ctx->listener;
+		while (previous->next != NULL) previous = previous->next;
+		previous->next = listener;
+	}
 }
 
 static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
@@ -359,8 +371,15 @@ static void src_destroy(src_ctx_t *ctx)
 	if (ctx->estream != NULL)
 		ctx->estream->ops->destroy(ctx->estream->ctx);
 	pthread_join(ctx->thread, NULL);
-	_pcm_close(ctx);
 	ctx->filter.ops->destroy(ctx->filter.ctx);
+	event_listener_t *listener = ctx->listener;
+	while (listener)
+	{
+		event_listener_t *next = listener->next;
+		free(listener);
+		listener = next;
+	}
+	_pcm_close(ctx);
 	free(ctx);
 }
 

@@ -15,7 +15,7 @@ struct demux_ops_s
 	jitter_t *(*jitter)(demux_ctx_t *ctx);
 	int (*run)(demux_ctx_t *ctx);
 	const char *(*mime)(demux_ctx_t *ctx, int index);
-	void (*eventlistener)(demux_ctx_t *ctx, event_listener_t listener, void *arg);
+	void (*eventlistener)(demux_ctx_t *ctx, event_listener_cb_t listener, void *arg);
 	int (*attach)(demux_ctx_t *ctx, long index, decoder_t *decoder);
 	decoder_t *(*estream)(demux_ctx_t *ctx, long index);
 	void (*destroy)(demux_ctx_t *ctx);

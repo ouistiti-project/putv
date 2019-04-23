@@ -241,7 +241,7 @@ static void _player_listener(void *arg, event_t event, void *eventarg)
 			err("player: source is null");
 			return;
 		}
-		const src_t *src = player->current->src;
+		const src_t *src = player_source(player);
 		decoder_t *decoder = NULL;
 
 		decoder = decoder_build(player, event_data->mime, player_filter(player));
@@ -404,4 +404,9 @@ int player_run(player_ctx_t *ctx)
 const filter_t *player_filter(player_ctx_t *ctx)
 {
 	return ctx->filter;
+}
+
+const src_t *player_source(player_ctx_t *ctx)
+{
+	return ctx->current->src;
 }

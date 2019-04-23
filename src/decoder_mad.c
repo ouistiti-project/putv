@@ -67,6 +67,8 @@ struct decoder_ctx_s
 #define DECODER_CTX
 #include "decoder.h"
 #include "media.h"
+#include "event.h"
+#include "src.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -247,6 +249,24 @@ enum mad_flow header(void *data, struct mad_header const *header)
 #define NBUFFER 6
 
 static const char *jitter_name = "mad decoder";
+
+static void _decoder_listener(void *arg, event_t event, void *eventarg)
+{
+	decoder_ctx_t *ctx = (decoder_ctx_t *)arg;
+	switch(event)
+	{
+		case SRC_EVENT_NEW_ES:
+		{
+			jitter_t *jitter = JITTER_init(jitter_name, NBUFFER, BUFFERSIZE);
+			//jitter_t *jitter = jitter_ringbuffer_init(jitter_name, NBUFFER, BUFFERSIZE);
+			ctx->in = jitter;
+			jitter->format = MPEG2_3_MP3;
+			jitter->ctx->thredhold = NBUFFER / 2;
+		}
+		break;
+	}
+}
+
 static decoder_ctx_t *mad_init(player_ctx_t *player, const filter_t *filter)
 {
 	decoder_ctx_t *ctx = calloc(1, sizeof(*ctx));
@@ -257,11 +277,11 @@ static decoder_ctx_t *mad_init(player_ctx_t *player, const filter_t *filter)
 			input, header /* header */, 0 /* filter */, output,
 			error, 0 /* message */);
 
-	jitter_t *jitter = JITTER_init(jitter_name, NBUFFER, BUFFERSIZE);
-	//jitter_t *jitter = jitter_ringbuffer_init(jitter_name, NBUFFER, BUFFERSIZE);
-	ctx->in = jitter;
-	jitter->format = MPEG2_3_MP3;
-	jitter->ctx->thredhold = NBUFFER / 2;
+	const src_t *src = player_source(player);
+	if (src->ops->eventlistener)
+	{
+		src->ops->eventlistener(src->ctx, _decoder_listener, ctx);
+	}
 
 	return ctx;
 }

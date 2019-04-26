@@ -102,8 +102,6 @@ static void heartbeat_start(heartbeat_ctx_t *ctx)
 	pthread_mutex_unlock(&ctx->mutex);
 }
 
-#define HEARTBEAT_COEF_1000 1000
-
 static int heartbeat_wait(heartbeat_ctx_t *ctx, void *arg)
 {
 	beat_samples_t *beat = (beat_samples_t *)arg;

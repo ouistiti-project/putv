@@ -88,8 +88,6 @@ static void heartbeat_destroy(heartbeat_ctx_t *ctx)
 	free(ctx);
 }
 
-#define HEARTBEAT_COEF_1000 1000
-
 static void *_heartbeat_thread(void *arg)
 {
 	heartbeat_ctx_t *ctx = (heartbeat_ctx_t *)arg;

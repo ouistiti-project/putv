@@ -152,11 +152,11 @@ static void *src_thread(void *arg)
 static int src_run(src_ctx_t *ctx)
 {
 	int ret;
-	const event_new_es_t event = {.pid = 0, .mime = ctx->mime};
+	const event_new_es_t event = {.pid = 0, .mime = ctx->mime, .jitte = JITTE_MID};
 	event_listener_t *listener = ctx->listener;
 	while (listener)
 	{
-		listener->cb(ctx->listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
+		listener->cb(listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
 		listener = listener->next;
 	}
 	ret = curl_easy_setopt(ctx->curl, CURLOPT_BUFFERSIZE, ctx->out->ctx->size);
@@ -204,7 +204,7 @@ static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
 	if (index > 0)
 		return -1;
 	ctx->estream = decoder;
-	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx);
+	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx, JITTE_MID);
 }
 
 static decoder_t *src_estream(src_ctx_t *ctx, int index)

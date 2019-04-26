@@ -5,6 +5,12 @@ typedef struct filter_audio_s filter_audio_t;
 typedef struct filter_s filter_t;
 typedef struct heartbeat_s heartbeat_t;
 
+typedef enum jitte_s {
+	JITTE_LOW,
+	JITTE_MID,
+	JITTE_HIGH,
+} jitte_t;
+
 typedef int (*consume_t)(void *consumer, unsigned char *buffer, size_t size);
 typedef int (*produce_t)(void *producter, unsigned char *buffer, size_t size);
 typedef struct jitter_ctx_s jitter_ctx_t;

@@ -2,6 +2,7 @@
 #define __EVENT_H__
 
 #include <stdint.h>
+#include "jitter.h"
 
 typedef enum event_e
 {
@@ -12,6 +13,7 @@ struct event_new_es_s
 {
 	uint32_t pid;
 	const char * mime;
+	jitte_t jitte;
 };
 
 typedef void (*event_listener_cb_t)(void *arg, event_t event, void *data);

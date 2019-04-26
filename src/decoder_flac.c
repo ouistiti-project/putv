@@ -87,16 +87,18 @@ static decoder_ctx_t *decoder_init(player_ctx_t *player, const filter_t *filter)
 	if (ctx->decoder == NULL)
 		err("flac decoder: open error");
 
-	jitter_t *jitter = jitter_ringbuffer_init(jitter_name, NBUFFER, BUFFERSIZE);
-	ctx->in = jitter;
-	jitter->format = FLAC;
-
 	return ctx;
 }
 
-static jitter_t *decoder_jitter(decoder_ctx_t *decoder)
+static jitter_t *decoder_jitter(decoder_ctx_t *ctx, jitte_t jitte)
 {
-	return decoder->in;
+	if (ctx->in == NULL)
+	{
+		jitter_t *jitter = jitter_ringbuffer_init(jitter_name, NBUFFER, BUFFERSIZE);
+		ctx->in = jitter;
+		jitter->format = FLAC;
+	}
+	return ctx->in;
 }
 
 static FLAC__StreamDecoderReadStatus

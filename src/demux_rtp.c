@@ -72,6 +72,7 @@ struct demux_ctx_s
 {
 	demux_out_t *out;
 	jitter_t *in;
+	jitte_t jitte;
 	unsigned short seqnum;
 	unsigned long missing;
 	demux_reorder_t reorder[NB_BUFFERS];
@@ -114,14 +115,18 @@ static demux_ctx_t *demux_init(player_ctx_t *player, const char *search)
 
 	demux_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->mime = utils_mime2mime(mime);
-	ctx->in = jitter_scattergather_init(jitter_name, NB_BUFFERS, BUFFERSIZE);
-	ctx->in->format = SINK_BITSSTREAM;
-	ctx->in->ctx->thredhold = NB_BUFFERS * 3 / 4;
 	return ctx;
 }
 
-static jitter_t *demux_jitter(demux_ctx_t *ctx)
+static jitter_t *demux_jitter(demux_ctx_t *ctx, jitte_t jitte)
 {
+	if (ctx->in == NULL)
+	{
+		ctx->in = jitter_scattergather_init(jitter_name, NB_BUFFERS, BUFFERSIZE);
+		ctx->in->format = SINK_BITSSTREAM;
+		ctx->in->ctx->thredhold = NB_BUFFERS * 3 / 4;
+		ctx->jitte = jitte;
+	}
 	return ctx->in;
 }
 
@@ -164,10 +169,10 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 		ctx->out = out;
 		warn("demux: new  rtp substream %d %s", out->ssrc, out->mime);
 		event_listener_t *listener = ctx->listener;
-		const event_new_es_t event = {.pid = out->ssrc, .mime = out->mime};
+		const event_new_es_t event = {.pid = out->ssrc, .mime = out->mime, .jitte = JITTE_HIGH};
 		while (listener != NULL)
 		{
-			listener->cb(ctx->listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
+			listener->cb(listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
 			listener = listener->next;
 		}
 	}
@@ -386,7 +391,7 @@ static int demux_attach(demux_ctx_t *ctx, long index, decoder_t *decoder)
 	if (out != NULL)
 	{
 		out->estream = decoder;
-		out->jitter = out->estream->ops->jitter(out->estream->ctx);
+		out->jitter = out->estream->ops->jitter(out->estream->ctx, ctx->jitte);
 	}
 }
 

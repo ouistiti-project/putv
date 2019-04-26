@@ -302,14 +302,14 @@ static void *src_thread(void *arg)
 static int src_run(src_ctx_t *ctx)
 {
 #ifdef DEMUX_PASSTHROUGH
+	ctx->out = ctx->demux.ops->jitter(ctx->demux.ctx, JITTE_HIGH);
 	ctx->demux.ops->run(ctx->demux.ctx);
-	ctx->out = ctx->demux.ops->jitter(ctx->demux.ctx);
 #else
-	const event_new_es_t event = {.pid = 0, .mime = ctx->mime};
+	const event_new_es_t event = {.pid = 0, .mime = ctx->mime, .jitte = JITTE_HIGH};
 	event_listener_t *listener = ctx->listener;
 	while (listener)
 	{
-		listener->cb(ctx->listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
+		listener->cb(listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
 		listener = listener->next;
 	}
 #endif
@@ -360,10 +360,10 @@ static const char *src_mime(src_ctx_t *ctx, int index)
 #endif
 }
 
-static void src_eventlistener(src_ctx_t *ctx, event_listener_cb_t listener, void *arg)
+static void src_eventlistener(src_ctx_t *ctx, event_listener_cb_t cb, void *arg)
 {
 #ifdef DEMUX_PASSTHROUGH
-	ctx->demux.ops->eventlistener(ctx->demux.ctx, listener, arg);
+	ctx->demux.ops->eventlistener(ctx->demux.ctx, cb, arg);
 #else
 	event_listener_t *listener = calloc(1, sizeof(*listener));
 	listener->cb = cb;
@@ -389,10 +389,11 @@ static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
 	int ret = 0;
 #ifdef DEMUX_PASSTHROUGH
 	ret = ctx->demux.ops->attach(ctx->demux.ctx, index, decoder);
+	ctx->out = ctx->demux.ops->jitter(ctx->demux.ctx, JITTE_HIGH);
 #else
 	ctx->estream = decoder;
 	dbg("src: attach");
-	ctx->out = decoder->ops->jitter(decoder->ctx);
+	ctx->out = decoder->ops->jitter(decoder->ctx, JITTE_HIGH);
 #endif
 	return ret;
 }

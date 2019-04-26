@@ -80,10 +80,16 @@ struct decoder_ctx_s
 
 #define decoder_dbg(...)
 
+#ifdef HEARTBEAT_0
+#define DECODER_HEARTBEAT
+#endif
+
 //#define JITTER_init jitter_scattergather_init
 //#define JITTER_destroy jitter_scattergather_destroy
 #define JITTER_init jitter_ringbuffer_init
 #define JITTER_destroy jitter_ringbuffer_destroy
+
+static jitter_t *decoder_jitter(decoder_ctx_t *ctx, jitte_t jitte);
 
 static
 enum mad_flow input(void *data,
@@ -257,11 +263,8 @@ static void _decoder_listener(void *arg, event_t event, void *eventarg)
 	{
 		case SRC_EVENT_NEW_ES:
 		{
-			jitter_t *jitter = JITTER_init(jitter_name, NBUFFER, BUFFERSIZE);
-			//jitter_t *jitter = jitter_ringbuffer_init(jitter_name, NBUFFER, BUFFERSIZE);
-			ctx->in = jitter;
-			jitter->format = MPEG2_3_MP3;
-			jitter->ctx->thredhold = NBUFFER / 2;
+			event_new_es_t *event_data = (event_new_es_t *)eventarg;
+			decoder_jitter(ctx, event_data->jitte);
 		}
 		break;
 	}
@@ -282,13 +285,24 @@ static decoder_ctx_t *mad_init(player_ctx_t *player, const filter_t *filter)
 	{
 		src->ops->eventlistener(src->ctx, _decoder_listener, ctx);
 	}
-
 	return ctx;
 }
 
-static jitter_t *mad_jitter(decoder_ctx_t *decoder)
+static jitter_t *decoder_jitter(decoder_ctx_t *ctx, jitte_t jitte)
 {
-	return decoder->in;
+	if (ctx->in == NULL)
+	{
+		int factor = jitte;
+		int nbbuffer = NBUFFER << factor;
+		warn("decoder jitter nbuffer %d", nbbuffer);
+		jitter_t *jitter = JITTER_init(jitter_name, nbbuffer, BUFFERSIZE);
+		//jitter_t *jitter = jitter_ringbuffer_init(jitter_name, NBUFFER, BUFFERSIZE);
+		jitter->format = MPEG2_3_MP3;
+		jitter->ctx->thredhold = nbbuffer / 2;
+
+		ctx->in = jitter;
+	}
+	return ctx->in;
 }
 
 static void *mad_thread(void *arg)
@@ -367,7 +381,7 @@ const decoder_ops_t *decoder_mad = &(const decoder_ops_t)
 {
 	.check = decoder_check,
 	.init = mad_init,
-	.jitter = mad_jitter,
+	.jitter = decoder_jitter,
 	.run = mad_run,
 	.destroy = mad_destroy,
 	.mime = mad_mime,

@@ -80,7 +80,9 @@ static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 	struct timeval timeout = {1,0};
 	ret = select(maxfd + 1, &rfds, NULL, NULL, &timeout);
 	if (ret > 0 && FD_ISSET(ctx->fd,&rfds))
+	{
 		ret = read(ctx->fd, buff, len);
+	}
 	else if (ret == 0)
 	{
 		warn("src: timeout");
@@ -144,11 +146,11 @@ static src_ctx_t *src_init(player_ctx_t *ctx, const char *url, const char *mime)
 
 static int src_run(src_ctx_t *ctx)
 {
-	const event_new_es_t event = {.pid = 0, .mime = ctx->mime};
+	const event_new_es_t event = {.pid = 0, .mime = ctx->mime, .jitte = JITTE_LOW};
 	event_listener_t *listener = ctx->listener;
 	while (listener)
 	{
-		listener->cb(ctx->listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
+		listener->cb(listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
 		listener = listener->next;
 	}
 	return 0;
@@ -179,7 +181,7 @@ static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
 	if (index > 0)
 		return -1;
 	ctx->estream = decoder;
-	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx);
+	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx, JITTE_LOW);
 	dbg("src: add producter to %s", ctx->out->ctx->name);
 	ctx->out->ctx->produce = (produce_t)src_read;
 	ctx->out->ctx->producter = (void *)ctx;

@@ -315,11 +315,11 @@ static void *src_thread(void *arg)
 
 static int src_run(src_ctx_t *ctx)
 {
-	const event_new_es_t event = {.pid = 0, .mime = mime_audiopcm};
+	const event_new_es_t event = {.pid = 0, .mime = mime_audiopcm, .jitte = JITTE_LOW};
 	event_listener_t *listener = ctx->listener;
 	while (listener)
 	{
-		listener->cb(ctx->listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
+		listener->cb(listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
 		listener = listener->next;
 	}
 	pthread_create(&ctx->thread, NULL, src_thread, ctx);
@@ -358,7 +358,7 @@ static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
 	if (index > 0)
 		return -1;
 	ctx->estream = decoder;
-	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx);
+	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx, JITTE_LOW);
 }
 
 static decoder_t *src_estream(src_ctx_t *ctx, int index)

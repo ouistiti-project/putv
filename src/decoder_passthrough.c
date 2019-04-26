@@ -63,7 +63,7 @@ static decoder_ctx_t *decoder_init(player_ctx_t *player, const filter_t *filter)
 	return ctx;
 }
 
-static jitter_t *decoder_jitter(decoder_ctx_t *ctx)
+static jitter_t *decoder_jitter(decoder_ctx_t *ctx, jitte_t jitte)
 {
 	return ctx->inout;
 }

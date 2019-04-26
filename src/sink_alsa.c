@@ -215,6 +215,7 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 		buffersize = *size;
 		periodsize = (*size / NB_BUFFER);
 		ret = snd_pcm_hw_params_set_buffer_size_near(ctx->playback_handle, hw_params, &buffersize);
+		dbg("try setting %ld %ld", periodsize, buffersize);
 		if (ret < 0)
 		{
 			err("sink: buffer_size");
@@ -227,6 +228,7 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 			err("sink: period_size");
 			goto error;
 		}
+		dbg("set %ld %ld", periodsize, buffersize);
 	}
 
 	ret = snd_pcm_hw_params(ctx->playback_handle, hw_params);

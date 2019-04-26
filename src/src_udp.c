@@ -242,6 +242,64 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 	return ctx;
 }
 
+static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
+{
+	int ret;
+	fd_set rfds;
+	int maxfd = ctx->sock;
+	FD_ZERO(&rfds);
+	FD_SET(ctx->sock, &rfds);
+	ret = select(maxfd + 1, &rfds, NULL, NULL, NULL);
+	if (ret != 1)
+	{
+		warn("udp select %d %s", ret, strerror(errno));
+		return -1;
+	}
+	int length;
+	ret = ioctl(ctx->sock, FIONREAD, &length);
+	if (length > ctx->out->ctx->size)
+		warn("src: fionread %d > %ld", length, ctx->out->ctx->size);
+	if (length == 0)
+		warn("src: fionread %d", length);
+#ifdef UDP_MARKER
+	if (length == 4)
+	{
+		unsigned long marker = 0;
+		ret = recvfrom(ctx->sock, (char *)&marker, sizeof(marker),
+				0, ctx->addr, &ctx->addrlen);
+		dbg("udp: marker %lx", marker);
+		return src_read(ctx, buff, len);
+	}
+	else
+#endif
+	{
+		ret = recvfrom(ctx->sock, buff, len,
+				0, ctx->addr, &ctx->addrlen);
+		src_dbg("src: play %d", ret);
+		if (ret < 0)
+		{
+			ctx->state = STATE_ERROR;
+			err("src: udp reception error %s", strerror(errno));
+		}
+		else if (ret == 0)
+		{
+			warn("src: udp end of stream");
+			ctx->out->ops->flush(ctx->out->ctx);
+		}
+		else
+		{
+#ifdef UDP_DUMP
+			if (ctx->dumpfd > 0)
+			{
+				write(ctx->dumpfd, buff, ret);
+			}
+#endif
+			src_dbg("src: play %d", ret);
+		}
+	}
+	return ret;
+}
+
 static void *src_thread(void *arg)
 {
 	src_ctx_t *ctx = (src_ctx_t *)arg;
@@ -260,46 +318,21 @@ static void *src_thread(void *arg)
 				continue;
 			}
 		}
-		fd_set rfds;
-		int maxfd = ctx->sock;
-		FD_ZERO(&rfds);
-		FD_SET(ctx->sock, &rfds);
-		ret = select(maxfd + 1, &rfds, NULL, NULL, NULL);
-		if (ret != 1)
-			continue;
-#ifdef UDP_MARKER
-		int length;
-		ret = ioctl(ctx->sock, FIONREAD, &length);
-		//dbg("src: fionread %d", length);
-		if (length == 4)
+		unsigned char *buff = ctx->out->ops->pull(ctx->out->ctx);
+		ret = src_read(ctx, buff, ctx->out->ctx->size);
+		if (ret < 0)
 		{
-			unsigned long marker = 0;
-			ret = recvfrom(ctx->sock, (char *)&marker, sizeof(marker),
-					0, ctx->addr, &ctx->addrlen);
-			dbg("udp: marker %lx", marker);
+			ctx->state = STATE_ERROR;
+		}
+		else if (ret == 0)
+		{
+			warn("src: udp end of stream");
+			/** quit the main loop **/
+			break;
 		}
 		else
-#endif
 		{
-			unsigned char *buff = ctx->out->ops->pull(ctx->out->ctx);
-			ret = recvfrom(ctx->sock, buff, ctx->out->ctx->size,
-					0, ctx->addr, &ctx->addrlen);
-			src_dbg("src: play %d", ret);
-			if (ret < 0)
-			{
-				ctx->state = STATE_ERROR;
-				err("src: udp reception error %s", strerror(errno));
-			}
-			else if (ret == 0)
-			{
-				warn("src: udp end of stream");
-				ctx->out->ops->flush(ctx->out->ctx);
-			}
-			else
-			{
-				src_dbg("src: play %d", ret);
-				ctx->out->ops->push(ctx->out->ctx, ret, NULL);
-			}
+			ctx->out->ops->push(ctx->out->ctx, ret, NULL);
 		}
 	}
 	dbg("src: thread end");

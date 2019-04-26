@@ -120,6 +120,11 @@ enum mad_flow input(void *data,
 	return MAD_FLOW_CONTINUE;
 }
 
+#ifdef DEBUG
+static clockid_t clockid = CLOCK_REALTIME;
+static struct timespec start = {0, 0};
+#endif
+
 static
 enum mad_flow output(void *data,
 		     struct mad_header const *header,
@@ -129,6 +134,21 @@ enum mad_flow output(void *data,
 	filter_audio_t audio;
 
 	/* pcm->samplerate contains the sampling frequency */
+
+#ifdef DEBUG
+	if (start.tv_nsec == 0)
+	{
+		clock_gettime(clockid, &start);
+	}
+#endif
+#ifdef DEBUG
+	unsigned long duration = (header->duration.fraction);
+	duration /= (MAD_TIMER_RESOLUTION / 100000);
+	decoder_dbg("duration 1 %lu.%02lums", duration / 100, duration % 100);
+	duration = pcm->length * 1000;
+	duration /= (pcm->samplerate / 100);
+	decoder_dbg("duration 2 %lu.%02lums", duration / 100, duration % 100);
+#endif
 
 	audio.samplerate = pcm->samplerate;
 	if (ctx->out->ctx->frequence == 0)
@@ -252,7 +272,7 @@ enum mad_flow header(void *data, struct mad_header const *header)
 //#define BUFFERSIZE MAD_BUFFER_MDLEN
 
 /// NBBUFFER must be at least 3 otherwise the decoder block on the end of the source
-#define NBUFFER 6
+#define NBUFFER 4
 
 static const char *jitter_name = "mad decoder";
 
@@ -315,6 +335,22 @@ static void *mad_thread(void *arg)
 #endif
 	dbg("decoder: start running");
 	result = mad_decoder_run(&ctx->decoder, MAD_DECODER_MODE_SYNC);
+#ifdef DEBUG
+	clockid_t clockid = CLOCK_REALTIME;
+	static struct timespec now;
+	clock_gettime(clockid, &now);
+	now.tv_sec -= start.tv_sec;
+	if (now.tv_nsec > start.tv_nsec)
+	{
+		now.tv_nsec -= start.tv_nsec;
+	}
+	else
+	{
+		now.tv_nsec -= 1000000000 - start.tv_nsec;
+		now.tv_sec -= 1;
+	}
+	dbg("decoder: end %lu.%09lu", now.tv_sec, now.tv_nsec);
+#endif
 	dbg("decoder: stop running");
 	/**
 	 * push the last buffer to the encoder, otherwise the next

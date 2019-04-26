@@ -36,6 +36,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/ioctl.h>
+#include <fcntl.h>
 #include <pwd.h>
 
 #include "player.h"
@@ -62,6 +63,9 @@ struct src_ctx_s
 #else
 	decoder_t *estream;
 	event_listener_t *listener;
+#endif
+#ifdef UDP_DUMP
+	int dumpfd;
 #endif
 };
 #define SRC_CTX
@@ -224,6 +228,9 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 		ctx->demux.ctx = ctx->demux.ops->init(player, search);
 #endif
 		ctx->mime = utils_mime2mime(mime);
+#ifdef UDP_DUMP
+		ctx->dumpfd = open("udp_dump.stream", O_RDWR | O_CREAT, 0644);
+#endif
 	}
 	if (ctx == NULL)
 	{
@@ -421,6 +428,10 @@ static void src_destroy(src_ctx_t *ctx)
 		free(listener);
 		listener = next;
 	}
+#endif
+#ifdef UDP_DUMP
+	if (ctx->dumpfd > 0)
+		close(ctx->dumpfd);
 #endif
 	close(ctx->sock);
 	free(ctx);

@@ -129,7 +129,7 @@ static src_ctx_t *src_init(player_ctx_t *player, const char * arg, const char *m
 
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, ctx);
 #ifdef CURL_DUMP
-		ctx->dumpfd = open("curl_dump.mp3", O_RDWR | O_CREAT);
+		ctx->dumpfd = open("curl_dump.mp3", O_RDWR | O_CREAT, 0644);
 #endif
 	}
 	return ctx;

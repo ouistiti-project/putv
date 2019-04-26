@@ -75,6 +75,10 @@ struct encoder_ctx_s
 
 #define encoder_dbg(...)
 
+#ifdef HEARTBEAT
+#define ENCODER_HEARTBEAT
+#endif
+
 #define NB_BUFFERS 6
 
 static const char *jitter_name = "lame encoder";
@@ -181,7 +185,7 @@ static void *lame_thread(void *arg)
 	int run = 1;
 	encoder_ctx_t *ctx = (encoder_ctx_t *)arg;
 	/* start decoding */
-#ifdef HEARTBEAT
+#ifdef ENCODER_HEARTBEAT
 	clockid_t clockid = CLOCK_REALTIME;
 	struct timespec start = {0, 0};
 	clock_gettime(clockid, &start);
@@ -191,7 +195,7 @@ static void *lame_thread(void *arg)
 	lame_set_debugf(ctx->encoder, encoder_message);
 	lame_set_msgf(ctx->encoder, encoder_message);
 #endif
-#ifdef HEARTBEAT
+#ifdef ENCODER_HEARTBEAT
 	ctx->heartbeat.ops->start(ctx->heartbeat.ctx);
 #endif
 	while (run)
@@ -220,7 +224,6 @@ static void *lame_thread(void *arg)
 #ifdef LAME_DUMP
 			if (ctx->dumpfd > 0 && ret > 0)
 			{
-				dbg("encoder lame dump %d", ret);
 				write(ctx->dumpfd, ctx->outbuffer, ret);
 			}
 #endif
@@ -228,7 +231,6 @@ static void *lame_thread(void *arg)
 		}
 		else
 		{
-			dbg("encoder lame flush");
 			ret = lame_encode_flush_nogap(ctx->encoder, ctx->outbuffer, ctx->out->ctx->size);
 			/* TODO : request media data from player to set new ID3 tag */
 			lame_init_bitstream(ctx->encoder);
@@ -237,7 +239,7 @@ static void *lame_thread(void *arg)
 		{
 			encoder_dbg("encoder lame %d", ret);
 			beat_bitrate_t *beat = NULL;
-#ifdef HEARTBEAT
+#ifdef ENCODER_HEARTBEAT
 			//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
 			ctx->beat.length = ret;
 			beat = &ctx->beat;
@@ -255,7 +257,7 @@ static void *lame_thread(void *arg)
 			run = 0;
 		}
 	}
-#ifdef HEARTBEAT
+#ifdef ENCODER_HEARTBEAT
 	struct timespec stop = {0, 0};
 	clock_gettime(clockid, &stop);
 	stop.tv_sec -= start.tv_sec;
@@ -273,7 +275,7 @@ static void *lame_thread(void *arg)
 static int encoder_run(encoder_ctx_t *ctx, jitter_t *jitter)
 {
 	ctx->out = jitter;
-#ifdef HEARTBEAT
+#ifdef ENCODER_HEARTBEAT
 	heartbeat_bitrate_t config;
 	config.bitrate = lame_get_brate(ctx->encoder);
 	config.ms = jitter->ctx->size * jitter->ctx->count * 8 / config.bitrate;
@@ -300,7 +302,7 @@ static void encoder_destroy(encoder_ctx_t *ctx)
 	if (ctx->thread)
 		pthread_join(ctx->thread, NULL);
 	lame_close(ctx->encoder);
-#ifdef HEARTBEAT
+#ifdef ENCODER_HEARTBEAT
 	ctx->heartbeat.ops->destroy(ctx->heartbeat.ctx);
 #endif
 	/* release the decoder */

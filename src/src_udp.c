@@ -275,7 +275,7 @@ static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 	{
 		ret = recvfrom(ctx->sock, buff, len,
 				0, ctx->addr, &ctx->addrlen);
-		src_dbg("src: play %d", ret);
+		dbg("src: play %d", ret);
 		if (ret < 0)
 		{
 			ctx->state = STATE_ERROR;
@@ -300,6 +300,7 @@ static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 	return ret;
 }
 
+#ifdef UDP_THREAD
 static void *src_thread(void *arg)
 {
 	src_ctx_t *ctx = (src_ctx_t *)arg;
@@ -338,6 +339,7 @@ static void *src_thread(void *arg)
 	dbg("src: thread end");
 	return NULL;
 }
+#endif
 
 static int src_run(src_ctx_t *ctx)
 {
@@ -353,6 +355,7 @@ static int src_run(src_ctx_t *ctx)
 		listener = listener->next;
 	}
 #endif
+#ifdef UDP_THREAD
 #ifdef USE_REALTIME
 	int ret;
 
@@ -387,6 +390,7 @@ static int src_run(src_ctx_t *ctx)
 	pthread_attr_destroy(&attr);
 #else
 	pthread_create(&ctx->thread, NULL, src_thread, ctx);
+#endif
 #endif
 	return 0;
 }
@@ -435,6 +439,11 @@ static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
 	dbg("src: attach");
 	ctx->out = decoder->ops->jitter(decoder->ctx, JITTE_HIGH);
 #endif
+#ifndef UDP_THREAD
+	dbg("src: add producter to %s", ctx->out->ctx->name);
+	ctx->out->ctx->produce = (produce_t)src_read;
+	ctx->out->ctx->producter = (void *)ctx;
+#endif
 	return ret;
 }
 
@@ -449,8 +458,10 @@ static decoder_t *src_estream(src_ctx_t *ctx, int index)
 
 static void src_destroy(src_ctx_t *ctx)
 {
+#ifdef UDP_THREAD
 	if (ctx->thread)
 		pthread_join(ctx->thread, NULL);
+#endif
 #ifdef DEMUX_PASSTHROUGH
 	ctx->demux.ops->destroy(ctx->demux.ctx);
 #else

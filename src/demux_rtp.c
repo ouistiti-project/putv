@@ -42,8 +42,8 @@
 typedef struct demux_s demux_t;
 typedef struct demux_ops_s demux_ops_t;
 
-#define NB_LOOPS 11
-#define NB_BUFFERS 10
+#define NB_LOOPS 21
+#define NB_BUFFERS 20
 #define BUFFERSIZE 1500
 
 typedef struct demux_reorder_s demux_reorder_t;

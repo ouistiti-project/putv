@@ -143,9 +143,6 @@ static void *src_thread(void *arg)
 	{
 		dbg("src curl error %d on %p", ret, ctx->curl);
 	}
-	ctx->outbuffer = ctx->out->ops->pull(ctx->out->ctx);
-	ctx->out->ops->push(ctx->out->ctx, 0, NULL);
-	ctx->out->ops->flush(ctx->out->ctx);
 	return 0;
 }
 
@@ -159,7 +156,6 @@ static int src_run(src_ctx_t *ctx)
 		listener->cb(listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
 		listener = listener->next;
 	}
-	ret = curl_easy_setopt(ctx->curl, CURLOPT_BUFFERSIZE, ctx->out->ctx->size);
 	//ret = curl_easy_perform(ctx->curl);
 	ret = pthread_create(&ctx->thread, NULL, src_thread, ctx);
 	return ret;
@@ -205,6 +201,7 @@ static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
 		return -1;
 	ctx->estream = decoder;
 	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx, JITTE_MID);
+	curl_easy_setopt(ctx->curl, CURLOPT_BUFFERSIZE, ctx->out->ctx->size);
 }
 
 static decoder_t *src_estream(src_ctx_t *ctx, int index)
@@ -214,10 +211,16 @@ static decoder_t *src_estream(src_ctx_t *ctx, int index)
 
 static void src_destroy(src_ctx_t *ctx)
 {
-	if (ctx->estream != NULL)
-		ctx->estream->ops->destroy(ctx->estream->ctx);
 	if (ctx->thread)
 		pthread_join(ctx->thread, NULL);
+	if (ctx->out != NULL)
+	{
+		ctx->outbuffer = ctx->out->ops->pull(ctx->out->ctx);
+		ctx->out->ops->push(ctx->out->ctx, 0, NULL);
+		ctx->out->ops->flush(ctx->out->ctx);
+	}
+	if (ctx->estream != NULL)
+		ctx->estream->ops->destroy(ctx->estream->ctx);
 #ifdef CURL_DUMP
 	if (ctx->dumpfd > 0)
 		close(ctx->dumpfd);

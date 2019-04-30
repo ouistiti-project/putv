@@ -86,6 +86,12 @@ struct src_ctx_s
 #define SRC_POLICY REALTIME_SCHED
 #define SRC_PRIORITY 65
 
+/**
+ * UDP_THREAD: This feature should minimize the resources, but in fact
+ * to receiv data in the decoding thread is too slow and the thread is often 
+ * not ready to receive UDP packet.
+ * The feature is alway possible to remember that is not a good solution.
+ */
 static const char *jitter_name = "udp socket";
 static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mime)
 {
@@ -279,7 +285,7 @@ static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 	{
 		ret = recvfrom(ctx->sock, buff, len,
 				0, ctx->addr, &ctx->addrlen);
-		dbg("src: play %d", ret);
+		src_dbg("src: play %d", ret);
 		if (ret < 0)
 		{
 			ctx->state = STATE_ERROR;

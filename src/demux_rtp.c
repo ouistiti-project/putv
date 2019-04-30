@@ -409,19 +409,21 @@ static decoder_t *demux_estream(demux_ctx_t *ctx, long index)
 
 static void demux_destroy(demux_ctx_t *ctx)
 {
+	demux_out_t *out = ctx->out;
+	while (out != NULL)
+	{
+		demux_out_t *old = out;
+		out = out->next;
+		if (old->estream != NULL)
+			old->estream->ops->destroy(old->estream->ctx);
+		free(old);
+	}
 	event_listener_t *listener = ctx->listener;
 	while (listener)
 	{
 		event_listener_t *next = listener->next;
 		free(listener);
 		listener = next;
-	}
-	demux_out_t *out = ctx->out;
-	while (out != NULL)
-	{
-		demux_out_t *old = out;
-		out = out->next;
-		free(old);
 	}
 	free(ctx);
 }

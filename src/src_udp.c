@@ -166,6 +166,10 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 		int value=1;
 		ret = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &value, sizeof(value));
 	}
+	else
+	{
+		err("src: bind error %s", strerror(errno));
+	}
 
 	if ((ret == 0) && (af == AF_INET) && IN_MULTICAST(inaddr))
 	{
@@ -431,12 +435,12 @@ static void src_eventlistener(src_ctx_t *ctx, event_listener_cb_t cb, void *arg)
 static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
 {
 	int ret = 0;
+	dbg("src: attach");
 #ifdef DEMUX_PASSTHROUGH
 	ret = ctx->demux.ops->attach(ctx->demux.ctx, index, decoder);
 	ctx->out = ctx->demux.ops->jitter(ctx->demux.ctx, JITTE_HIGH);
 #else
 	ctx->estream = decoder;
-	dbg("src: attach");
 	ctx->out = decoder->ops->jitter(decoder->ctx, JITTE_HIGH);
 #endif
 #ifndef UDP_THREAD
@@ -465,6 +469,8 @@ static void src_destroy(src_ctx_t *ctx)
 #ifdef DEMUX_PASSTHROUGH
 	ctx->demux.ops->destroy(ctx->demux.ctx);
 #else
+	if (ctx->estream != NULL)
+		ctx->estream->ops->destroy(ctx->estream->ctx);
 	event_listener_t *listener = ctx->listener;
 	while (listener)
 	{

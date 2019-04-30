@@ -134,6 +134,7 @@ static int demux_attach(demux_ctx_t *ctx, long index, decoder_t *decoder)
 {
 	if (index > 0)
 		return -1;
+	dbg("demux: attach");
 	ctx->estream = decoder;
 }
 
@@ -144,6 +145,8 @@ static decoder_t *demux_estream(demux_ctx_t *ctx, long index)
 
 static void demux_destroy(demux_ctx_t *ctx)
 {
+	if (ctx->estream != NULL)
+		ctx->estream->ops->destroy(ctx->estream->ctx);
 	event_listener_t *listener = ctx->listener;
 	while (listener)
 	{

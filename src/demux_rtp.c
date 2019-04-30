@@ -43,7 +43,7 @@ typedef struct demux_s demux_t;
 typedef struct demux_ops_s demux_ops_t;
 
 #define NB_LOOPS 21
-#define NB_BUFFERS 20
+#define NB_BUFFERS 8
 #define BUFFERSIZE 1500
 
 typedef struct demux_reorder_s demux_reorder_t;
@@ -122,9 +122,10 @@ static jitter_t *demux_jitter(demux_ctx_t *ctx, jitte_t jitte)
 {
 	if (ctx->in == NULL)
 	{
-		ctx->in = jitter_scattergather_init(jitter_name, NB_BUFFERS, BUFFERSIZE);
+		int nbbuffers = NB_BUFFERS << jitte;
+		ctx->in = jitter_scattergather_init(jitter_name, nbbuffers, BUFFERSIZE);
 		ctx->in->format = SINK_BITSSTREAM;
-		ctx->in->ctx->thredhold = NB_BUFFERS * 3 / 4;
+		ctx->in->ctx->thredhold = nbbuffers * 3 / 4;
 		ctx->jitte = jitte;
 	}
 	return ctx->in;

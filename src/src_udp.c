@@ -238,7 +238,7 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 	}
 	if (ctx == NULL)
 	{
-		dbg("src: udp error %s", strerror(errno));
+		err("src: udp error %s", strerror(errno));
 		close(sock);
 	}
 
@@ -256,7 +256,7 @@ static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 	ret = select(maxfd + 1, &rfds, NULL, NULL, NULL);
 	if (ret != 1)
 	{
-		warn("udp select %d %s", ret, strerror(errno));
+		err("udp select %d %s", ret, strerror(errno));
 		return -1;
 	}
 	int length;
@@ -288,7 +288,7 @@ static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 		else if (ret == 0)
 		{
 			warn("src: udp end of stream");
-			ctx->out->ops->flush(ctx->out->ctx);
+			ctx->state = STATE_ERROR;
 		}
 		else
 		{
@@ -325,17 +325,7 @@ static void *src_thread(void *arg)
 		}
 		unsigned char *buff = ctx->out->ops->pull(ctx->out->ctx);
 		ret = src_read(ctx, buff, ctx->out->ctx->size);
-		if (ret < 0)
-		{
-			ctx->state = STATE_ERROR;
-		}
-		else if (ret == 0)
-		{
-			warn("src: udp end of stream");
-			/** quit the main loop **/
-			break;
-		}
-		else
+		if (ret > 0)
 		{
 			ctx->out->ops->push(ctx->out->ctx, ret, NULL);
 		}

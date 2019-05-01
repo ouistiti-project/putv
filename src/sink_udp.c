@@ -25,6 +25,7 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *****************************************************************************/
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
@@ -292,6 +293,17 @@ static void *sink_thread(void *arg)
 
 	/* start decoding */
 	dbg("sink: thread run");
+	int ret;
+#ifdef USE_REALTIME
+	cpu_set_t cpuset;
+	pthread_t self = pthread_self();
+	CPU_ZERO(&cpuset);
+	CPU_SET(0, &cpuset);
+	
+	ret = pthread_setaffinity_np(self, 1, &cpuset);
+	if (ret != 0)
+		err("src: CPUC affinity error: %s", strerror(errno));
+#endif
 #ifdef UDP_MARKER
 	warn("sink: udp marker is ON");
 #endif
@@ -306,7 +318,6 @@ static void *sink_thread(void *arg)
 
 		size_t length = ctx->in->ops->length(ctx->in->ctx);
 
-		int ret;
 #ifdef UDP_MARKER
 		static unsigned long marker = 0;
 		ret = sendto(ctx->sock, (char *)&marker, sizeof(marker), MSG_NOSIGNAL| MSG_DONTWAIT,

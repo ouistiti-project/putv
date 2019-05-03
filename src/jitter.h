@@ -3,10 +3,10 @@
 
 typedef struct filter_audio_s filter_audio_t;
 typedef struct filter_s filter_t;
+typedef struct heartbeat_s heartbeat_t;
 
 typedef int (*consume_t)(void *consumer, unsigned char *buffer, size_t size);
 typedef int (*produce_t)(void *producter, unsigned char *buffer, size_t size);
-typedef int (*heart_t)(void *heart, void *beat);
 typedef struct jitter_ctx_s jitter_ctx_t;
 struct jitter_ctx_s
 {
@@ -19,18 +19,18 @@ struct jitter_ctx_s
 	produce_t produce;
 	void *producter;
 	unsigned int frequence;
-	heart_t heart;
-	void *heart_ctx;
+	heartbeat_t *heartbeat;
 	void *private;
 };
 
 typedef struct jitter_ops_s jitter_ops_t;
 struct jitter_ops_s
 {
+	heartbeat_t *(*heartbeat)(jitter_ctx_t *, heartbeat_t *new);
 	void (*reset)(jitter_ctx_t *);
 	unsigned char *(*pull)(jitter_ctx_t *);
 	void (*push)(jitter_ctx_t *, size_t len, void *beat);
-	unsigned char *(*peer)(jitter_ctx_t *);
+	unsigned char *(*peer)(jitter_ctx_t *, void **beat);
 	void (*pop)(jitter_ctx_t *, size_t len);
 	void (*flush)(jitter_ctx_t *);
 	size_t (*length)(jitter_ctx_t*);
@@ -38,7 +38,7 @@ struct jitter_ops_s
 	int (*wait)(jitter_ctx_t *);
 };
 
-typedef enum
+typedef enum jitter_format_e
 {
 	PCM_16bits_LE_mono,
 	PCM_16bits_LE_stereo,

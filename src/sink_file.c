@@ -39,7 +39,6 @@ typedef struct sink_s sink_t;
 typedef struct sink_ctx_s sink_ctx_t;
 struct sink_ctx_s
 {
-	const sink_t *ops;
 	int fd;
 	player_ctx_t *ctx;
 	jitter_t *in;
@@ -84,7 +83,6 @@ static sink_ctx_t *sink_init(player_ctx_t *ctx, const char *path)
 	if (fd >= 0)
 	{
 		sink_ctx_t *sink = calloc(1, sizeof(*sink));
-		sink->ops = sink_file;
 		sink->fd = fd;
 		sink->ctx = ctx;
 
@@ -105,9 +103,14 @@ static int sink_run(sink_ctx_t *sink)
 	return 0;
 }
 
-static jitter_t *sink_jitter(sink_ctx_t *sink)
+static jitter_t *sink_jitter(sink_ctx_t *sink, int index)
 {
 	return sink->in;
+}
+
+static int sink_attach(sink_ctx_t *ctx, const char *mime)
+{
+	return 0;
 }
 
 static void sink_destroy(sink_ctx_t *sink)
@@ -122,6 +125,7 @@ const sink_ops_t *sink_file = &(sink_ops_t)
 {
 	.init = sink_init,
 	.jitter = sink_jitter,
+	.attach = sink_attach,
 	.run = sink_run,
 	.destroy = sink_destroy,
 };

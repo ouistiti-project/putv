@@ -54,7 +54,6 @@ typedef struct player_decoder_s player_decoder_t;
 
 struct player_decoder_s
 {
-	decoder_t *decoder;
 	const src_t *src;
 	int mediaid;
 };
@@ -80,6 +79,7 @@ struct player_ctx_s
 	player_decoder_t *current;
 	pthread_cond_t cond;
 	pthread_mutex_t mutex;
+	jitter_t *audioout;
 };
 
 player_ctx_t *player_init(const char *filtername)
@@ -230,6 +230,31 @@ struct _player_play_s
 	player_decoder_t *dec;
 };
 
+static void _player_listener(void *arg, event_t event, void *eventarg)
+{
+	player_ctx_t *player = (player_ctx_t *)arg;
+	if (event == SRC_EVENT_NEW_ES)
+	{
+		event_new_es_t *event_data = (event_new_es_t *)eventarg;
+		if (player->current == NULL)
+		{
+			err("player: source is null");
+			return;
+		}
+		const src_t *src = player_source(player);
+		decoder_t *decoder = NULL;
+
+		decoder = decoder_build(player, event_data->mime, player_filter(player));
+		if (decoder != NULL)
+		{
+			decoder->ops->run(decoder->ctx, player->audioout);
+			src->ops->attach(src->ctx, event_data->pid, decoder);
+		}
+		else
+			err("player: decoder not found for %s", event_data->mime);
+	}
+}
+
 static int _player_play(void* arg, int id, const char *url, const char *info, const char *mime)
 {
 	struct _player_play_s *data = (struct _player_play_s *)arg;
@@ -243,7 +268,20 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 		data->dec = calloc(1, sizeof(*data->dec));
 		data->dec->mediaid = id;
 		data->dec->src = src;
-		data->dec->decoder = src->audio[0];
+
+		if (src->ops->eventlistener)
+		{
+			src->ops->eventlistener(src->ctx, _player_listener, player);
+		}
+		else
+		{
+			decoder_t *decoder = NULL;
+			decoder = decoder_build(player, mime, player_filter(player));
+
+			src->ops->attach(src->ctx, 0, decoder);
+			decoder->ops->run(decoder->ctx, player->audioout);
+		}
+
 		return 0;
 	}
 	else
@@ -254,15 +292,27 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 	return -1;
 }
 
-int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
+int player_subscribe(player_ctx_t *ctx, estream_t type, jitter_t *encoder_jitter)
 {
+	if (type == ES_AUDIO)
+	{
+		ctx->audioout = encoder_jitter;
+	}
+	return 0;
+}
+
+int player_run(player_ctx_t *ctx)
+{
+	if (ctx->audioout == NULL)
+		return -1;
+
 	struct _player_play_s player =
 	{
 		.ctx = ctx,
 		.dec = NULL,
 	};
 
-	ctx->filter = filter_build(ctx->filtername, encoder_jitter->format);
+	ctx->filter = filter_build(ctx->filtername, ctx->audioout->format);
 
 	while (ctx->state != STATE_ERROR)
 	{
@@ -282,7 +332,7 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 			else
 			{
 				dbg("player: stop");
-				encoder_jitter->ops->reset(encoder_jitter->ctx);
+				ctx->audioout->ops->reset(ctx->audioout->ctx);
 				pthread_cond_wait(&ctx->cond, &ctx->mutex);
 			}
 		}
@@ -301,7 +351,6 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 			if (ctx->current != NULL)
 			{
 				dbg("player: wait");
-				ctx->current->decoder->ops->destroy(ctx->current->decoder->ctx);
 				ctx->current->src->ops->destroy(ctx->current->src->ctx);
 				free(ctx->current);
 				ctx->current = NULL;
@@ -311,8 +360,11 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 				ctx->current = player.dec;
 				dbg("player: play");
 				ctx->state = STATE_PLAY;
-				ctx->current->decoder->ops->run(ctx->current->decoder->ctx, encoder_jitter);
-				ctx->current->src->ops->run(ctx->current->src->ctx, ctx->current->decoder->ops->jitter(ctx->current->decoder->ctx));
+				/**
+				 * the src needs to be ready before the decoder
+				 * to set a producer if it's needed
+				 */
+				ctx->current->src->ops->run(ctx->current->src->ctx);
 				if (ctx->media->ops->next)
 				{
 					ctx->media->ops->next(ctx->media->ctx);
@@ -320,11 +372,11 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 				else if (ctx->media->ops->end)
 					ctx->media->ops->end(ctx->media->ctx);
 			}
-			else {
+			else
+			{
 				if (player.dec != NULL)
 				{
 					ctx->current = player.dec;
-					ctx->current->decoder->ops->destroy(ctx->current->decoder->ctx);
 					ctx->current->src->ops->destroy(ctx->current->src->ctx);
 					free(ctx->current);
 					ctx->current = NULL;
@@ -352,4 +404,9 @@ int player_run(player_ctx_t *ctx, jitter_t *encoder_jitter)
 const filter_t *player_filter(player_ctx_t *ctx)
 {
 	return ctx->filter;
+}
+
+const src_t *player_source(player_ctx_t *ctx)
+{
+	return ctx->current->src;
 }

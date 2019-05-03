@@ -69,6 +69,8 @@ static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data);
 static int media_play(media_ctx_t *ctx, media_parse_t play, void *data);
 static int media_next(media_ctx_t *ctx);
 static int media_end(media_ctx_t *ctx);
+static option_state_t media_loop(media_ctx_t *ctx, option_state_t enable);
+static option_state_t media_random(media_ctx_t *ctx, option_state_t enable);
 
 static int media_count(media_ctx_t *ctx)
 {
@@ -170,13 +172,29 @@ static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data)
 static int media_next(media_ctx_t *ctx)
 {
 	int ret = -1;
-	if ((ctx->current == NULL) && (ctx->options & OPTION_LOOP))
+	if (ctx->current != NULL)
 	{
-		dbg("media loop");
+		ctx->current = ctx->current->next;
+		/**
+		 * if the list is available the next may be not null.
+		 * stop or replay for the last entry, depends of the LOOP
+		 * option
+		 */
+		if ((ctx->current == NULL) &&
+			(ctx->options & OPTION_LOOP))
+		{
+			dbg("media loop");
+			ctx->current = ctx->media;
+		}
+	}
+	else
+	{
+		/**
+		 * first call to the next function
+		 * has to set the current with the first
+		 */
 		ctx->current = ctx->media;
 	}
-	else if (ctx->current != NULL)
-		ctx->current = ctx->current->next;
 
 	if (ctx->current != NULL)
 		ret = ctx->current->id;
@@ -207,16 +225,18 @@ static int media_end(media_ctx_t *ctx)
 /**
  * the loop requires to restart the player.
  */
-static void media_loop(media_ctx_t *ctx, int enable)
+static option_state_t media_loop(media_ctx_t *ctx, option_state_t enable)
 {
-	if (enable)
+	if (enable == OPTION_ENABLE)
 		ctx->options |= OPTION_LOOP;
-	else
+	else if (enable == OPTION_DISABLE)
 		ctx->options &= ~OPTION_LOOP;
+	return (ctx->options & OPTION_LOOP)? OPTION_ENABLE: OPTION_DISABLE;
 }
 
-static void media_random(media_ctx_t *ctx, int enable)
+static option_state_t media_random(media_ctx_t *ctx, option_state_t enable)
 {
+	return OPTION_DISABLE;
 }
 
 static media_ctx_t *media_init(player_ctx_t *player, const char *url,...)

@@ -164,7 +164,7 @@ static int cmds_input_cmd(cmds_ctx_t *ctx)
 
 static void *_cmds_input_pthread(void *arg)
 {
-	int ret;
+	long ret;
 	cmds_ctx_t *ctx = (cmds_ctx_t *)arg;
 	ret = cmds_input_cmd(ctx);
 	return (void*)ret;

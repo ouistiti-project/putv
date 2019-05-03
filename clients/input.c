@@ -58,6 +58,7 @@
 #define dbg(...)
 #endif
 
+typedef void *(*__start_routine_t) (void *);
 
 typedef struct input_ctx_s input_ctx_t;
 struct input_ctx_s
@@ -189,7 +190,7 @@ int run_client(void *arg)
 	ctx->client = &data;
 
 	pthread_t thread;
-	pthread_create(&thread, NULL, client_loop, (void *)&data);
+	pthread_create(&thread, NULL, (__start_routine_t)client_loop, (void *)&data);
 
 #ifdef USE_LIBINPUT
 	struct libinput *li;

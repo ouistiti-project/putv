@@ -32,6 +32,7 @@
 #include <pthread.h>
 
 #include "jitter.h"
+#include "heartbeat.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -83,7 +84,7 @@ struct jitter_private_s
 
 static unsigned char *jitter_pull(jitter_ctx_t *jitter);
 static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat);
-static unsigned char *jitter_peer(jitter_ctx_t *jitter);
+static unsigned char *jitter_peer(jitter_ctx_t *jitter, void **beat);
 static void jitter_pop(jitter_ctx_t *jitter, size_t len);
 static void jitter_reset(jitter_ctx_t *jitter);
 
@@ -166,6 +167,14 @@ static void _jitter_init(jitter_ctx_t *jitter)
 		private->state = JITTER_FILLING;
 }
 
+static heartbeat_t *jitter_heartbeat(jitter_ctx_t *ctx, heartbeat_t *new)
+{
+	heartbeat_t *old = ctx->heartbeat;
+	if (new != NULL)
+		ctx->heartbeat = new;
+	return old;
+}
+
 static unsigned char *jitter_pull(jitter_ctx_t *jitter)
 {
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
@@ -234,10 +243,15 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 		{
 			private->out->state = SCATTER_POP;
 			int tlen = 0;
-			if (private->out->beat && jitter->heart != NULL)
+#ifdef HEARTBEAT
+			if (private->out->beat && jitter->heartbeat != NULL)
 			{
-				jitter->heart(jitter->heart_ctx, private->out->beat);
+				heartbeat_t *heartbeat = jitter->heartbeat;
+				heartbeat->ops->wait(heartbeat->ctx, private->out->beat);
+				jitter_dbg("jitter %s boom", jitter->name);
+				private->out->beat = NULL;
 			}
+#endif
 			do
 			{
 				int ret;
@@ -269,6 +283,13 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 		 * has to send an event to the consumer
 		 * that a new buffer is ready */
 		pthread_cond_broadcast(&private->condpeer);
+#ifdef HEARTBEAT
+		if (jitter->heartbeat != NULL)
+		{
+			if (private->in->beat)
+				pthread_yield();
+		}
+#endif
 	}
 	else if (private->state == JITTER_FILLING &&
 			private->level == jitter->thredhold)
@@ -281,7 +302,7 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 	}
 }
 
-static unsigned char *jitter_peer(jitter_ctx_t *jitter)
+static unsigned char *jitter_peer(jitter_ctx_t *jitter, void **beat)
 {
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
 
@@ -298,27 +319,34 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter)
 			 * consume buffer. In this case the producer runs inside
 			 * the consumer thread.
 			 */
-			int len = 0;
 			do
 			{
-				int ret;
-				ret = jitter->produce(jitter->producter, 
-					private->in->data + len, jitter->size - len);
-				if (ret > 0)
-					len += ret;
-				if (ret <= 0)
+				/**
+				 * The producer must push enougth data to start
+				 * the running, otherwise the peer will block.
+				 */
+				int len = 0;
+				do
 				{
-					len = ret;
-					break;
+					int ret;
+					ret = jitter->produce(jitter->producter,
+						private->in->data + len, jitter->size - len);
+					if (ret > 0)
+						len += ret;
+					if (ret <= 0)
+					{
+						len = ret;
+						break;
+					}
+				} while (len < jitter->size);
+				if (len > 0)
+					jitter_push(jitter, len, NULL);
+				else
+				{
+					dbg("produce nothing");
+					return NULL;
 				}
-			} while (len < jitter->size);
-			if (len > 0)
-				jitter_push(jitter, len, NULL);
-			else
-			{
-				dbg("produce nothing");
-				return NULL;
-			}
+			} while (private->state == JITTER_FILLING);
 			/**
 			 * The end of the producer and returns to the standard case.
 			 */
@@ -345,15 +373,29 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter)
 	}
 	private->out->state = SCATTER_POP;
 	pthread_mutex_unlock(&private->mutex);
-	if (private->out->beat && jitter->heart != NULL)
+#ifdef HEARTBEAT
+	while (private->out->beat && jitter->heartbeat != NULL)
 	{
+		if (beat != NULL)
+		{
+			*beat = private->out->beat;
+			private->out->beat = NULL;
+			break;
+		}
 		/**
 		 * The heartbeat is set by the producer.
 		 * The scatter gather releases the buffer to the consumer
 		 * when the heart beats
 		 */
-		jitter->heart(jitter->heart_ctx, private->out->beat);
+		int ret;
+		heartbeat_t *heartbeat = jitter->heartbeat;
+		ret = heartbeat->ops->wait(heartbeat->ctx, private->out->beat);
+		jitter_dbg("jitter %s boom", jitter->name);
+		if (ret == -1)
+			heartbeat->ops->start(heartbeat->ctx);
+		private->out->beat = NULL;
 	}
+#endif
 	return private->out->data;
 }
 
@@ -482,6 +524,7 @@ static int jitter_empty(jitter_ctx_t *jitter)
 
 static const jitter_ops_t *jitter_scattergather = &(jitter_ops_t)
 {
+	.heartbeat = jitter_heartbeat,
 	.reset = jitter_reset,
 	.pull = jitter_pull,
 	.push = jitter_push,

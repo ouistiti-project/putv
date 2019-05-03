@@ -26,6 +26,7 @@
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *****************************************************************************/
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 
 #include <libgen.h>
@@ -34,6 +35,8 @@
 #include <signal.h>
 
 #include <pthread.h>
+#include <string.h>
+#include <errno.h>
 
 /**
  * user database access
@@ -46,6 +49,10 @@
 # include <sys/stat.h>
 # include <sys/types.h>
 # include <unistd.h>
+/**
+ * file access
+ */
+# include <fcntl.h>
 
 #include "player.h"
 #include "encoder.h"
@@ -80,20 +87,25 @@ static void _autostart(union sigval arg)
 }
 #endif
 
-static int run_player(player_ctx_t *player, jitter_t *sink_jitter)
+static int run_player(player_ctx_t *player, sink_t *sink)
 {
 	int ret;
 	const encoder_t *encoder;
 	encoder_ctx_t *encoder_ctx;
 	jitter_t *encoder_jitter = NULL;
+	jitter_t *sink_jitter;
 
 	encoder = ENCODER;
 	encoder_ctx = encoder->init(player);
+	int index = sink->ops->attach(sink->ctx, encoder->mime(encoder_ctx));
+	sink_jitter = sink->ops->jitter(sink->ctx, index);
 	encoder->run(encoder_ctx, sink_jitter);
 	encoder_jitter = encoder->jitter(encoder_ctx);
 
 	if (encoder_jitter != NULL)
-		ret = player_run(player, encoder_jitter);
+		ret = player_subscribe(player, ES_AUDIO, encoder_jitter);
+	if (ret == 0)
+		ret = player_run(player);
 	encoder->destroy(encoder_ctx);
 	return ret;
 }
@@ -114,11 +126,12 @@ int main(int argc, char **argv)
 	const char *user = NULL;
 	const char *pidfile = NULL;
 	const char *filtername = "pcm_stereo";
+	const char *logfile = NULL;
 
 	int opt;
 	do
 	{
-		opt = getopt(argc, argv, "R:m:o:u:p:f:hDVxalr");
+		opt = getopt(argc, argv, "R:m:o:u:p:f:hDVxalrL:");
 		switch (opt)
 		{
 			case 'R':
@@ -157,6 +170,9 @@ int main(int argc, char **argv)
 			case 'r':
 				mode |= RANDOM;
 			break;
+			case 'L':
+				logfile = optarg;
+			break;
 		}
 	} while(opt != -1);
 
@@ -171,6 +187,20 @@ int main(int argc, char **argv)
 		}
 		return 0;
 	}
+	utils_srandom();
+
+	if (logfile != NULL && logfile[0] != '\0')
+	{
+		int logfd = open(logfile, O_WRONLY | O_CREAT | O_TRUNC, 00644);
+		if (logfd > 0)
+		{
+			dup2(logfd, 1);
+			dup2(logfd, 2);
+			close(logfd);
+		}
+		else
+			err("log file error %s", strerror(errno));
+	}
 
 	player_ctx_t *player = player_init(filtername);
 	player_change(player, mediapath, (mode & RANDOM), (mode & LOOP));
@@ -179,7 +209,7 @@ int main(int argc, char **argv)
 	{
 		player_state(player, STATE_PLAY);
 #ifdef USE_TIMER
-		if (player_mediaid(player) != 0)
+		if (player_mediaid(player) < 0)
 		{
 			int ret;
 			struct sigevent event;
@@ -223,22 +253,65 @@ int main(int argc, char **argv)
 		}
 	}
 
-	sink_t *sink = sink_build(player, outarg);;
+	sink_t *sink = sink_build(player, outarg);
+	if (sink == NULL)
+	{
+		err("output not set");
+		exit(-1);
+	}
 
 	cmds_t cmds[3];
 	int nbcmds = 0;
-#ifdef CMDLINE
 	if (!(mode & DAEMONIZE))
 	{
+#ifdef CMDLINE
 		cmds[nbcmds].ops = cmds_line;
 		cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, sink, NULL);
 		nbcmds++;
-	}
 #endif
+	}
+	else
+	{
+#ifndef DEBUG
+		int nullfd = open("/dev/null", O_WRONLY);
+		if (nullfd > 0)
+		{
+			dup2(nullfd, 0);
+			if (logfile == NULL)
+			{
+				dup2(nullfd, 1);
+				dup2(nullfd, 2);
+			}
+			close(nullfd);
+		}
+#endif
+	}
 #ifdef CMDINPUT
 	cmds[nbcmds].ops = cmds_input;
 	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, sink, CMDINPUT_PATH);
 	nbcmds++;
+#endif
+#ifdef TINYSVCMDNS
+	const char *txt[] =
+	{
+		"path="INDEX_HTML,
+		"if="NETIF,
+		NULL,
+	};
+	cmds[nbcmds].ops = cmds_tinysvcmdns;
+	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, sink, txt);
+	nbcmds++;
+#ifdef NETIF2
+	const char *txt2[] =
+	{
+		"path="INDEX_HTML,
+		"if="NETIF2,
+		NULL,
+	};
+	cmds[nbcmds].ops = cmds_tinysvcmdns;
+	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, sink, txt2);
+	nbcmds++;
+#endif
 #endif
 #ifdef JSONRPC
 	char socketpath[256];
@@ -254,11 +327,8 @@ int main(int argc, char **argv)
 
 	int i;
 	for (i = 0; i < nbcmds; i++)
-		cmds[i].ops->run(cmds[i].ctx);
-
-	sink->ops->run(sink->ctx);
-	jitter_t *sink_jitter = NULL;
-	sink_jitter = sink->ops->jitter(sink->ctx);
+		if(cmds[i].ctx != NULL)
+			cmds[i].ops->run(cmds[i].ctx);
 
 #ifdef USE_REALTIME
 	struct sched_param params;
@@ -266,14 +336,19 @@ int main(int argc, char **argv)
 	sched_setscheduler(0, REALTIME_SCHED, &params);
 #endif
 
-	run_player(player, sink_jitter);
+	/**
+	 * the sink must to run before to start the encoder
+	 */
+	sink->ops->run(sink->ctx);
+	run_player(player, sink);
 
 	sink->ops->destroy(sink->ctx);
 	player_destroy(player);
 
 	for (i = 0; i < nbcmds; i++)
 	{
-		cmds[i].ops->destroy(cmds[i].ctx);
+		if (cmds[i].ctx != NULL)
+			cmds[i].ops->destroy(cmds[i].ctx);
 	}
 	return 0;
 }

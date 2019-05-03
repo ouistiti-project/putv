@@ -35,6 +35,7 @@
 #include "player.h"
 #include "jitter.h"
 #include "filter.h"
+#include "event.h"
 typedef struct src_s src_t;
 typedef struct src_ops_s src_ops_t;
 typedef struct src_ctx_s src_ctx_t;
@@ -50,9 +51,13 @@ struct src_ctx_s
 	int samplesize;
 	int nchannels;
 	filter_t filter;
+	decoder_t *estream;
+	event_listener_t *listener;
 };
 #define SRC_CTX
 #include "src.h"
+#include "media.h"
+#include "decoder.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -159,7 +164,7 @@ static int _pcm_close(src_ctx_t *ctx)
 }
 
 static const char *jitter_name = "alsa";
-static src_ctx_t *alsa_init(player_ctx_t *player, const char *url)
+static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mime)
 {
 	int count = 2;
 	const char *soundcard;
@@ -191,7 +196,7 @@ static src_ctx_t *alsa_init(player_ctx_t *player, const char *url)
 	return ctx;
 }
 
-static void *alsa_thread(void *arg)
+static void *src_thread(void *arg)
 {
 	int ret;
 	src_ctx_t *ctx = (src_ctx_t *)arg;
@@ -308,26 +313,84 @@ static void *alsa_thread(void *arg)
 	return NULL;
 }
 
-static int alsa_run(src_ctx_t *ctx, jitter_t *jitter)
+static int src_run(src_ctx_t *ctx)
 {
-	ctx->out = jitter;
-	pthread_create(&ctx->thread, NULL, alsa_thread, ctx);
+	const event_new_es_t event = {.pid = 0, .mime = mime_audiopcm};
+	event_listener_t *listener = ctx->listener;
+	while (listener)
+	{
+		listener->cb(ctx->listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
+		listener = listener->next;
+	}
+	pthread_create(&ctx->thread, NULL, src_thread, ctx);
 	return 0;
 }
 
-static void alsa_destroy(src_ctx_t *ctx)
+static const char *src_mime(src_ctx_t *ctx, int index)
 {
+	if (index > 0)
+		return NULL;
+	return mime_audiopcm;
+}
+
+static void src_eventlistener(src_ctx_t *ctx, event_listener_cb_t cb, void *arg)
+{
+	event_listener_t *listener = calloc(1, sizeof(*listener));
+	listener->cb = cb;
+	listener->arg = arg;
+	if (ctx->listener == NULL)
+		ctx->listener = listener;
+	else
+	{
+		/**
+		 * add listener to the end of the list. this allow to call
+		 * a new listener with the current event when the function is
+		 * called from a callback
+		 */
+		event_listener_t *previous = ctx->listener;
+		while (previous->next != NULL) previous = previous->next;
+		previous->next = listener;
+	}
+}
+
+static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
+{
+	if (index > 0)
+		return -1;
+	ctx->estream = decoder;
+	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx);
+}
+
+static decoder_t *src_estream(src_ctx_t *ctx, int index)
+{
+	return ctx->estream;
+}
+
+static void src_destroy(src_ctx_t *ctx)
+{
+	if (ctx->estream != NULL)
+		ctx->estream->ops->destroy(ctx->estream->ctx);
 	pthread_join(ctx->thread, NULL);
-	_pcm_close(ctx);
 	ctx->filter.ops->destroy(ctx->filter.ctx);
+	event_listener_t *listener = ctx->listener;
+	while (listener)
+	{
+		event_listener_t *next = listener->next;
+		free(listener);
+		listener = next;
+	}
+	_pcm_close(ctx);
 	free(ctx);
 }
 
 const src_ops_t *src_alsa = &(src_ops_t)
 {
 	.protocol = "pcm://",
-	.init = alsa_init,
-	.run = alsa_run,
-	.destroy = alsa_destroy,
-	.mime = "audio/pcm",
+	.init = src_init,
+	.run = src_run,
+	.eventlistener = src_eventlistener,
+	.attach = src_attach,
+	.estream = src_estream,
+	.destroy = src_destroy,
+	.mime = src_mime,
 };

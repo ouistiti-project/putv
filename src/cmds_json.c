@@ -530,6 +530,13 @@ static int method_onchange(json_t *json_params, json_t **result, void *userdata)
 	const char *mediapath = media_path();
 	json_object_set(*result, "media", json_string(mediapath));
 
+	json_t *options = json_array();
+	if (media->ops->loop(media->ctx, OPTION_REQUEST) == OPTION_ENABLE)
+		json_array_append(options, json_string("loop"));
+	if (media->ops->random(media->ctx, OPTION_REQUEST) == OPTION_ENABLE)
+		json_array_append(options, json_string("random"));
+	json_object_set(*result, "options", options);
+
 	if (ctx->sink->ops->getvolume != NULL)
 	{
 		unsigned int volume = ctx->sink->ops->getvolume(ctx->sink->ctx);
@@ -806,11 +813,11 @@ static int method_capabilities(json_t *json_params, json_t **result, void *userd
 	json_t *codec;
 	codec = json_array();
 #ifdef DECODER_MAD
-	value = json_string(decoder_mad->mime);
+	value = json_string(decoder_mad->mime(NULL));
 	json_array_append(codec, value);
 #endif
 #ifdef DECODER_FLAC
-	value = json_string(decoder_flac->mime);
+	value = json_string(decoder_flac->mime(NULL));
 	json_array_append(codec, value);
 #endif
 	json_object_set(input, "codec", codec);
@@ -853,6 +860,17 @@ static int method_capabilities(json_t *json_params, json_t **result, void *userd
 #endif
 #ifdef SRC_UNIX
 	protocol = src_unix->protocol;
+	while ((off = strchr(protocol, ',')) > 0)
+	{
+		value = json_stringn(protocol, off - protocol);
+		protocol = off + 1;
+		json_array_append(aprotocol, value);
+	}
+	value = json_string(protocol);
+	json_array_append(aprotocol, value);
+#endif
+#ifdef SRC_UDP
+	protocol = src_udp->protocol;
 	while ((off = strchr(protocol, ',')) > 0)
 	{
 		value = json_stringn(protocol, off - protocol);

@@ -1,5 +1,5 @@
 /*****************************************************************************
- * decoder_mad.c
+ * mux_mad.c
  * this file is part of https://github.com/ouistiti-project/putv
  *****************************************************************************
  * Copyright (C) 2016-2017
@@ -33,7 +33,7 @@
 #include <stdlib.h>
 
 #include "player.h"
-#include "decoder.h"
+#include "mux.h"
 #include "filter.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -44,41 +44,38 @@
 #define dbg(...)
 #endif
 
-#define decoder_dbg(...)
+#define mux_dbg(...)
 
-decoder_t *decoder_build(player_ctx_t *player, const char *mime, const filter_t *filter)
+mux_t *mux_build(player_ctx_t *player, const char *protocol)
 {
-	decoder_t *decoder = NULL;
-	const decoder_ops_t *ops = NULL;
-	decoder_ctx_t *ctx = NULL;
-#ifdef DECODER_MAD
-	if (mime && !strcmp(mime, decoder_mad->mime(NULL)))
+	mux_t *mux = NULL;
+	const mux_ops_t *ops = NULL;
+	mux_ctx_t *ctx = NULL;
+#ifdef MUX_RTP
+	if (protocol && !strcmp(protocol, mux_rtp->protocol))
 	{
-		ops = decoder_mad;
+		ops = mux_rtp;
 	}
+	else
 #endif
-#ifdef DECODER_FLAC
-	if (mime && !strcmp(mime, decoder_flac->mime(NULL)))
+#ifdef MUX_DVB
+	if (protocol && !strcmp(protocol, mux_dvb->protocol))
 	{
-		ops = decoder_flac;
+		ops = mux_dvb;
 	}
+	else
 #endif
-#ifdef DECODER_PASSTHROUGH
-	if (mime && !strcmp(mime, decoder_passthrough->mime(NULL)))
-	{
-		ops = decoder_passthrough;
-	}
-#endif
+		ops = mux_passthrough;
 
 	if (ops != NULL)
 	{
-		ctx = ops->init(player, filter);
+		ctx = ops->init(player, "");
 	}
 	if (ctx != NULL)
 	{
-		decoder = calloc(1, sizeof(*decoder));
-		decoder->ops = ops;
-		decoder->ctx = ctx;
+		mux = calloc(1, sizeof(*mux));
+		mux->ops = ops;
+		mux->ctx = ctx;
 	}
-	return decoder;
+	return mux;
 }

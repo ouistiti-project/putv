@@ -38,6 +38,7 @@
 
 #include "player.h"
 #include "decoder.h"
+#include "media.h"
 #include "src.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -65,6 +66,9 @@ src_t *src_build(player_ctx_t *player, const char *url, const char *mime)
 	#ifdef SRC_ALSA
 		src_alsa,
 	#endif
+	#ifdef SRC_UDP
+		src_udp,
+	#endif
 		NULL
 	};
 
@@ -77,6 +81,8 @@ src_t *src_build(player_ctx_t *player, const char *url, const char *mime)
 	src_default = src_curl;
 	#elif defined(SRC_ALSA)
 	src_default = src_alsa;
+	#elif defined(SRC_UDP)
+	src_default = src_udp;
 	#endif
 
 	int i = 0;
@@ -92,7 +98,7 @@ src_t *src_build(player_ctx_t *player, const char *url, const char *mime)
 				len = next - protocol;
 			if (!(strncmp(url, protocol, len)))
 			{
-				src_ctx = src_list[i]->init(player, url);
+				src_ctx = src_list[i]->init(player, url, mime);
 				src_default = src_list[i];
 				break;
 			}
@@ -110,7 +116,7 @@ src_t *src_build(player_ctx_t *player, const char *url, const char *mime)
 
 	if (src_ctx == NULL && src_default != NULL)
 	{
-		src_ctx = src_default->init(player, url);
+		src_ctx = src_default->init(player, url, mime);
 	}
 	if (src_ctx == NULL)
 	{
@@ -121,11 +127,5 @@ src_t *src_build(player_ctx_t *player, const char *url, const char *mime)
 	src->ops = src_default;
 	src->ctx = src_ctx;
 
-	if (src->ops->mime != NULL)
-		mime = src->ops->mime;
-	decoder_t *decoder = NULL;
-	decoder = decoder_build(player, mime, player_filter(player));
-
-	src->audio[0] = decoder;
 	return src;
 }

@@ -27,20 +27,27 @@
  *****************************************************************************/
 #include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h>
 #include <string.h>
 #include <time.h>
 #include <pthread.h>
 #include <errno.h>
+#include <sys/types.h>
 
 #include "jitter.h"
 typedef struct heartbeat_ctx_s heartbeat_ctx_t;
 struct heartbeat_ctx_s
 {
-	unsigned int samplerate;
-	unsigned int samplesize;
-	unsigned int nchannels;
+	int run;
+	unsigned int bitrate;
+	unsigned int ms;
+	unsigned long length;
+	unsigned long previous;
+	unsigned long thredhold;
 	struct timespec clock;
 	pthread_mutex_t mutex;
+	pthread_cond_t cond;
+	pthread_t thread;
 };
 #define HEARTBEAT_CTX
 #include "heartbeat.h"
@@ -55,95 +62,112 @@ struct heartbeat_ctx_s
 
 #define heartbeat_dbg(...)
 
-static clockid_t clockid = CLOCK_REALTIME;
+#define HEARTBEAT_POLICY REALTIME_SCHED
+#define HEARTBEAT_PRIORITY 65
 
 static heartbeat_ctx_t *heartbeat_init(void *arg)
 {
-	heartbeat_samples_t *config = (heartbeat_samples_t *)arg;
+	heartbeat_bitrate_t *config = (heartbeat_bitrate_t *)arg;
 	heartbeat_ctx_t *ctx = calloc(1, sizeof(*ctx));
-	ctx->samplerate = config->samplerate;
-	ctx->nchannels = 2;
-	switch (config->format)
-	{
-	case PCM_16bits_LE_mono:
-		ctx->nchannels = 1;
-	case PCM_16bits_LE_stereo:
-		ctx->samplesize = 2;
-	break;
-	case PCM_24bits3_LE_stereo:
-		ctx->samplesize = 2;
-	break;
-	case PCM_24bits4_LE_stereo:
-	case PCM_32bits_LE_stereo:
-	case PCM_32bits_BE_stereo:
-		ctx->samplesize = 2;
-	break;
-	default:
-		ctx->samplesize = 4;
-	break;
-	}
-	if (config->nchannels != 0)
-		ctx->nchannels = config->nchannels;
-
+	ctx->bitrate = config->bitrate;
+	ctx->ms = config->ms;
+	// bitrate in kB/s, the alarm rings each around 500 ms
+	ctx->thredhold = ctx->bitrate * config->ms / 8;
 	pthread_mutex_init(&ctx->mutex, NULL);
+	pthread_cond_init(&ctx->cond, NULL);
+	
 	return ctx;
 }
 
 static void heartbeat_destroy(heartbeat_ctx_t *ctx)
 {
+	ctx->run = 0;
+	pthread_join(ctx->thread, NULL);
 	pthread_mutex_destroy(&ctx->mutex);
+	pthread_cond_destroy(&ctx->cond);
 	free(ctx);
+}
+
+static void *_heartbeat_thread(void *arg)
+{
+	heartbeat_ctx_t *ctx = (heartbeat_ctx_t *)arg;
+	clockid_t clockid = CLOCK_REALTIME;
+	int flags = 0;
+	struct timespec clock;
+	struct timespec rest;
+
+	ctx->run = 1;
+	while (ctx->run)
+	{
+		clock.tv_sec = 0;
+		clock.tv_nsec = ctx->ms * 1000000;
+		clock_nanosleep(clockid, flags, &clock, &rest);
+		pthread_cond_broadcast(&ctx->cond);
+	}
 }
 
 static void heartbeat_start(heartbeat_ctx_t *ctx)
 {
-	pthread_mutex_lock(&ctx->mutex);
-	clock_gettime(clockid, &ctx->clock);
-	pthread_mutex_unlock(&ctx->mutex);
+#ifdef USE_REALTIME
+	int ret;
+
+	pthread_attr_t attr;
+	struct sched_param params;
+
+	pthread_attr_init(&attr);
+
+	ret = pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+	if (ret < 0)
+		err("setdetachstate error %s", strerror(errno));
+	ret = pthread_attr_setscope(&attr, PTHREAD_SCOPE_PROCESS);
+	if (ret < 0)
+		err("setscope error %s", strerror(errno));
+	ret = pthread_attr_setschedpolicy(&attr, HEARTBEAT_POLICY);
+	if (ret < 0)
+		err("setschedpolicy error %s", strerror(errno));
+	params.sched_priority = HEARTBEAT_PRIORITY;
+	ret = pthread_attr_setschedparam(&attr, &params);
+	if (ret < 0)
+		err("setschedparam error %s", strerror(errno));
+	if (getuid() == 0)
+		ret = pthread_attr_setinheritsched(&attr, PTHREAD_EXPLICIT_SCHED);
+	else
+	{
+		warn("run server as root to use realtime");
+		ret = pthread_attr_setinheritsched(&attr, PTHREAD_INHERIT_SCHED);
+	}
+	if (ret < 0)
+		err("setinheritsched error %s", strerror(errno));
+	pthread_create(&ctx->thread, &attr, _heartbeat_thread, ctx);
+	pthread_attr_destroy(&attr);
+#else
+	pthread_create(&ctx->thread, NULL, _heartbeat_thread, ctx);
+#endif
 }
 
 static int heartbeat_wait(heartbeat_ctx_t *ctx, void *arg)
 {
-	beat_samples_t *beat = (beat_samples_t *)arg;
-	if (ctx->samplerate == 0)
+	beat_bitrate_t *beat = (beat_bitrate_t *)arg;
+	if (ctx->bitrate == 0)
 		return -1;
 
-	if (ctx->clock.tv_sec == 0 && ctx->clock.tv_nsec == 0)
-		return -1;
-
+	ctx->length += beat->length;
+	if (ctx->length < ctx->thredhold)
+		return 0;
 	pthread_mutex_lock(&ctx->mutex);
 
-	unsigned long usec = beat->nsamples * 1000;
-	int divider = ctx->samplerate / 100;
-	usec /= divider;
-	usec *= 10;
-	ctx->clock.tv_nsec += (usec % 1000000) * 1000;
-	ctx->clock.tv_sec += usec / 1000000;
-	if (ctx->clock.tv_nsec > 1000000000)
-	{
-		ctx->clock.tv_nsec -= 1000000000;
-		ctx->clock.tv_sec += 1;
-	}
-	int flags = TIMER_ABSTIME;
-	while (clock_nanosleep(clockid, flags, &ctx->clock, NULL) != 0)
-	{
-		if (errno == EINTR)
-			continue;
-		else
-		{
-			if (errno == EFAULT)
-				heartbeat_dbg("heartbeat to late %lu.%09lu", ctx->clock.tv_sec, ctx->clock.tv_nsec);
-			pthread_mutex_unlock(&ctx->mutex);
-			return -1;
-		}
-	}
+	pthread_cond_wait(&ctx->cond, &ctx->mutex);
 #ifdef DEBUG
+	clockid_t clockid = CLOCK_REALTIME;
 	struct timespec now;
 	clock_gettime(clockid, &now);
-	heartbeat_dbg("heartbeat: boom %lu.%09lu %ld.%06ld", now.tv_sec, now.tv_nsec, usec / 1000000, usec % 1000000);
+	heartbeat_dbg("heartbeat: boom %lu.%09lu %lu.%03lu %ld/%ld",
+			now.tv_sec, now.tv_nsec,
+			ctx->ms/1000, ctx->ms,
+			ctx->thredhold, ctx->length - ctx->previous);
 #endif
-	beat->nsamples = 0;
-
+	ctx->length -= ctx->thredhold;
+	ctx->previous = ctx->length;
 	pthread_mutex_unlock(&ctx->mutex);
 	return 0;
 }
@@ -158,7 +182,7 @@ static int heartbeat_unlock(heartbeat_ctx_t *ctx)
 	return pthread_mutex_unlock(&ctx->mutex);
 }
 
-const heartbeat_ops_t *heartbeat_samples = &(heartbeat_ops_t)
+const heartbeat_ops_t *heartbeat_bitrate = &(heartbeat_ops_t)
 {
 	.init = heartbeat_init,
 	.start = heartbeat_start,

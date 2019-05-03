@@ -107,8 +107,8 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data);
 static int media_play(media_ctx_t *ctx, media_parse_t play, void *data);
 static int media_next(media_ctx_t *ctx);
-static void media_random(media_ctx_t *ctx, int enable);
-static void media_loop(media_ctx_t *ctx, int enable);
+static option_state_t media_loop(media_ctx_t *ctx, option_state_t enable);
+static option_state_t media_random(media_ctx_t *ctx, option_state_t enable);
 static int media_end(media_ctx_t *ctx);
 
 /**
@@ -135,7 +135,7 @@ static int _run_cb(_find_mediaid_t *mdata, int id, const char *path, const char 
 		object = json_object();
 
 #if defined(USE_ID3TAG)
-		if (mime && !strcmp(mime, "audio/mp3"))
+		if (mime && !strcmp(mime, mime_audiomp3))
 		{
 			static struct
 			{
@@ -468,22 +468,22 @@ static int media_end(media_ctx_t *ctx)
 /**
  * the loop requires to restart the player.
  */
-static void media_loop(media_ctx_t *ctx, int enable)
+static option_state_t media_loop(media_ctx_t *ctx, option_state_t enable)
 {
-	if (enable)
+	if (enable == OPTION_ENABLE)
 		ctx->options |= OPTION_LOOP;
-	else
+	else if (enable == OPTION_DISABLE)
 		ctx->options &= ~OPTION_LOOP;
+	return (ctx->options & OPTION_LOOP)? OPTION_ENABLE: OPTION_DISABLE;
 }
 
-static void media_random(media_ctx_t *ctx, int enable)
+static option_state_t media_random(media_ctx_t *ctx, option_state_t enable)
 {
-	if (enable)
-	{
+	if (enable == OPTION_ENABLE)
 		ctx->options |= OPTION_RANDOM;
-	}
-	else
+	else if (enable == OPTION_DISABLE)
 		ctx->options &= ~OPTION_RANDOM;
+	return (ctx->options & OPTION_RANDOM)? OPTION_ENABLE: OPTION_DISABLE;
 }
 
 #ifdef USE_INOTIFY
@@ -579,19 +579,6 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url,...)
 		ctx->options |= OPTION_INOTIFY;
 #endif
 	}
-	unsigned int seed;
-	if (!access(RANDOM_DEVICE, R_OK))
-	{
-		int fd = open(RANDOM_DEVICE, O_RDONLY);
-		pthread_yield();
-		read(fd, &seed, sizeof(seed));
-		close(fd);
-	}
-	else
-	{
-		seed = time(NULL);
-	}
-	srandom(seed);
 	return ctx;
 }
 

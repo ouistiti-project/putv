@@ -4,15 +4,36 @@
 #define RANDOM_DEVICE "/dev/hwrng"
 
 typedef struct player_ctx_s player_ctx_t;
+#include "jitter.h"
 
 extern const char const *mime_octetstream;
+extern const char const *mime_audiomp3;
+extern const char const *mime_audioflac;
+extern const char const *mime_audioalac;
+extern const char const *mime_audiopcm;
 
+void utils_srandom();
 const char *utils_getmime(const char *path);
 const char *utils_getpath(const char *url, const char *proto);
+char *utils_parseurl(const char *url,
+								char **protocol,
+								char **host,
+								char **port,
+								char **path,
+								char **search);
+const char *utils_mime2mime(const char *mime);
+const char *utils_format2mime(jitter_format_t format);
 
 typedef struct media_ctx_s media_ctx_t;
 
 typedef int (*media_parse_t)(void *arg, int id, const char *url, const char *info, const char *mime);
+
+typedef enum option_state_e
+{
+	OPTION_REQUEST = -1,
+	OPTION_DISABLE,
+	OPTION_ENABLE,
+} option_state_t;
 
 typedef struct media_ops_s media_ops_t;
 struct media_ops_s
@@ -61,11 +82,11 @@ struct media_ops_s
 	/**
 	 * optional
 	 */
-	void (*random)(media_ctx_t *ctx, int enable);
+	option_state_t (*random)(media_ctx_t *ctx, option_state_t enable);
 	/**
 	 * optional
 	 */
-	void (*loop)(media_ctx_t *ctx, int enable);
+	option_state_t (*loop)(media_ctx_t *ctx, option_state_t enable);
 };
 
 typedef struct media_s media_t;

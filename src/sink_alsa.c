@@ -67,11 +67,19 @@ struct sink_ctx_s
 #define sink_dbg(...)
 
 #define LATENCE_MS 50
-#define NB_BUFFER 6
+#define NB_BUFFER 3
+
+#ifdef USE_REALTIME
+// REALTIME_SCHED is set from the Makefile to SCHED_RR
+#define SINK_POLICY REALTIME_SCHED
+#define SINK_PRIORITY 65
+#endif
 
 #ifdef SINK_ALSA_MIXER
 void _mixer_setvolume(sink_ctx_t *ctx, unsigned int volume)
 {
+	if (ctx->mixerchannel == NULL)
+		return;
     long min, max;
     snd_mixer_selem_get_playback_volume_range(ctx->mixerchannel, &min, &max);
 	if (volume > 100)
@@ -81,6 +89,9 @@ void _mixer_setvolume(sink_ctx_t *ctx, unsigned int volume)
 
 unsigned int _mixer_getvolume(sink_ctx_t *ctx)
 {
+	if (ctx->mixerchannel == NULL)
+		return 0;
+
 	long volume;
     long min, max;
 
@@ -189,9 +200,10 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 	if (*size > 0)
 	{
 		int dir = 0;
-		periodsize = *size;
-		buffersize = *size * NB_BUFFER;
+		buffersize = *size;
+		periodsize = (*size / NB_BUFFER);
 		ret = snd_pcm_hw_params_set_buffer_size_near(ctx->playback_handle, hw_params, &buffersize);
+		dbg("try setting %ld %ld", periodsize, buffersize);
 		if (ret < 0)
 		{
 			err("sink: buffer_size");
@@ -204,6 +216,7 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 			err("sink: period_size");
 			goto error;
 		}
+		dbg("set %ld %ld", periodsize, buffersize);
 	}
 
 	ret = snd_pcm_hw_params(ctx->playback_handle, hw_params);
@@ -226,8 +239,8 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 		rate,
 		ctx->samplesize,
 		ctx->nchannels);
-	ctx->buffersize = periodsize;
-	*size = periodsize;
+	ctx->buffersize = periodsize * ctx->samplesize * ctx->nchannels;
+	*size = ctx->buffersize;
 
 	ret = snd_pcm_prepare(ctx->playback_handle);
 	if (ret < 0) {
@@ -275,7 +288,7 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 	}
 #endif
 
-	unsigned int size = LATENCE_MS * samplerate * 4 * 2 / 1000;
+	unsigned int size = LATENCE_MS * samplerate / 1000;
 	if (_pcm_open(ctx, format, samplerate, &size) < 0)
 	{
 		err("sink: init error %s", strerror(errno));
@@ -313,7 +326,7 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 	return ctx;
 }
 
-static jitter_t *alsa_jitter(sink_ctx_t *ctx)
+static jitter_t *alsa_jitter(sink_ctx_t *ctx, int index)
 {
 	return ctx->in;
 }
@@ -335,7 +348,7 @@ static int _alsa_checksamplerate(sink_ctx_t *ctx)
 	return ret;
 }
 
-static void *alsa_thread(void *arg)
+static void *sink_thread(void *arg)
 {
 	int ret;
 	int divider = 2;
@@ -371,14 +384,14 @@ static void *alsa_thread(void *arg)
 			}
 		}
 
-		unsigned char *buff = ctx->in->ops->peer(ctx->in->ctx);
+		unsigned char *buff = ctx->in->ops->peer(ctx->in->ctx, NULL);
 		if (buff != NULL)
 		{
 			int length = ctx->in->ops->length(ctx->in->ctx);
 			_alsa_checksamplerate(ctx);
 			//snd_pcm_mmap_begin
 			ret = snd_pcm_writei(ctx->playback_handle, buff, length / divider);
-			sink_dbg("sink  alsa : write %d %d", ret * divider, length);
+			sink_dbg("sink  alsa : write %d/%d %d/%d %d", ret * divider, length, ret, length / divider, divider);
 			if (ret == -EPIPE)
 			{
 				warn("pcm recover");
@@ -400,9 +413,48 @@ static void *alsa_thread(void *arg)
 	return NULL;
 }
 
+static int sink_attach(sink_ctx_t *ctx, const char *mime)
+{
+	return 0;
+}
+
 static int alsa_run(sink_ctx_t *ctx)
 {
-	pthread_create(&ctx->thread, NULL, alsa_thread, ctx);
+#ifdef USE_REALTIME
+	int ret;
+
+	pthread_attr_t attr;
+	struct sched_param params;
+
+	pthread_attr_init(&attr);
+
+	ret = pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+	if (ret < 0)
+		err("setdetachstate error %s", strerror(errno));
+	ret = pthread_attr_setscope(&attr, PTHREAD_SCOPE_PROCESS);
+	if (ret < 0)
+		err("setscope error %s", strerror(errno));
+	ret = pthread_attr_setschedpolicy(&attr, SINK_POLICY);
+	if (ret < 0)
+		err("setschedpolicy error %s", strerror(errno));
+	params.sched_priority = SINK_PRIORITY;
+	ret = pthread_attr_setschedparam(&attr, &params);
+	if (ret < 0)
+		err("setschedparam error %s", strerror(errno));
+	if (getuid() == 0)
+		ret = pthread_attr_setinheritsched(&attr, PTHREAD_EXPLICIT_SCHED);
+	else
+	{
+		warn("run server as root to use realtime");
+		ret = pthread_attr_setinheritsched(&attr, PTHREAD_INHERIT_SCHED);
+	}
+	if (ret < 0)
+		err("setinheritsched error %s", strerror(errno));
+	pthread_create(&ctx->thread, &attr, sink_thread, ctx);
+	pthread_attr_destroy(&attr);
+#else
+	pthread_create(&ctx->thread, NULL, sink_thread, ctx);
+#endif
 	return 0;
 }
 
@@ -434,6 +486,7 @@ const sink_ops_t *sink_alsa_mixer = &(sink_ops_t)
 {
 	.init = alsa_init,
 	.jitter = alsa_jitter,
+	.attach = sink_attach,
 	.run = alsa_run,
 	.destroy = alsa_destroy,
 

@@ -38,6 +38,8 @@
 #endif
 
 #include "player.h"
+#include "jitter.h"
+#include "heartbeat.h"
 #include "filter.h"
 typedef struct decoder_s decoder_t;
 typedef struct decoder_ops_s decoder_ops_t;
@@ -47,17 +49,24 @@ struct decoder_ctx_s
 	const decoder_ops_t *ops;
 	struct mad_decoder decoder;
 	pthread_t thread;
+
 	jitter_t *in;
 	unsigned char *inbuffer;
+
 	jitter_t *out;
 	unsigned char *outbuffer;
 	size_t outbufferlen;
+
 	const filter_t *filter;
+
+	heartbeat_t heartbeat;
+	beat_samples_t beat;
+	unsigned long nsamples;
+	unsigned int nloops;
 };
 #define DECODER_CTX
 #include "decoder.h"
-#include "decoder.h"
-#include "jitter.h"
+#include "media.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -85,7 +94,7 @@ enum mad_flow input(void *data,
 		len = stream->next_frame - ctx->inbuffer;
 	ctx->in->ops->pop(ctx->in->ctx, len);
 
-	ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx);
+	ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx, NULL);
 
 	len = ctx->in->ops->length(ctx->in->ctx);
 	if (ctx->inbuffer == NULL)
@@ -97,6 +106,7 @@ enum mad_flow input(void *data,
 	if (stream->next_frame)
 		stream->next_frame = ctx->inbuffer;
 
+	decoder_dbg("decoder mad: data len %ld", len);
 	mad_stream_buffer(stream, ctx->inbuffer, len);
 
 	return MAD_FLOW_CONTINUE;
@@ -137,7 +147,6 @@ enum mad_flow output(void *data,
 	}
 	decoder_dbg("decoder mad: audio frame %d Hz, %d channels, %d samples", audio.samplerate, audio.nchannels, audio.nsamples);
 
-	unsigned int nsamples;
 	if (audio.nchannels == 1)
 		audio.samples[1] = audio.samples[0];
 
@@ -154,9 +163,28 @@ enum mad_flow output(void *data,
 				ctx->out->ctx->size - ctx->outbufferlen);
 		if (ctx->outbufferlen >= ctx->out->ctx->size)
 		{
-			ctx->out->ops->push(ctx->out->ctx, ctx->out->ctx->size, NULL);
+			if (ctx->outbufferlen > ctx->out->ctx->size)
+				err("decoder: out %ld %ld", ctx->outbufferlen, ctx->out->ctx->size);
+			beat_samples_t *beat = NULL;
+			ctx->nsamples += pcm->length - audio.nsamples;
+#ifdef DECODER_HEARTBEAT
+			if (ctx->nloops == ctx->out->ctx->count)
+			{
+				ctx->beat.nsamples = ctx->nsamples;
+				ctx->nsamples = 0;
+				ctx->nloops = 0;
+				beat = &ctx->beat;
+				decoder_dbg("decoder: heart boom %d", ctx->beat.nsamples);
+			}
+#endif
+			ctx->out->ops->push(ctx->out->ctx, ctx->out->ctx->size, beat);
+			ctx->nloops++;
 			ctx->outbuffer = NULL;
 			ctx->outbufferlen = 0;
+		}
+		else
+		{
+			ctx->nsamples += pcm->length;
 		}
 	}
 
@@ -206,14 +234,17 @@ enum mad_flow error(void *data,
 		return MAD_FLOW_BREAK;
 	}
 }
-
+enum mad_flow header(void *data, struct mad_header const *header)
+{
+	decoder_ctx_t *ctx = (decoder_ctx_t *)data;
+	decoder_dbg("decoder mad: audio header mpeg1layer%d, samplerate %d", header->layer, header->samplerate);
+}
 /// MAD_BUFFER_MDLEN is too small on ARM device
-//#define BUFFERSIZE (MAD_BUFFER_MDLEN)
-#define LATENCE 200 /*ms*/
-#define BUFFERSIZE (40*LATENCE)
+#define BUFFERSIZE 2881
+//#define BUFFERSIZE MAD_BUFFER_MDLEN
 
 /// NBBUFFER must be at least 3 otherwise the decoder block on the end of the source
-#define NBUFFER 3
+#define NBUFFER 6
 
 static const char *jitter_name = "mad decoder";
 static decoder_ctx_t *mad_init(player_ctx_t *player, const filter_t *filter)
@@ -223,13 +254,14 @@ static decoder_ctx_t *mad_init(player_ctx_t *player, const filter_t *filter)
 
 	ctx->filter = filter;
 	mad_decoder_init(&ctx->decoder, ctx,
-			input, 0 /* header */, 0 /* filter */, output,
+			input, header /* header */, 0 /* filter */, output,
 			error, 0 /* message */);
 
 	jitter_t *jitter = JITTER_init(jitter_name, NBUFFER, BUFFERSIZE);
 	//jitter_t *jitter = jitter_ringbuffer_init(jitter_name, NBUFFER, BUFFERSIZE);
 	ctx->in = jitter;
 	jitter->format = MPEG2_3_MP3;
+	jitter->ctx->thredhold = NBUFFER / 2;
 
 	return ctx;
 }
@@ -244,7 +276,12 @@ static void *mad_thread(void *arg)
 	int result = 0;
 	decoder_ctx_t *ctx = (decoder_ctx_t *)arg;
 	/* start decoding */
+#ifdef DECODER_HEARTBEAT
+	ctx->heartbeat.ops->start(ctx->heartbeat.ctx);
+#endif
+	dbg("decoder: start running");
 	result = mad_decoder_run(&ctx->decoder, MAD_DECODER_MODE_SYNC);
+	dbg("decoder: stop running");
 	/**
 	 * push the last buffer to the encoder, otherwise the next
 	 * decoder will begins with a pull buffer
@@ -261,6 +298,21 @@ static int mad_run(decoder_ctx_t *ctx, jitter_t *jitter)
 {
 	ctx->out = jitter;
 	ctx->filter->ops->set(ctx->filter->ctx, NULL, jitter->ctx->frequence);
+#ifdef DECODER_HEARTBEAT
+	if (heartbeat_samples)
+	{
+		heartbeat_samples_t config =
+		{
+			.samplerate = jitter->ctx->frequence,
+			.format = jitter->format,
+			.nchannels = 0,
+		};
+		ctx->heartbeat.ops = heartbeat_samples;
+		ctx->heartbeat.ctx = heartbeat_samples->init(&config);
+		dbg("set heart %s", jitter->ctx->name);
+		jitter->ops->heartbeat(jitter->ctx, &ctx->heartbeat);
+	}
+#endif
 	pthread_create(&ctx->thread, NULL, mad_thread, ctx);
 	return 0;
 }
@@ -273,23 +325,31 @@ static int decoder_check(const char *path)
 	return -1;
 }
 
+static const char *mad_mime(decoder_ctx_t *ctx)
+{
+	return mime_audiomp3;
+}
+
 static void mad_destroy(decoder_ctx_t *ctx)
 {
 	if (ctx->thread > 0)
 		pthread_join(ctx->thread, NULL);
 	/* release the decoder */
 	mad_decoder_finish(&ctx->decoder);
+#ifdef DECODER_HEARTBEAT
+	ctx->heartbeat.ops->destroy(ctx->heartbeat.ctx);
+#endif
 	JITTER_destroy(ctx->in);
 	free(ctx);
 }
 
-const decoder_ops_t *decoder_mad = &(decoder_ops_t)
+const decoder_ops_t *decoder_mad = &(const decoder_ops_t)
 {
 	.check = decoder_check,
 	.init = mad_init,
 	.jitter = mad_jitter,
 	.run = mad_run,
 	.destroy = mad_destroy,
-	.mime = "audio/mp3",
+	.mime = mad_mime,
 };
 

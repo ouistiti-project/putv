@@ -43,6 +43,7 @@ struct encoder_ctx_s
 #define ENCODER_CTX
 #include "encoder.h"
 #include "jitter.h"
+#include "media.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -71,6 +72,11 @@ static int encoder_run(encoder_ctx_t *encoder, jitter_t *jitter)
 	return 0;
 }
 
+static const char *encoder_mime(encoder_ctx_t *encoder)
+{
+	return mime_audiopcm;
+}
+
 static void encoder_destroy(encoder_ctx_t *encoder)
 {
 	free(encoder);
@@ -81,6 +87,7 @@ const encoder_t *encoder_passthrough = &(encoder_t)
 	.init = encoder_init,
 	.jitter = encoder_jitter,
 	.run = encoder_run,
+	.mime = encoder_mime,
 	.destroy = encoder_destroy,
 };
 

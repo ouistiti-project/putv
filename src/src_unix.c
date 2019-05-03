@@ -31,6 +31,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/ioctl.h>
@@ -38,20 +39,25 @@
 
 #include "player.h"
 #include "jitter.h"
+#include "event.h"
 typedef struct src_ops_s src_ops_t;
 typedef struct src_ctx_s src_ctx_t;
 struct src_ctx_s
 {
 	player_ctx_t *player;
-	const src_ops_t *ops;
+	const char *mime;
 	int handle;
 	state_t state;
 	pthread_t thread;
 	jitter_t *out;
 	unsigned int samplerate;
+	decoder_t *estream;
+	event_listener_t *listener;
 };
 #define SRC_CTX
 #include "src.h"
+#include "media.h"
+#include "decoder.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -63,51 +69,79 @@ struct src_ctx_s
 
 #define src_dbg(...)
 
-static const char *jitter_name = "unxi socket";
-static src_ctx_t *src_init(player_ctx_t *player, const char *url)
+static const char *jitter_name = "unix socket";
+static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mime)
 {
 	int count = 2;
-	src_ctx_t *ctx = calloc(1, sizeof(*ctx));
-	const char *path = NULL;
-
-	if (strstr(url, "://") != NULL)
-	{
-		path = strstr(url, "file://") + 7;
-	}
-	else
-	{
-		path = url;
-	}
-	if (path[0] == '~')
-	{
-		struct passwd *pw = NULL;
-		pw = getpwuid(geteuid());
-		chdir(pw->pw_dir);
-		path++;
-		if (path[0] == '/')
-			path++;
-	}
-
-	ctx->ops = src_unix;
-	ctx->player = player;
-
-	ctx->handle = socket(AF_UNIX, SOCK_STREAM, 0);
-	if (ctx->handle == 0)
-	{
-		free(ctx);
-		return NULL;
-	}
+	int ret;
 	struct sockaddr_un addr;
 	memset(&addr, 0, sizeof(struct sockaddr_un));
 	addr.sun_family = AF_UNIX;
-	strncpy(addr.sun_path, path, sizeof(addr.sun_path) - 1);
 
-	int ret = connect(ctx->handle, (struct sockaddr *) &addr, sizeof(addr));
+	char *protocol = NULL;
+	char *path = NULL;
+	char *value = utils_parseurl(url, &protocol, NULL, NULL, &path, NULL);
+	if (protocol && strcmp(protocol, "unix") != 0)
+	{
+		free(value);
+		return NULL;
+	}
+	if (path != NULL)
+	{
+		if (path[0] == '~')
+		{
+			struct passwd *pw = NULL;
+			pw = getpwuid(geteuid());
+			chdir(pw->pw_dir);
+			path++;
+			if (path[0] == '/')
+				path++;
+		}
+		struct stat filestat;
+		ret = stat(path, &filestat);
+		if (ret != 0 || !S_ISSOCK(filestat.st_mode))
+		{
+			err("error: %s is not a socket", path);
+			free(value);
+			return NULL;
+		}
+		strncpy(addr.sun_path, path, sizeof(addr.sun_path) - 1);
+	}
+	else
+	{
+		free(value);
+		return NULL;
+	}
+	free(value);
+
+
+
+	int handle = socket(AF_UNIX, SOCK_STREAM, 0);
+	if (handle == 0)
+	{
+		err("connection error on socket %s", path);
+		return NULL;
+	}
+
+	ret = connect(handle, (struct sockaddr *) &addr, sizeof(addr));
 	if (ret < 0)
 	{
-		close(ctx->handle);
-		free(ctx);
+		err("connection error on socket %s", path);
+		close(handle);
 		return NULL;
+	}
+
+	src_ctx_t *ctx = calloc(1, sizeof(*ctx));
+	ctx->player = player;
+	ctx->handle = handle;
+	ctx->mime = mime;
+	if (ctx->mime == mime_octetstream)
+	{
+#ifdef DECODER_LAME
+		ctx->mime = mime_audiomp3;
+#elif defined(DECODER_FLAC)
+		ctx->mime = mime_audioflac;
+#endif
 	}
 	return ctx;
 }
@@ -139,7 +173,9 @@ static void *src_thread(void *arg)
 		}
 		else if (ret == 0)
 		{
+			ctx->out->ops->push(ctx->out->ctx, 0, NULL);
 			ctx->out->ops->flush(ctx->out->ctx);
+			break;
 		}
 		else
 		{
@@ -151,26 +187,84 @@ static void *src_thread(void *arg)
 	return NULL;
 }
 
-static int src_run(src_ctx_t *ctx, jitter_t *jitter)
+static int src_run(src_ctx_t *ctx)
 {
-	ctx->out = jitter;
+	const event_new_es_t event = {.pid = 0, .mime = ctx->mime};
+	event_listener_t *listener = ctx->listener;
+	while (listener)
+	{
+		listener->cb(ctx->listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
+		listener = listener->next;
+	}
 	pthread_create(&ctx->thread, NULL, src_thread, ctx);
 	return 0;
 }
 
+static const char *src_mime(src_ctx_t *ctx, int index)
+{
+	if (index > 0)
+		return NULL;
+	return ctx->mime;
+}
+
+static void src_eventlistener(src_ctx_t *ctx, event_listener_cb_t cb, void *arg)
+{
+	event_listener_t *listener = calloc(1, sizeof(*listener));
+	listener->cb = cb;
+	listener->arg = arg;
+	if (ctx->listener == NULL)
+		ctx->listener = listener;
+	else
+	{
+		/**
+		 * add listener to the end of the list. this allow to call
+		 * a new listener with the current event when the function is
+		 * called from a callback
+		 */
+		event_listener_t *previous = ctx->listener;
+		while (previous->next != NULL) previous = previous->next;
+		previous->next = listener;
+	}
+}
+
+static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
+{
+	if (index > 0)
+		return -1;
+	ctx->estream = decoder;
+	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx);
+}
+
+static decoder_t *src_estream(src_ctx_t *ctx, int index)
+{
+	return ctx->estream;
+}
+
 static void src_destroy(src_ctx_t *ctx)
 {
+	if (ctx->estream != NULL)
+		ctx->estream->ops->destroy(ctx->estream->ctx);
 	if (ctx->thread)
 		pthread_join(ctx->thread, NULL);
+	event_listener_t *listener = ctx->listener;
+	while (listener)
+	{
+		event_listener_t *next = listener->next;
+		free(listener);
+		listener = next;
+	}
 	close(ctx->handle);
 	free(ctx);
 }
 
 const src_ops_t *src_unix = &(src_ops_t)
 {
-	.protocol = "unix://",
-	.mime = "audio/mp3",
+	.protocol = "unix://|file://",
 	.init = src_init,
 	.run = src_run,
+	.mime = src_mime,
+	.eventlistener = src_eventlistener,
+	.attach = src_attach,
+	.estream = src_estream,
 	.destroy = src_destroy,
 };

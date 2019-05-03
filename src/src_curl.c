@@ -37,6 +37,7 @@
 #include <curl/curl.h>
 
 #include "player.h"
+#include "event.h"
 typedef struct src_ops_s src_ops_t;
 typedef struct src_ctx_s src_ctx_t;
 struct src_ctx_s
@@ -49,10 +50,15 @@ struct src_ctx_s
 	size_t outlen;
 	pthread_t thread;
 	CURL *curl;
+	const char *mime;
+	decoder_t *estream;
+	event_listener_t *listener;
 };
 #define SRC_CTX
 #include "src.h"
 #include "jitter.h"
+#include "media.h"
+#include "decoder.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -100,7 +106,7 @@ static uint write_cb(char *in, uint size, uint nmemb, src_ctx_t *ctx)
 	return writelen;
 }
 
-static src_ctx_t *src_init(player_ctx_t *player, const char * arg)
+static src_ctx_t *src_init(player_ctx_t *player, const char * arg, const char *mime)
 {
 	src_ctx_t *ctx;
 	CURL *curl;
@@ -119,6 +125,7 @@ static src_ctx_t *src_init(player_ctx_t *player, const char * arg)
 		ctx->ops = src_curl;
 		ctx->curl = curl;
 		ctx->player = player;
+		ctx->mime = mime;
 
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, ctx);
 #ifdef CURL_DUMP
@@ -142,24 +149,86 @@ static void *src_thread(void *arg)
 	return 0;
 }
 
-static int src_run(src_ctx_t *ctx, jitter_t *out)
+static int src_run(src_ctx_t *ctx)
 {
 	int ret;
-	ctx->out = out;
+	const event_new_es_t event = {.pid = 0, .mime = ctx->mime};
+	event_listener_t *listener = ctx->listener;
+	while (listener)
+	{
+		listener->cb(ctx->listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
+		listener = listener->next;
+	}
 	ret = curl_easy_setopt(ctx->curl, CURLOPT_BUFFERSIZE, ctx->out->ctx->size);
 	//ret = curl_easy_perform(ctx->curl);
 	ret = pthread_create(&ctx->thread, NULL, src_thread, ctx);
 	return ret;
 }
 
+static const char *src_mime(src_ctx_t *ctx, int index)
+{
+	if (index > 0)
+		return NULL;
+	const char *mime = ctx->mime;
+	if (ctx->mime == NULL)
+	{
+		CURLcode ret = curl_easy_getinfo(ctx->curl, CURLINFO_CONTENT_TYPE, &mime);
+		if (ret == CURLE_OK)
+			ctx->mime = utils_mime2mime(mime);
+	}
+	return mime;
+}
+
+static void src_eventlistener(src_ctx_t *ctx, event_listener_cb_t cb, void *arg)
+{
+	event_listener_t *listener = calloc(1, sizeof(*listener));
+	listener->cb = cb;
+	listener->arg = arg;
+	if (ctx->listener == NULL)
+		ctx->listener = listener;
+	else
+	{
+		/**
+		 * add listener to the end of the list. this allow to call
+		 * a new listener with the current event when the function is
+		 * called from a callback
+		 */
+		event_listener_t *previous = ctx->listener;
+		while (previous->next != NULL) previous = previous->next;
+		previous->next = listener;
+	}
+}
+
+static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
+{
+	if (index > 0)
+		return -1;
+	ctx->estream = decoder;
+	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx);
+}
+
+static decoder_t *src_estream(src_ctx_t *ctx, int index)
+{
+	return ctx->estream;
+}
+
 static void src_destroy(src_ctx_t *ctx)
 {
+	if (ctx->estream != NULL)
+		ctx->estream->ops->destroy(ctx->estream->ctx);
 	if (ctx->thread)
 		pthread_join(ctx->thread, NULL);
 #ifdef CURL_DUMP
 	if (ctx->dumpfd > 0)
 		close(ctx->dumpfd);
 #endif
+	event_listener_t *listener = ctx->listener;
+	while (listener)
+	{
+		event_listener_t *next = listener->next;
+		free(listener);
+		listener = next;
+	}
 	curl_easy_cleanup(ctx->curl);
 	free(ctx);
 }
@@ -169,6 +238,10 @@ const src_ops_t *src_curl = &(src_ops_t)
 	.protocol = "http://|https://|file://",
 	.init = src_init,
 	.run = src_run,
+	.mime = src_mime,
+	.eventlistener = src_eventlistener,
+	.attach = src_attach,
+	.estream = src_estream,
 	.destroy = src_destroy,
 	.mime = NULL,
 };

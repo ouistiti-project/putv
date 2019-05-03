@@ -1,6 +1,10 @@
 #ifndef __SRC_H__
 #define __SRC_H__
 
+#include "event.h"
+
+#define MAX_ESTREAM 4
+
 typedef struct player_ctx_s player_ctx_t;
 typedef struct decoder_s decoder_t;
 typedef struct jitter_s jitter_t;
@@ -13,9 +17,12 @@ typedef struct src_ops_s src_ops_t;
 struct src_ops_s
 {
 	const char *protocol;
-	const char *mime;
-	src_ctx_t *(*init)(player_ctx_t *, const char *path);
-	int (*run)(src_ctx_t *, jitter_t *jitter);
+	src_ctx_t *(*init)(player_ctx_t *, const char *path, const char *mime);
+	int (*run)(src_ctx_t *);
+	const char *(*mime)(src_ctx_t *ctx, int index);
+	void (*eventlistener)(src_ctx_t *ctx, event_listener_cb_t listener, void *arg);
+	int (*attach)(src_ctx_t *ctx, int index, decoder_t *decoder);
+	decoder_t *(*estream)(src_ctx_t *ctx, int index);
 	void (*destroy)(src_ctx_t *);
 };
 
@@ -24,8 +31,6 @@ struct src_s
 {
 	const src_ops_t *ops;
 	src_ctx_t *ctx;
-	decoder_t *audio[4];
-	decoder_t *video[2];
 };
 
 src_t *src_build(player_ctx_t *player, const char *url, const char *mime);
@@ -34,4 +39,5 @@ extern const src_ops_t *src_file;
 extern const src_ops_t *src_curl;
 extern const src_ops_t *src_unix;
 extern const src_ops_t *src_alsa;
+extern const src_ops_t *src_udp;
 #endif

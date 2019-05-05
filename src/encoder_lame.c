@@ -148,12 +148,13 @@ static encoder_ctx_t *encoder_init(player_ctx_t *player)
 	 */
 	ctx->samplesframe = lame_get_framesize(ctx->encoder) * 3;
 	//ctx->samplesframe = 576;
+	unsigned long buffsize = ctx->samplesframe * ctx->samplesize * ctx->nchannels;
 	dbg("encoder config :\n" \
 		"\tbuffer size %lu\n" \
 		"\tsample rate %d\n" \
 		"\tsample size %d\n" \
 		"\tnchannels %u",
-		ctx->samplesframe * ctx->samplesize * ctx->nchannels,
+		buffsize,
 		ctx->samplerate,
 		ctx->samplesize,
 		ctx->nchannels);

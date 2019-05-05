@@ -314,7 +314,6 @@ static jitter_t *decoder_jitter(decoder_ctx_t *ctx, jitte_t jitte)
 	{
 		int factor = jitte;
 		int nbbuffer = NBUFFER << factor;
-		warn("decoder jitter nbuffer %d", nbbuffer);
 		jitter_t *jitter = JITTER_init(jitter_name, nbbuffer, BUFFERSIZE);
 		//jitter_t *jitter = jitter_ringbuffer_init(jitter_name, NBUFFER, BUFFERSIZE);
 		jitter->format = MPEG2_3_MP3;

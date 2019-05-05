@@ -152,7 +152,7 @@ static cmds_ctx_t *cmds_tinysvcmdns_init(player_ctx_t *player, sink_t *sink, voi
 
 	if (ifa_main == NULL)
 	{
-		warn("tinysvcmdns: no non-loopback ipv4 or ipv6 interface found");
+		err("tinysvcmdns: ipv4 or ipv6 interface different of loopback not found");
 		return NULL;
 	}
 

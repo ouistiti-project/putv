@@ -38,7 +38,6 @@
 #include <sys/ioctl.h>
 #include <fcntl.h>
 
-#define __USE_GNU
 #include <pthread.h>
 
 #include <unistd.h>

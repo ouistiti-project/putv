@@ -124,6 +124,9 @@ static jitter_t *demux_jitter(demux_ctx_t *ctx, jitte_t jitte)
 	{
 		int nbbuffers = NB_BUFFERS << jitte;
 		ctx->in = jitter_scattergather_init(jitter_name, nbbuffers, BUFFERSIZE);
+#ifdef USE_REALTIME
+		ctx->in->ops->lock(ctx->in->ctx);
+#endif
 		ctx->in->format = SINK_BITSSTREAM;
 		ctx->in->ctx->thredhold = nbbuffers * 3 / 4;
 		ctx->jitte = jitte;

@@ -33,6 +33,7 @@ typedef struct jitter_ops_s jitter_ops_t;
 struct jitter_ops_s
 {
 	heartbeat_t *(*heartbeat)(jitter_ctx_t *, heartbeat_t *new);
+	void (*lock)(jitter_ctx_t *);
 	void (*reset)(jitter_ctx_t *);
 	unsigned char *(*pull)(jitter_ctx_t *);
 	void (*push)(jitter_ctx_t *, size_t len, void *beat);

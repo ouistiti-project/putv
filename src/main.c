@@ -295,7 +295,9 @@ int main(int argc, char **argv)
 	const char *txt[] =
 	{
 		"path="INDEX_HTML,
+#ifdef NETIF
 		"if="NETIF,
+#endif
 		NULL,
 	};
 	cmds[nbcmds].ops = cmds_tinysvcmdns;

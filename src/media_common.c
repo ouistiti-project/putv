@@ -36,6 +36,12 @@
 #include <pthread.h>
 #include <sched.h>
 
+#ifdef USE_ID3TAG
+#include <id3tag.h>
+#include <jansson.h>
+#define N_(string) string
+#endif
+
 #include "media.h"
 #include "decoder.h"
 #include "player.h"
@@ -53,6 +59,14 @@ const char const *mime_audiomp3 = "audio/mp3";
 const char const *mime_audioflac = "audio/flac";
 const char const *mime_audioalac = "audio/alac";
 const char const *mime_audiopcm = "audio/pcm";
+
+const char const *str_title = "Title";
+const char const *str_artist = "Artist";
+const char const *str_album = "Album";
+const char const *str_track = "Track";
+const char const *str_year = "Year";
+const char const *str_genre = "Genre";
+const char const *str_date = "Date";
 
 void utils_srandom()
 {
@@ -214,6 +228,57 @@ const char *utils_format2mime(jitter_format_t format)
 	}
 	return mime_octetstream;
 }
+
+#ifdef USE_ID3TAG
+int media_parseid3tag(const char *path, json_t *object)
+{
+	struct
+	{
+		char const *id;
+		char const *label;
+	} const labels[] =
+	{
+	{ ID3_FRAME_TITLE,  N_(str_title)     },
+	{ ID3_FRAME_ARTIST, N_(str_artist)    },
+	{ ID3_FRAME_ALBUM,  N_(str_album)     },
+	{ ID3_FRAME_TRACK,  N_(str_track)     },
+	{ ID3_FRAME_YEAR,   N_(str_year)      },
+	{ ID3_FRAME_GENRE,  N_(str_genre)     },
+	};
+	struct id3_file *fd = id3_file_open(path, ID3_FILE_MODE_READONLY);
+	if (fd == NULL)
+		return -1;
+	struct id3_tag *tag = id3_file_tag(fd);
+
+	int i;
+	for (i = 0; i < sizeof(labels) / sizeof(labels[0]); ++i)
+	{
+		struct id3_frame const *frame;
+		frame = id3_tag_findframe(tag, labels[i].id, 0);
+		if (frame)
+		{
+			union id3_field const *field;
+			id3_ucs4_t const *ucs4;
+			field    = id3_frame_field(frame, 1);
+			ucs4 = id3_field_getstrings(field, 0);
+			if (labels[i].id == ID3_FRAME_GENRE && ucs4 != NULL)
+				ucs4 = id3_genre_name(ucs4);
+			json_t *value;
+			if (ucs4 != NULL)
+			{
+				char *latin1 = id3_ucs4_utf8duplicate(ucs4);
+				value = json_string(latin1);
+				free(latin1);
+			}
+			else
+				value = json_null();
+			json_object_set(object, labels[i].label, value);
+		}
+	}
+	id3_file_close(fd);
+	return 0;
+}
+#endif
 
 static char *current_path;
 media_t *media_build(player_ctx_t *player, const char *url)

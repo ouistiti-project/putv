@@ -65,15 +65,15 @@ const char const *mime_audioflac = "audio/flac";
 const char const *mime_audioalac = "audio/alac";
 const char const *mime_audiopcm = "audio/pcm";
 
-const char const *str_title = "Title";
-const char const *str_artist = "Artist";
-const char const *str_album = "Album";
-const char const *str_track = "Track";
-const char const *str_year = "Year";
-const char const *str_genre = "Genre";
-const char const *str_date = "Date";
-const char const *str_comment = "Comment";
-const char const *str_cover = "Cover";
+const char const *str_title = "title";
+const char const *str_artist = "artist";
+const char const *str_album = "album";
+const char const *str_track = "track";
+const char const *str_year = "year";
+const char const *str_genre = "genre";
+const char const *str_date = "date";
+const char const *str_comment = "comment";
+const char const *str_cover = "cover";
 
 void utils_srandom()
 {

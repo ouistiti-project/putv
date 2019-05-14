@@ -156,14 +156,14 @@ static int _run_cb(_find_mediaid_t *mdata, int id, const char *path, const char 
 			{
 				json_t *value;
 				value = json_string(coverpath);
-				json_object_set(object, "Cover", value);
+				json_object_set(object, str_cover, value);
 			}
 			strcpy(dname, "cover.png");
 			if (!access(coverpath, R_OK))
 			{
 				json_t *value;
 				value = json_string(coverpath);
-				json_object_set(object, "Cover", value);
+				json_object_set(object, str_cover, value);
 			}
 		}
 

@@ -12,6 +12,16 @@ extern const char const *mime_audioflac;
 extern const char const *mime_audioalac;
 extern const char const *mime_audiopcm;
 
+extern const char const *str_title;
+extern const char const *str_artist;
+extern const char const *str_album;
+extern const char const *str_track;
+extern const char const *str_year;
+extern const char const *str_genre;
+extern const char const *str_date;
+extern const char const *str_comment;
+extern const char const *str_cover;
+
 void utils_srandom();
 const char *utils_getmime(const char *path);
 const char *utils_getpath(const char *url, const char *proto);

@@ -84,12 +84,6 @@ static int media_end(media_ctx_t *ctx);
 static option_state_t media_loop(media_ctx_t *ctx, option_state_t enable);
 static option_state_t media_random(media_ctx_t *ctx, option_state_t enable);
 
-static const char *str_key_title = "Title";
-static const char *str_key_artist = "Artist";
-static const char *str_key_album = "Album";
-static const char *str_key_genre = "Genre";
-static const char *str_key_cover = "Cover";
-
 static int _execute(sqlite3_stmt *statement)
 {
 	int id = -1;
@@ -356,19 +350,19 @@ static int opus_parse_info(const char *info, char **ptitle, char **partist, char
 	if (json_is_object(jinfo))
 	{
 		json_t *value;
-		value = json_object_get(jinfo, str_key_title);
+		value = json_object_get(jinfo, str_title);
 		if (value != NULL)
 			*ptitle = strdup(json_string_value(value));
-		value = json_object_get(jinfo, str_key_artist);
+		value = json_object_get(jinfo, str_artist);
 		if (value != NULL)
 			*partist = strdup(json_string_value(value));
-		value = json_object_get(jinfo, str_key_album);
+		value = json_object_get(jinfo, str_album);
 		if (value != NULL)
 			*palbum = strdup(json_string_value(value));
-		value = json_object_get(jinfo, str_key_genre);
+		value = json_object_get(jinfo, str_genre);
 		if (value != NULL)
 			*pgenre = strdup(json_string_value(value));
-		value = json_object_get(jinfo, str_key_cover);
+		value = json_object_get(jinfo, str_cover);
 		if (value != NULL)
 			*pcover = strdup(json_string_value(value));
 	}
@@ -422,7 +416,7 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 				{
 					const char *string = sqlite3_column_text(st_select, 0);
 					json_t *jstring = json_string(string);
-					json_object_set_new(json_info, str_key_title, jstring);
+					json_object_set_new(json_info, str_title, jstring);
 				}
 			}
 			sqlite3_finalize(st_select);
@@ -451,7 +445,7 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 				{
 					const char *string = sqlite3_column_text(st_select, 0);
 					json_t *jstring = json_string(string);
-					json_object_set_new(json_info, str_key_artist, jstring);
+					json_object_set_new(json_info, str_artist, jstring);
 				}
 			}
 			sqlite3_finalize(st_select);
@@ -480,7 +474,7 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 				{
 					const char *string = sqlite3_column_text(st_select, 0);
 					json_t *jstring = json_string(string);
-					json_object_set_new(json_info, str_key_album, jstring);
+					json_object_set_new(json_info, str_album, jstring);
 				}
 			}
 			sqlite3_finalize(st_select);
@@ -509,7 +503,7 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 				{
 					const char *string = sqlite3_column_text(st_select, 0);
 					json_t *jstring = json_string(string);
-					json_object_set_new(json_info, str_key_genre, jstring);
+					json_object_set_new(json_info, str_genre, jstring);
 				}
 			}
 			sqlite3_finalize(st_select);
@@ -544,7 +538,7 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 				{
 					const char *string = sqlite3_column_text(st_select, 0);
 					json_t *jstring = json_string(string);
-					json_object_set_new(json_info, str_key_cover, jstring);
+					json_object_set_new(json_info, str_cover, jstring);
 				}
 			}
 			sqlite3_finalize(st_select);

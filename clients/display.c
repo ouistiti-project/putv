@@ -105,7 +105,7 @@ int display_default(void *eventdata, json_t *json_params)
 	const char *title = NULL;
 	const char *album = NULL;
 	const char *artist = NULL;
-	json_unpack(info, "{ss,ss,ss}", "Album", &album,"Title", &title, "Artist", &artist);
+	json_unpack(info, "{ss,ss,ss}", "album", &album,"title", &title, "artist", &artist);
 	if (artist != NULL)
 	{
 		char *string = strdup(artist);

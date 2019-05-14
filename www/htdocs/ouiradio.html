@@ -12,9 +12,9 @@
 		<script type="text/javascript" src="/js/jquery.min.js"></script>
 		<script type="text/javascript" src="/js/bootstrap.min.js"></script>
 		<script type="text/javascript" src="/js/jsonrpc.js"></script>
-		<script type="text/javascript" src="/ouiradio.js"></script>
 		<script type="text/javascript">
-var player;
+var g_player;
+var g_config;
 initIHM = function()
 {
 	$('.action-btn').addClass('hidden');
@@ -23,7 +23,7 @@ initIHM = function()
 }
 playerstate = function(result)
 {
-	player.state = result.state;
+	this.state = result.state;
 	if (result.state == "play")
 		$('#playpause').find('.glyphicon').removeClass('glyphicon-play').addClass('glyphicon-pause');
 	else if (result.state == "pause")
@@ -73,7 +73,7 @@ playerlist = function(result)
 					$(playlist).append(elem);
 				}
 			}
-			if (table[i].id == player.currentid)
+			if (table[i].id == this.currentid)
 				$(elem).addClass("active");
 		}
 	}
@@ -106,15 +106,13 @@ playerlist = function(result)
 	}
 };
 
-$(document).ready(function()
+create_player = function (config)
 {
-	$('#media').addClass('hidden');
-	initIHM();
-	player = new JsonRPC(configs.player);
+	var player = new JsonRPC(config.player);
 	player.onopen = function ()
 	{
 		player.send('capabilities', null);
-	};
+	}.bind(player);
 	player.onchange = function(result)
 	{
 		if (result.state != undefined)
@@ -159,14 +157,13 @@ $(document).ready(function()
 		if (result.id != undefined && result.id > -1)
 		{
 			var firstid = result.id - (result.id % 5);
-			console.log("firstid "+firstid);
 			player.send("list", {maxitems:5, first:firstid});
 		}
 		if (result.volume != undefined)
 		{
 			$('#volume').data('level',result.volume);
 		}
-	};
+	}.bind(player);
 	player.options = function(result)
 		{
 			$('#random').removeClass('btn-primary');
@@ -175,14 +172,14 @@ $(document).ready(function()
 			$('#repeat').removeClass('btn-primary');
 			if (result.loop == true)
 				$('#repeat').addClass('btn-primary');
-		};
+		}.bind(player);
 	player.volume = function(result)
 		{
 			$('#volumebar').data('level',result.level);
 			$('#volumebar').attr('aria-valuenow',result.level).css('width', result.level+"%");
 			if ($('#volume').css('display') == 'none')
 				$('#volume').fadeIn( 400 ).delay( 1200 ).slideUp( 300 );
-		};
+		}.bind(player);
 	player.capabilities = function(result)
 	{
 		initIHM();
@@ -254,7 +251,8 @@ $(document).ready(function()
 			break;
 			}
 		}
-	};
+	}.bind(player);
+
 	$('#playpause').on('click', function (event)
 		{
 			if (player.state == "play")
@@ -266,9 +264,9 @@ $(document).ready(function()
 		{
 			player.send("next", null);
 		});
-	$('#test').on('click', function (event)
+	$('#stop').on('click', function (event)
 		{
-			player.send('capabilities', null);
+			player.send("stop", null);
 		});
 	$('#PagerList').find('.next')
 		.addClass('disabled')
@@ -290,12 +288,13 @@ $(document).ready(function()
 		{
 			player.send("volume", {step:5});
 		});
-	if (configs.media != undefined)
+
+	if (config.media != undefined)
 	{
 		var i;
-		for (i in configs.media)
+		for (i in config.media)
 		{
-			var media = configs.media[i];
+			var media = config.media[i];
 			var options = "";
 			if (media.options != undefined && media.options.length > 0)
 			{
@@ -314,10 +313,48 @@ $(document).ready(function()
 		}
 	}
 	player.connect();
+	return player;
+}
+
+$(document).ready(function()
+{
+	$('#media').addClass('hidden');
+	initIHM();
+	var xhr = new XMLHttpRequest();
+	xhr.onreadystatechange = function()
+	{
+		var xhr = this;
+		if (xhr.readyState === XMLHttpRequest.DONE)
+		{
+			if (xhr.status === 200)
+			{
+				g_config = JSON.parse(xhr.responseText);
+				g_player = create_player(g_config);
+			}
+		}
+		else if (xhr.readyState >= XMLHttpRequest.LOADING &&
+				xhr.status > 399)
+		{
+			console.log("Config request error "+xhr.status);
+			if (xhr.readyState === XMLHttpRequest.LOADING)
+				xhr.abort();
+		}
+		return true;
+	}.bind(xhr);
+	xhr.onerror = function(err)
+	{
+		console.log("Configr request error: "+err);
+	}.bind(xhr);
+	
+	xhr.open("GET", "ouiradio.json");
+	xhr.responseType = "text/json";
+	xhr.withCredentials = true;
+	xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
+	xhr.send();
 });
 		</script>
 	</head>
-	<body style="padding-top: 220px;">
+	<body style="padding-top: 200px;">
 		<nav class="navbar navbar-default navbar-fixed-top">
 			<div class="container-fluid">
 				<div class="navbar-header">

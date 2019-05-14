@@ -35,6 +35,7 @@
 #include <time.h>
 #include <pthread.h>
 #include <sched.h>
+#include <limits.h>
 
 #ifdef USE_ID3TAG
 #include <id3tag.h>
@@ -71,6 +72,8 @@ const char const *str_track = "Track";
 const char const *str_year = "Year";
 const char const *str_genre = "Genre";
 const char const *str_date = "Date";
+const char const *str_comment = "Comment";
+const char const *str_cover = "Cover";
 
 void utils_srandom()
 {
@@ -233,6 +236,41 @@ const char *utils_format2mime(jitter_format_t format)
 	return mime_octetstream;
 }
 
+static char *media_regfile(char *path, const char *mime, const unsigned char *data, unsigned long length)
+{
+	int fd = -1;
+	char *ext = strrchr(path, '.');
+	if (!strcmp(mime,"image/png"))
+		strcpy(ext, ".png");
+	if (!strcmp(mime,"image/jpeg"))
+		strcpy(ext, ".jpg");
+	fd = open(path, O_WRONLY | O_CREAT | O_EXCL, 0666);
+	if (fd > 0)
+	{
+		write(fd, data, length);
+		close(fd);
+	}
+	return path;
+}
+
+static char *media_tmpfile(char *path, const char *mime, const unsigned char *data, unsigned long length)
+{
+	static int fd = -1;
+	if (fd > 0)
+		close(fd);
+	char *ext = strrchr(path, '.');
+	if (!strcmp(mime,"image/png"))
+		strcpy(ext, "XXXXXX.png");
+	if (!strcmp(mime,"image/jpeg"))
+		strcpy(ext, "XXXXXX.jpg");
+	fd = mkstemps(path, 4);
+	if (fd > 0)
+	{
+		write(fd, data, length);
+	}
+	return path;
+}
+
 #ifdef USE_ID3TAG
 int media_parseid3tag(const char *path, json_t *object)
 {
@@ -248,6 +286,8 @@ int media_parseid3tag(const char *path, json_t *object)
 	{ ID3_FRAME_TRACK,  N_(str_track)     },
 	{ ID3_FRAME_YEAR,   N_(str_year)      },
 	{ ID3_FRAME_GENRE,  N_(str_genre)     },
+	{ ID3_FRAME_COMMENT,N_(str_comment)   },
+	{ "APIC",           N_(str_cover)   },
 	};
 	struct id3_file *fd = id3_file_open(path, ID3_FILE_MODE_READONLY);
 	if (fd == NULL)
@@ -255,28 +295,130 @@ int media_parseid3tag(const char *path, json_t *object)
 	struct id3_tag *tag = id3_file_tag(fd);
 
 	int i;
+#if 0
+	for (i = 0; i < tag->nframes; i++)
+	{
+		struct id3_frame const *frame = NULL;
+		frame = tag->frames[i];
+		warn("frame %s", frame->id);
+		//dbg("field 0 type %d", field->type);
+	}
+#endif
 	for (i = 0; i < sizeof(labels) / sizeof(labels[0]); ++i)
 	{
-		struct id3_frame const *frame;
-		frame = id3_tag_findframe(tag, labels[i].id, 0);
-		if (frame)
+		json_t *value = NULL;
+		struct id3_frame const *frame = NULL;
+		int j = 0;
+		frame = id3_tag_findframe(tag, labels[i].id, j);
+		while (frame != NULL)
 		{
+			int fieldid = 0;
 			union id3_field const *field;
-			id3_ucs4_t const *ucs4;
-			field    = id3_frame_field(frame, 1);
-			ucs4 = id3_field_getstrings(field, 0);
-			if (labels[i].id == ID3_FRAME_GENRE && ucs4 != NULL)
-				ucs4 = id3_genre_name(ucs4);
-			json_t *value;
-			if (ucs4 != NULL)
+			enum id3_field_textencoding encoding = ID3_FIELD_TEXTENCODING_ISO_8859_1;
+			const unsigned char *data = NULL;
+			unsigned long length = 0;
+			const char *info[5];
+			char *tinfo[5] = {0};
+
+			for (fieldid = 0; (field = id3_frame_field(frame, fieldid)) != NULL && fieldid < 5; fieldid++)
 			{
-				char *latin1 = id3_ucs4_utf8duplicate(ucs4);
-				value = json_string(latin1);
-				free(latin1);
+				dbg("field[%s][%d] %d", frame->id, fieldid, id3_field_type(field));
+				switch (id3_field_type(field))
+				{
+				case ID3_FIELD_TYPE_TEXTENCODING:
+					encoding = id3_field_gettextencoding(field);
+				break;
+				case ID3_FIELD_TYPE_FRAMEID:
+				{
+					info[fieldid] = id3_field_getframeid(field);
+				}
+				break;
+				case ID3_FIELD_TYPE_STRINGLIST:
+				{
+					int nb = 0;
+					int k = 0;
+					nb = id3_field_getnstrings(field);
+					if (nb > 1)
+					{
+						value = json_array();
+						for (k = 0; k < nb; k++)
+						{
+							json_t *fieldvalue;
+							id3_ucs4_t const *ucs4 = NULL;
+							ucs4 = id3_field_getstrings(field, k);
+							if (labels[i].id == ID3_FRAME_GENRE)
+								ucs4 = id3_genre_name(ucs4);
+							char *latin1 = id3_ucs4_utf8duplicate(ucs4);
+							fieldvalue = json_string(latin1);
+							free(latin1);
+							json_array_append(value, fieldvalue);
+						}
+					}
+					else if (nb == 1)
+					{
+						json_t *fieldvalue;
+						id3_ucs4_t const *ucs4 = NULL;
+						ucs4 = id3_field_getstrings(field, k);
+						if (labels[i].id == ID3_FRAME_GENRE)
+							ucs4 = id3_genre_name(ucs4);
+						char *latin1 = id3_ucs4_utf8duplicate(ucs4);
+						fieldvalue = json_string(latin1);
+						free(latin1);
+						value = fieldvalue;
+					}
+				}
+				break;
+				case ID3_FIELD_TYPE_INT8:
+				case ID3_FIELD_TYPE_INT16:
+				case ID3_FIELD_TYPE_INT24:
+				case ID3_FIELD_TYPE_INT32:
+				{
+					unsigned long integer = id3_field_getint(field);
+				}
+				break;
+				case ID3_FIELD_TYPE_STRING:
+				{
+					id3_ucs4_t const *ucs4 = NULL;
+					ucs4 = id3_field_getstring(field);
+					tinfo[fieldid] = id3_ucs4_utf8duplicate(ucs4);
+				}
+				break;
+				case ID3_FIELD_TYPE_LATIN1:
+				{
+					info[fieldid] = id3_field_getlatin1(field);
+				}
+				break;
+				case ID3_FIELD_TYPE_BINARYDATA:
+				{
+					char coverpath[PATH_MAX];
+					data = id3_field_getbinarydata(field, &length);
+					strcpy(coverpath, path);
+					char *name = strrchr(coverpath, '/');
+					if (name != NULL)
+						name++;
+					else
+						name = coverpath;
+#if 0
+					if (tinfo[3] != NULL)
+						strcpy(name, tinfo[3]);
+					else
+#endif
+						strcpy(name, "cover.");
+					value = json_string(media_regfile(coverpath, info[1], data, length));
+				}
+				break;
+				}
 			}
-			else
+			for (fieldid = 0; fieldid < 5; fieldid++)
+				if (tinfo[fieldid] != NULL)
+					free(tinfo[fieldid]);
+			if (value == NULL)
 				value = json_null();
+			
 			json_object_set(object, labels[i].label, value);
+
+			j++;
+			frame = id3_tag_findframe(tag, labels[i].id, j);
 		}
 	}
 	id3_file_close(fd);

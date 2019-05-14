@@ -480,6 +480,32 @@ int media_parseoggmetadata(const char *path, json_t *object)
 		}
 	}
 	FLAC__metadata_object_delete(vorbiscomment);
+
+	/**
+	 * picture
+	 */
+	FLAC__StreamMetadata *vorbispicture;
+	FLAC__metadata_get_picture(path, &vorbispicture, FLAC__STREAM_METADATA_PICTURE_TYPE_FRONT_COVER, NULL, NULL, -1, -1, -1, -1);
+	if (vorbispicture != NULL)
+	{
+		FLAC__StreamMetadata_Picture *picture;
+		picture = &vorbispicture->data.picture;
+
+		char coverpath[PATH_MAX];
+		strncpy(coverpath, path, PATH_MAX - 10);
+		char *name = strrchr(coverpath, '/');
+		if (name != NULL)
+			name++;
+		else
+			name = coverpath;
+		strcpy(name, "cover.");
+
+		json_t *value;
+		value = json_string(media_regfile(coverpath, picture->mime_type, picture->data, picture->data_length));
+		json_object_set(object, str_cover, value);
+
+		FLAC__metadata_object_delete(vorbispicture);
+	}
 	return 0;
 }
 #endif

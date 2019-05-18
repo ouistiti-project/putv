@@ -1,6 +1,8 @@
 #ifndef __DECODER_H__
 #define __DECODER_H__
 
+#include "jitter.h"
+
 typedef struct player_ctx_s player_ctx_t;
 typedef struct jitter_s jitter_t;
 typedef struct filter_s filter_t;
@@ -13,7 +15,7 @@ struct decoder_ops_s
 {
 	int (*check)(const char *path);
 	decoder_ctx_t *(*init)(player_ctx_t *, const filter_t *);
-	jitter_t *(*jitter)(decoder_ctx_t *decoder);
+	jitter_t *(*jitter)(decoder_ctx_t *decoder, jitte_t jitte);
 	int (*run)(decoder_ctx_t *, jitter_t *);
 	const char *(*mime)(decoder_ctx_t *ctx);
 	void (*destroy)(decoder_ctx_t *);

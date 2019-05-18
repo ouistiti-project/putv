@@ -129,7 +129,7 @@ static src_ctx_t *src_init(player_ctx_t *player, const char * arg, const char *m
 
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, ctx);
 #ifdef CURL_DUMP
-		ctx->dumpfd = open("curl_dump.mp3", O_RDWR | O_CREAT);
+		ctx->dumpfd = open("curl_dump.mp3", O_RDWR | O_CREAT, 0644);
 #endif
 	}
 	return ctx;
@@ -143,23 +143,19 @@ static void *src_thread(void *arg)
 	{
 		dbg("src curl error %d on %p", ret, ctx->curl);
 	}
-	ctx->outbuffer = ctx->out->ops->pull(ctx->out->ctx);
-	ctx->out->ops->push(ctx->out->ctx, 0, NULL);
-	ctx->out->ops->flush(ctx->out->ctx);
 	return 0;
 }
 
 static int src_run(src_ctx_t *ctx)
 {
 	int ret;
-	const event_new_es_t event = {.pid = 0, .mime = ctx->mime};
+	const event_new_es_t event = {.pid = 0, .mime = ctx->mime, .jitte = JITTE_MID};
 	event_listener_t *listener = ctx->listener;
 	while (listener)
 	{
-		listener->cb(ctx->listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
+		listener->cb(listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
 		listener = listener->next;
 	}
-	ret = curl_easy_setopt(ctx->curl, CURLOPT_BUFFERSIZE, ctx->out->ctx->size);
 	//ret = curl_easy_perform(ctx->curl);
 	ret = pthread_create(&ctx->thread, NULL, src_thread, ctx);
 	return ret;
@@ -204,7 +200,8 @@ static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
 	if (index > 0)
 		return -1;
 	ctx->estream = decoder;
-	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx);
+	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx, JITTE_MID);
+	curl_easy_setopt(ctx->curl, CURLOPT_BUFFERSIZE, ctx->out->ctx->size);
 }
 
 static decoder_t *src_estream(src_ctx_t *ctx, int index)
@@ -214,10 +211,16 @@ static decoder_t *src_estream(src_ctx_t *ctx, int index)
 
 static void src_destroy(src_ctx_t *ctx)
 {
-	if (ctx->estream != NULL)
-		ctx->estream->ops->destroy(ctx->estream->ctx);
 	if (ctx->thread)
 		pthread_join(ctx->thread, NULL);
+	if (ctx->out != NULL)
+	{
+		ctx->outbuffer = ctx->out->ops->pull(ctx->out->ctx);
+		ctx->out->ops->push(ctx->out->ctx, 0, NULL);
+		ctx->out->ops->flush(ctx->out->ctx);
+	}
+	if (ctx->estream != NULL)
+		ctx->estream->ops->destroy(ctx->estream->ctx);
 #ifdef CURL_DUMP
 	if (ctx->dumpfd > 0)
 		close(ctx->dumpfd);

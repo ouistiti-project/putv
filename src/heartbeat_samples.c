@@ -113,7 +113,8 @@ static int heartbeat_wait(heartbeat_ctx_t *ctx, void *arg)
 
 	pthread_mutex_lock(&ctx->mutex);
 
-	unsigned long usec = beat->nsamples * 1000;
+#if 0
+	unsigned long usec = beat->nsamples * HEARTBEAT_COEF_1000;
 	int divider = ctx->samplerate / 100;
 	usec /= divider;
 	usec *= 10;
@@ -124,6 +125,15 @@ static int heartbeat_wait(heartbeat_ctx_t *ctx, void *arg)
 		ctx->clock.tv_nsec -= 1000000000;
 		ctx->clock.tv_sec += 1;
 	}
+#else
+	ctx->clock.tv_nsec += (beat->nsamples * HEARTBEAT_COEF_1000 / ctx->samplerate) * 1000000;
+	ctx->clock.tv_sec += (beat->nsamples / ctx->samplerate);
+	if (ctx->clock.tv_nsec > 1000000000)
+	{
+		ctx->clock.tv_nsec -= 1000000000;
+		ctx->clock.tv_sec += 1;
+	}
+#endif
 	int flags = TIMER_ABSTIME;
 	while (clock_nanosleep(clockid, flags, &ctx->clock, NULL) != 0)
 	{

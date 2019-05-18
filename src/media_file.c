@@ -249,20 +249,12 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url,...)
 		media_insert(ctx, url, NULL, utils_getmime(url));
 #else
 		const char *mime = utils_getmime(url);
-		if(mime != mime_octetstream)
-		{
-			media_url_t *media;
-			media = calloc(1, sizeof(*media));
-			media->url = strdup(url);
-			media->mime = mime;
-			media->id = 0;
-			ctx->media = media;
-		}
-		else
-		{
-			free(ctx);
-			ctx = NULL;
-		}
+		media_url_t *media;
+		media = calloc(1, sizeof(*media));
+		media->url = strdup(url);
+		media->mime = mime;
+		media->id = 0;
+		ctx->media = media;
 #endif
 	}
 	return ctx;

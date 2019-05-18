@@ -42,8 +42,8 @@
 typedef struct demux_s demux_t;
 typedef struct demux_ops_s demux_ops_t;
 
-#define NB_LOOPS 11
-#define NB_BUFFERS 10
+#define NB_LOOPS 21
+#define NB_BUFFERS 8
 #define BUFFERSIZE 1500
 
 typedef struct demux_reorder_s demux_reorder_t;
@@ -72,6 +72,7 @@ struct demux_ctx_s
 {
 	demux_out_t *out;
 	jitter_t *in;
+	jitte_t jitte;
 	unsigned short seqnum;
 	unsigned long missing;
 	demux_reorder_t reorder[NB_BUFFERS];
@@ -114,14 +115,22 @@ static demux_ctx_t *demux_init(player_ctx_t *player, const char *search)
 
 	demux_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->mime = utils_mime2mime(mime);
-	ctx->in = jitter_scattergather_init(jitter_name, NB_BUFFERS, BUFFERSIZE);
-	ctx->in->format = SINK_BITSSTREAM;
-	ctx->in->ctx->thredhold = NB_BUFFERS * 3 / 4;
 	return ctx;
 }
 
-static jitter_t *demux_jitter(demux_ctx_t *ctx)
+static jitter_t *demux_jitter(demux_ctx_t *ctx, jitte_t jitte)
 {
+	if (ctx->in == NULL)
+	{
+		int nbbuffers = NB_BUFFERS << jitte;
+		ctx->in = jitter_scattergather_init(jitter_name, nbbuffers, BUFFERSIZE);
+#ifdef USE_REALTIME
+		ctx->in->ops->lock(ctx->in->ctx);
+#endif
+		ctx->in->format = SINK_BITSSTREAM;
+		ctx->in->ctx->thredhold = nbbuffers * 3 / 4;
+		ctx->jitte = jitte;
+	}
 	return ctx->in;
 }
 
@@ -164,10 +173,10 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 		ctx->out = out;
 		warn("demux: new  rtp substream %d %s", out->ssrc, out->mime);
 		event_listener_t *listener = ctx->listener;
-		const event_new_es_t event = {.pid = out->ssrc, .mime = out->mime};
+		const event_new_es_t event = {.pid = out->ssrc, .mime = out->mime, .jitte = JITTE_HIGH};
 		while (listener != NULL)
 		{
-			listener->cb(ctx->listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
+			listener->cb(listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
 			listener = listener->next;
 		}
 	}
@@ -386,7 +395,7 @@ static int demux_attach(demux_ctx_t *ctx, long index, decoder_t *decoder)
 	if (out != NULL)
 	{
 		out->estream = decoder;
-		out->jitter = out->estream->ops->jitter(out->estream->ctx);
+		out->jitter = out->estream->ops->jitter(out->estream->ctx, ctx->jitte);
 	}
 }
 
@@ -404,19 +413,21 @@ static decoder_t *demux_estream(demux_ctx_t *ctx, long index)
 
 static void demux_destroy(demux_ctx_t *ctx)
 {
+	demux_out_t *out = ctx->out;
+	while (out != NULL)
+	{
+		demux_out_t *old = out;
+		out = out->next;
+		if (old->estream != NULL)
+			old->estream->ops->destroy(old->estream->ctx);
+		free(old);
+	}
 	event_listener_t *listener = ctx->listener;
 	while (listener)
 	{
 		event_listener_t *next = listener->next;
 		free(listener);
 		listener = next;
-	}
-	demux_out_t *out = ctx->out;
-	while (out != NULL)
-	{
-		demux_out_t *old = out;
-		out = out->next;
-		free(old);
 	}
 	free(ctx);
 }

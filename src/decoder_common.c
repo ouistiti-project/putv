@@ -76,6 +76,7 @@ decoder_t *decoder_build(player_ctx_t *player, const char *mime, const filter_t 
 	}
 	if (ctx != NULL)
 	{
+		warn("new decoder for %s", decoder_mad->mime(NULL));
 		decoder = calloc(1, sizeof(*decoder));
 		decoder->ops = ops;
 		decoder->ctx = ctx;

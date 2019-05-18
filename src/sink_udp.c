@@ -25,6 +25,7 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *****************************************************************************/
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
@@ -35,12 +36,13 @@
 #include <arpa/inet.h>
 #include <ifaddrs.h>
 #include <sys/ioctl.h>
+#include <fcntl.h>
 
-#define __USE_GNU
 #include <pthread.h>
 
 #include <unistd.h>
 #include <poll.h>
+#include <sched.h>
 
 #include "player.h"
 #include "mux.h"
@@ -63,6 +65,9 @@ struct sink_ctx_s
 	int counter;
 #ifdef MUX
 	mux_t *mux;
+#endif
+#ifdef UDP_DUMP
+	int dumpfd;
 #endif
 };
 #define SINK_CTX
@@ -246,12 +251,18 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 
 		unsigned int size = mtu;
 		jitter_t *jitter = jitter_scattergather_init(jitter_name, 6, size);
+#ifdef USE_REALTIME
+		jitter->ops->lock(jitter->ctx);
+#endif
 		jitter->ctx->frequence = 0;
 		jitter->ctx->thredhold = 3;
 		jitter->format = format;
 		ctx->in = jitter;
 #ifdef MUX
 		ctx->mux = mux_build(player, protocol);
+#endif
+#ifdef UDP_DUMP
+		ctx->dumpfd = open("udp_dump.stream", O_RDWR | O_CREAT, 0644);
 #endif
 	}
 	free(value);
@@ -284,6 +295,17 @@ static void *sink_thread(void *arg)
 
 	/* start decoding */
 	dbg("sink: thread run");
+	int ret;
+#ifdef USE_REALTIME
+	cpu_set_t cpuset;
+	pthread_t self = pthread_self();
+	CPU_ZERO(&cpuset);
+	CPU_SET(0, &cpuset);
+	
+	ret = pthread_setaffinity_np(self, 1, &cpuset);
+	if (ret != 0)
+		err("src: CPUC affinity error: %s", strerror(errno));
+#endif
 #ifdef UDP_MARKER
 	warn("sink: udp marker is ON");
 #endif
@@ -298,7 +320,6 @@ static void *sink_thread(void *arg)
 
 		size_t length = ctx->in->ops->length(ctx->in->ctx);
 
-		int ret;
 #ifdef UDP_MARKER
 		static unsigned long marker = 0;
 		ret = sendto(ctx->sock, (char *)&marker, sizeof(marker), MSG_NOSIGNAL| MSG_DONTWAIT,
@@ -315,7 +336,7 @@ static void *sink_thread(void *arg)
 			FD_ZERO(&wfds);
 			FD_SET(ctx->sock, &wfds);
 			ret = select(maxfd + 1, NULL, &wfds, NULL, NULL);
-			if (ret == 1 && FD_ISSET(ctx->sock, &wfds))
+			if (ret > 0 && FD_ISSET(ctx->sock, &wfds))
 			{
 				ret = sendto(ctx->sock, buff, len, MSG_NOSIGNAL| MSG_DONTWAIT,
 						(struct sockaddr *)&ctx->saddr, sizeof(ctx->saddr));
@@ -329,8 +350,15 @@ static void *sink_thread(void *arg)
 				run = 0;
 				break;
 			}
+			else
+			{
+#ifdef UDP_DUMP
+				write(ctx->dumpfd, buff, ret);
+#endif
+			}
 			len -= ret;
 			buff += ret;
+			sched_yield();
 		}
 		if (len == 0)
 		{
@@ -398,6 +426,10 @@ static void sink_destroy(sink_ctx_t *ctx)
 	if (ctx->thread)
 		pthread_join(ctx->thread, NULL);
 	jitter_scattergather_destroy(ctx->in);
+#ifdef UDP_DUMP
+	if (ctx->dumpfd > 0)
+		close(ctx->dumpfd);
+#endif
 	free(ctx);
 }
 

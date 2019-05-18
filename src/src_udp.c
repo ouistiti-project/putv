@@ -25,6 +25,7 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *****************************************************************************/
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <string.h>
 #include <pthread.h>
@@ -36,6 +37,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/ioctl.h>
+#include <fcntl.h>
 #include <pwd.h>
 
 #include "player.h"
@@ -63,6 +65,9 @@ struct src_ctx_s
 	decoder_t *estream;
 	event_listener_t *listener;
 #endif
+#ifdef UDP_DUMP
+	int dumpfd;
+#endif
 };
 #define SRC_CTX
 #include "src.h"
@@ -82,6 +87,12 @@ struct src_ctx_s
 #define SRC_POLICY REALTIME_SCHED
 #define SRC_PRIORITY 65
 
+/**
+ * UDP_THREAD: This feature should minimize the resources, but in fact
+ * to receiv data in the decoding thread is too slow and the thread is often 
+ * not ready to receive UDP packet.
+ * The feature is alway possible to remember that is not a good solution.
+ */
 static const char *jitter_name = "udp socket";
 static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mime)
 {
@@ -162,6 +173,10 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 		int value=1;
 		ret = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &value, sizeof(value));
 	}
+	else
+	{
+		err("src: bind error %s", strerror(errno));
+	}
 
 	if ((ret == 0) && (af == AF_INET) && IN_MULTICAST(inaddr))
 	{
@@ -224,10 +239,13 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 		ctx->demux.ctx = ctx->demux.ops->init(player, search);
 #endif
 		ctx->mime = utils_mime2mime(mime);
+#ifdef UDP_DUMP
+		ctx->dumpfd = open("udp_dump.stream", O_RDWR | O_CREAT, 0644);
+#endif
 	}
 	if (ctx == NULL)
 	{
-		dbg("src: udp error %s", strerror(errno));
+		err("src: udp error %s", strerror(errno));
 		close(sock);
 	}
 
@@ -235,11 +253,80 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 	return ctx;
 }
 
+static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
+{
+	int ret;
+	fd_set rfds;
+	int maxfd = ctx->sock;
+	FD_ZERO(&rfds);
+	FD_SET(ctx->sock, &rfds);
+	ret = select(maxfd + 1, &rfds, NULL, NULL, NULL);
+	if (ret != 1)
+	{
+		err("udp select %d %s", ret, strerror(errno));
+		return -1;
+	}
+	int length;
+	ret = ioctl(ctx->sock, FIONREAD, &length);
+	if (length > ctx->out->ctx->size)
+		warn("src: fionread %d > %ld", length, ctx->out->ctx->size);
+	if (length == 0)
+		warn("src: fionread %d", length);
+#ifdef UDP_MARKER
+	if (length == 4)
+	{
+		unsigned long marker = 0;
+		ret = recvfrom(ctx->sock, (char *)&marker, sizeof(marker),
+				0, ctx->addr, &ctx->addrlen);
+		dbg("udp: marker %lx", marker);
+		return src_read(ctx, buff, len);
+	}
+	else
+#endif
+	{
+		ret = recvfrom(ctx->sock, buff, len,
+				0, ctx->addr, &ctx->addrlen);
+		src_dbg("src: play %d", ret);
+		if (ret < 0)
+		{
+			ctx->state = STATE_ERROR;
+			err("src: udp reception error %s", strerror(errno));
+		}
+		else if (ret == 0)
+		{
+			warn("src: udp end of stream");
+			ctx->state = STATE_ERROR;
+		}
+		else
+		{
+#ifdef UDP_DUMP
+			if (ctx->dumpfd > 0)
+			{
+				write(ctx->dumpfd, buff, ret);
+			}
+#endif
+			src_dbg("src: play %d", ret);
+		}
+	}
+	return ret;
+}
+
+#ifdef UDP_THREAD
 static void *src_thread(void *arg)
 {
 	src_ctx_t *ctx = (src_ctx_t *)arg;
 
 	int ret;
+#ifdef USE_REALTIME
+	cpu_set_t cpuset;
+	pthread_t self = pthread_self();
+	CPU_ZERO(&cpuset);
+	CPU_SET(0, &cpuset);
+	
+	ret = pthread_setaffinity_np(self, 1, &cpuset);
+	if (ret != 0)
+		err("src: CPUC affinity error: %s", strerror(errno));
+#endif
 #ifdef UDP_MARKER
 	warn("src: udp marker is ON");
 #endif
@@ -253,66 +340,33 @@ static void *src_thread(void *arg)
 				continue;
 			}
 		}
-		fd_set rfds;
-		int maxfd = ctx->sock;
-		FD_ZERO(&rfds);
-		FD_SET(ctx->sock, &rfds);
-		ret = select(maxfd + 1, &rfds, NULL, NULL, NULL);
-		if (ret != 1)
-			continue;
-#ifdef UDP_MARKER
-		int length;
-		ret = ioctl(ctx->sock, FIONREAD, &length);
-		//dbg("src: fionread %d", length);
-		if (length == 4)
+		unsigned char *buff = ctx->out->ops->pull(ctx->out->ctx);
+		ret = src_read(ctx, buff, ctx->out->ctx->size);
+		if (ret > 0)
 		{
-			unsigned long marker = 0;
-			ret = recvfrom(ctx->sock, (char *)&marker, sizeof(marker),
-					0, ctx->addr, &ctx->addrlen);
-			dbg("udp: marker %lx", marker);
-		}
-		else
-#endif
-		{
-			unsigned char *buff = ctx->out->ops->pull(ctx->out->ctx);
-			ret = recvfrom(ctx->sock, buff, ctx->out->ctx->size,
-					0, ctx->addr, &ctx->addrlen);
-			src_dbg("src: play %d", ret);
-			if (ret < 0)
-			{
-				ctx->state = STATE_ERROR;
-				err("src: udp reception error %s", strerror(errno));
-			}
-			else if (ret == 0)
-			{
-				warn("src: udp end of stream");
-				ctx->out->ops->flush(ctx->out->ctx);
-			}
-			else
-			{
-				src_dbg("src: play %d", ret);
-				ctx->out->ops->push(ctx->out->ctx, ret, NULL);
-			}
+			ctx->out->ops->push(ctx->out->ctx, ret, NULL);
 		}
 	}
 	dbg("src: thread end");
 	return NULL;
 }
+#endif
 
 static int src_run(src_ctx_t *ctx)
 {
 #ifdef DEMUX_PASSTHROUGH
+	ctx->out = ctx->demux.ops->jitter(ctx->demux.ctx, JITTE_HIGH);
 	ctx->demux.ops->run(ctx->demux.ctx);
-	ctx->out = ctx->demux.ops->jitter(ctx->demux.ctx);
 #else
-	const event_new_es_t event = {.pid = 0, .mime = ctx->mime};
+	const event_new_es_t event = {.pid = 0, .mime = ctx->mime, .jitte = JITTE_HIGH};
 	event_listener_t *listener = ctx->listener;
 	while (listener)
 	{
-		listener->cb(ctx->listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
+		listener->cb(listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
 		listener = listener->next;
 	}
 #endif
+#ifdef UDP_THREAD
 #ifdef USE_REALTIME
 	int ret;
 
@@ -348,6 +402,7 @@ static int src_run(src_ctx_t *ctx)
 #else
 	pthread_create(&ctx->thread, NULL, src_thread, ctx);
 #endif
+#endif
 	return 0;
 }
 
@@ -360,10 +415,10 @@ static const char *src_mime(src_ctx_t *ctx, int index)
 #endif
 }
 
-static void src_eventlistener(src_ctx_t *ctx, event_listener_cb_t listener, void *arg)
+static void src_eventlistener(src_ctx_t *ctx, event_listener_cb_t cb, void *arg)
 {
 #ifdef DEMUX_PASSTHROUGH
-	ctx->demux.ops->eventlistener(ctx->demux.ctx, listener, arg);
+	ctx->demux.ops->eventlistener(ctx->demux.ctx, cb, arg);
 #else
 	event_listener_t *listener = calloc(1, sizeof(*listener));
 	listener->cb = cb;
@@ -387,12 +442,18 @@ static void src_eventlistener(src_ctx_t *ctx, event_listener_cb_t listener, void
 static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
 {
 	int ret = 0;
+	dbg("src: attach");
 #ifdef DEMUX_PASSTHROUGH
 	ret = ctx->demux.ops->attach(ctx->demux.ctx, index, decoder);
+	ctx->out = ctx->demux.ops->jitter(ctx->demux.ctx, JITTE_HIGH);
 #else
 	ctx->estream = decoder;
-	dbg("src: attach");
-	ctx->out = decoder->ops->jitter(decoder->ctx);
+	ctx->out = decoder->ops->jitter(decoder->ctx, JITTE_HIGH);
+#endif
+#ifndef UDP_THREAD
+	dbg("src: add producter to %s", ctx->out->ctx->name);
+	ctx->out->ctx->produce = (produce_t)src_read;
+	ctx->out->ctx->producter = (void *)ctx;
 #endif
 	return ret;
 }
@@ -408,11 +469,15 @@ static decoder_t *src_estream(src_ctx_t *ctx, int index)
 
 static void src_destroy(src_ctx_t *ctx)
 {
+#ifdef UDP_THREAD
 	if (ctx->thread)
 		pthread_join(ctx->thread, NULL);
+#endif
 #ifdef DEMUX_PASSTHROUGH
 	ctx->demux.ops->destroy(ctx->demux.ctx);
 #else
+	if (ctx->estream != NULL)
+		ctx->estream->ops->destroy(ctx->estream->ctx);
 	event_listener_t *listener = ctx->listener;
 	while (listener)
 	{
@@ -420,6 +485,10 @@ static void src_destroy(src_ctx_t *ctx)
 		free(listener);
 		listener = next;
 	}
+#endif
+#ifdef UDP_DUMP
+	if (ctx->dumpfd > 0)
+		close(ctx->dumpfd);
 #endif
 	close(ctx->sock);
 	free(ctx);

@@ -2,6 +2,7 @@
 #define __DEMUX_H__
 
 #include "event.h"
+#include "jitter.h"
 
 typedef struct player_ctx_s player_ctx_t;
 
@@ -12,7 +13,7 @@ typedef struct demux_ops_s demux_ops_t;
 struct demux_ops_s
 {
 	demux_ctx_t *(*init)(player_ctx_t *player, const char *arg);
-	jitter_t *(*jitter)(demux_ctx_t *ctx);
+	jitter_t *(*jitter)(demux_ctx_t *ctx, jitte_t jitte);
 	int (*run)(demux_ctx_t *ctx);
 	const char *(*mime)(demux_ctx_t *ctx, int index);
 	void (*eventlistener)(demux_ctx_t *ctx, event_listener_cb_t listener, void *arg);

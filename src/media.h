@@ -12,6 +12,16 @@ extern const char const *mime_audioflac;
 extern const char const *mime_audioalac;
 extern const char const *mime_audiopcm;
 
+extern const char const *str_title;
+extern const char const *str_artist;
+extern const char const *str_album;
+extern const char const *str_track;
+extern const char const *str_year;
+extern const char const *str_genre;
+extern const char const *str_date;
+extern const char const *str_comment;
+extern const char const *str_cover;
+
 void utils_srandom();
 const char *utils_getmime(const char *path);
 const char *utils_getpath(const char *url, const char *proto);
@@ -98,6 +108,14 @@ struct media_s
 
 media_t *media_build(player_ctx_t *player, const char *path);
 const char *media_path();
+
+typedef struct json_t json_t;
+#ifdef USE_ID3TAG
+int media_parseid3tag(const char *path, json_t *object);
+#endif
+#ifdef USE_OGGMETADDATA
+int media_parseoggmetadata(const char *path, json_t *object);
+#endif
 
 extern const media_ops_t *media_sqlite;
 extern const media_ops_t *media_file;

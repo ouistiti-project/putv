@@ -35,6 +35,17 @@
 #include <time.h>
 #include <pthread.h>
 #include <sched.h>
+#include <limits.h>
+
+#ifdef USE_ID3TAG
+#include <id3tag.h>
+#include <jansson.h>
+#define N_(string) string
+#endif
+
+#ifdef USE_OGGMETADDATA
+#include <FLAC/metadata.h>
+#endif
 
 #include "media.h"
 #include "decoder.h"
@@ -53,6 +64,16 @@ const char const *mime_audiomp3 = "audio/mp3";
 const char const *mime_audioflac = "audio/flac";
 const char const *mime_audioalac = "audio/alac";
 const char const *mime_audiopcm = "audio/pcm";
+
+const char const *str_title = "title";
+const char const *str_artist = "artist";
+const char const *str_album = "album";
+const char const *str_track = "track";
+const char const *str_year = "year";
+const char const *str_genre = "genre";
+const char const *str_date = "date";
+const char const *str_comment = "comment";
+const char const *str_cover = "cover";
 
 void utils_srandom()
 {
@@ -214,6 +235,280 @@ const char *utils_format2mime(jitter_format_t format)
 	}
 	return mime_octetstream;
 }
+
+static char *media_regfile(char *path, const char *mime, const unsigned char *data, unsigned long length)
+{
+	int fd = -1;
+	char *ext = strrchr(path, '.');
+	if (!strcmp(mime,"image/png"))
+		strcpy(ext, ".png");
+	if (!strcmp(mime,"image/jpeg"))
+		strcpy(ext, ".jpg");
+	fd = open(path, O_WRONLY | O_CREAT | O_EXCL, 0666);
+	if (fd > 0)
+	{
+		write(fd, data, length);
+		close(fd);
+	}
+	return path;
+}
+
+static char *media_tmpfile(char *path, const char *mime, const unsigned char *data, unsigned long length)
+{
+	static int fd = -1;
+	if (fd > 0)
+		close(fd);
+	char *ext = strrchr(path, '.');
+	if (!strcmp(mime,"image/png"))
+		strcpy(ext, "XXXXXX.png");
+	if (!strcmp(mime,"image/jpeg"))
+		strcpy(ext, "XXXXXX.jpg");
+	fd = mkstemps(path, 4);
+	if (fd > 0)
+	{
+		write(fd, data, length);
+	}
+	return path;
+}
+
+#ifdef USE_ID3TAG
+int media_parseid3tag(const char *path, json_t *object)
+{
+	struct
+	{
+		char const *id;
+		char const *label;
+	} const labels[] =
+	{
+	{ ID3_FRAME_TITLE,  N_(str_title)     },
+	{ ID3_FRAME_ARTIST, N_(str_artist)    },
+	{ ID3_FRAME_ALBUM,  N_(str_album)     },
+	{ ID3_FRAME_TRACK,  N_(str_track)     },
+	{ ID3_FRAME_YEAR,   N_(str_year)      },
+	{ ID3_FRAME_GENRE,  N_(str_genre)     },
+	{ ID3_FRAME_COMMENT,N_(str_comment)   },
+	{ "APIC",           N_(str_cover)   },
+	};
+	struct id3_file *fd = id3_file_open(path, ID3_FILE_MODE_READONLY);
+	if (fd == NULL)
+		return -1;
+	struct id3_tag *tag = id3_file_tag(fd);
+
+	int i;
+#if 0
+	for (i = 0; i < tag->nframes; i++)
+	{
+		struct id3_frame const *frame = NULL;
+		frame = tag->frames[i];
+		warn("frame %s", frame->id);
+		//dbg("field 0 type %d", field->type);
+	}
+#endif
+	for (i = 0; i < sizeof(labels) / sizeof(labels[0]); ++i)
+	{
+		json_t *value = NULL;
+		struct id3_frame const *frame = NULL;
+		int j = 0;
+		frame = id3_tag_findframe(tag, labels[i].id, j);
+		while (frame != NULL)
+		{
+			int fieldid = 0;
+			union id3_field const *field;
+			enum id3_field_textencoding encoding = ID3_FIELD_TEXTENCODING_ISO_8859_1;
+			const unsigned char *data = NULL;
+			unsigned long length = 0;
+			const char *info[5];
+			char *tinfo[5] = {0};
+
+			for (fieldid = 0; (field = id3_frame_field(frame, fieldid)) != NULL && fieldid < 5; fieldid++)
+			{
+				dbg("field[%s][%d] %d", frame->id, fieldid, id3_field_type(field));
+				switch (id3_field_type(field))
+				{
+				case ID3_FIELD_TYPE_TEXTENCODING:
+					encoding = id3_field_gettextencoding(field);
+				break;
+				case ID3_FIELD_TYPE_FRAMEID:
+				{
+					info[fieldid] = id3_field_getframeid(field);
+				}
+				break;
+				case ID3_FIELD_TYPE_STRINGLIST:
+				{
+					int nb = 0;
+					int k = 0;
+					nb = id3_field_getnstrings(field);
+					if (nb > 1)
+					{
+						value = json_array();
+						for (k = 0; k < nb; k++)
+						{
+							json_t *fieldvalue;
+							id3_ucs4_t const *ucs4 = NULL;
+							ucs4 = id3_field_getstrings(field, k);
+							if (labels[i].id == ID3_FRAME_GENRE)
+								ucs4 = id3_genre_name(ucs4);
+							char *latin1 = id3_ucs4_utf8duplicate(ucs4);
+							fieldvalue = json_string(latin1);
+							free(latin1);
+							json_array_append(value, fieldvalue);
+						}
+					}
+					else if (nb == 1)
+					{
+						json_t *fieldvalue;
+						id3_ucs4_t const *ucs4 = NULL;
+						ucs4 = id3_field_getstrings(field, k);
+						if (labels[i].id == ID3_FRAME_GENRE)
+							ucs4 = id3_genre_name(ucs4);
+						char *latin1 = id3_ucs4_utf8duplicate(ucs4);
+						fieldvalue = json_string(latin1);
+						free(latin1);
+						value = fieldvalue;
+					}
+				}
+				break;
+				case ID3_FIELD_TYPE_INT8:
+				case ID3_FIELD_TYPE_INT16:
+				case ID3_FIELD_TYPE_INT24:
+				case ID3_FIELD_TYPE_INT32:
+				{
+					unsigned long integer = id3_field_getint(field);
+				}
+				break;
+				case ID3_FIELD_TYPE_STRING:
+				{
+					id3_ucs4_t const *ucs4 = NULL;
+					ucs4 = id3_field_getstring(field);
+					tinfo[fieldid] = id3_ucs4_utf8duplicate(ucs4);
+				}
+				break;
+				case ID3_FIELD_TYPE_LATIN1:
+				{
+					info[fieldid] = id3_field_getlatin1(field);
+				}
+				break;
+				case ID3_FIELD_TYPE_BINARYDATA:
+				{
+					char coverpath[PATH_MAX];
+					data = id3_field_getbinarydata(field, &length);
+					strcpy(coverpath, path);
+					char *name = strrchr(coverpath, '/');
+					if (name != NULL)
+						name++;
+					else
+						name = coverpath;
+#if 0
+					if (tinfo[3] != NULL)
+						strcpy(name, tinfo[3]);
+					else
+#endif
+						strcpy(name, "cover.");
+					value = json_string(media_regfile(coverpath, info[1], data, length));
+				}
+				break;
+				}
+			}
+			for (fieldid = 0; fieldid < 5; fieldid++)
+				if (tinfo[fieldid] != NULL)
+					free(tinfo[fieldid]);
+			if (value == NULL)
+				value = json_null();
+			
+			json_object_set(object, labels[i].label, value);
+
+			j++;
+			frame = id3_tag_findframe(tag, labels[i].id, j);
+		}
+	}
+	id3_file_close(fd);
+	return 0;
+}
+#endif
+
+#ifdef USE_OGGMETADDATA
+int media_parseoggmetadata(const char *path, json_t *object)
+{
+	struct
+	{
+		char const *id;
+		char const *label;
+		int const length;
+		enum {
+			label_string,
+			label_integer,
+		} type;
+	} const labels[] =
+	{
+		{str_title, str_title, 5, label_string},
+		{str_album, str_album, 5, label_string},
+		{str_artist, str_artist, 6, label_string},
+		{str_year, str_year, 4, label_integer},
+		{str_genre, str_genre, 5, label_string},
+		{str_date, str_year, 4, label_integer},
+		{"TRACKNUMBER", str_track, 11, label_integer},
+	};
+	FLAC__StreamMetadata *vorbiscomment;
+	FLAC__metadata_get_tags(path, &vorbiscomment);
+	FLAC__StreamMetadata_VorbisComment *data;
+	data = &vorbiscomment->data.vorbis_comment;
+	int n;
+	for (n = 0; n < data->num_comments; n++)
+	{
+		FLAC__StreamMetadata_VorbisComment_Entry *comments;
+		comments = &data->comments[n];
+		json_t *value;
+		int i;
+		for (i = 0; i < sizeof(labels) / sizeof(labels[0]); ++i)
+		{
+			const char *svalue = comments->entry + labels[i].length;
+			if (!strncasecmp(comments->entry, labels[i].id, labels[i].length) &&
+				svalue[0] == '=')
+			{
+				svalue++;
+				switch(labels[i].type)
+				{
+				case label_string:
+					value = json_string(svalue);
+				break;
+				case label_integer:
+					value = json_integer(atoi(svalue));
+				break;
+				}
+				json_object_set(object, labels[i].label, value);
+			}
+		}
+	}
+	FLAC__metadata_object_delete(vorbiscomment);
+
+	/**
+	 * picture
+	 */
+	FLAC__StreamMetadata *vorbispicture;
+	FLAC__metadata_get_picture(path, &vorbispicture, FLAC__STREAM_METADATA_PICTURE_TYPE_FRONT_COVER, NULL, NULL, -1, -1, -1, -1);
+	if (vorbispicture != NULL)
+	{
+		FLAC__StreamMetadata_Picture *picture;
+		picture = &vorbispicture->data.picture;
+
+		char coverpath[PATH_MAX];
+		strncpy(coverpath, path, PATH_MAX - 10);
+		char *name = strrchr(coverpath, '/');
+		if (name != NULL)
+			name++;
+		else
+			name = coverpath;
+		strcpy(name, "cover.");
+
+		json_t *value;
+		value = json_string(media_regfile(coverpath, picture->mime_type, picture->data, picture->data_length));
+		json_object_set(object, str_cover, value);
+
+		FLAC__metadata_object_delete(vorbispicture);
+	}
+	return 0;
+}
+#endif
 
 static char *current_path;
 media_t *media_build(player_ctx_t *player, const char *url)

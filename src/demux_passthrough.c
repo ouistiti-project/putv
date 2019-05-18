@@ -76,18 +76,20 @@ static demux_ctx_t *demux_init(player_ctx_t *player, const char *search)
 	return ctx;
 }
 
-static jitter_t *demux_jitter(demux_ctx_t *ctx)
+static jitter_t *demux_jitter(demux_ctx_t *ctx, jitte_t jitte)
 {
-	return ctx->estream->ops->jitter(ctx->estream->ctx);
+	if (ctx->estream == NULL)
+		return NULL;
+	return ctx->estream->ops->jitter(ctx->estream->ctx, jitte);
 }
 
 static int demux_run(demux_ctx_t *ctx)
 {
-	const event_new_es_t event = {.pid = 0, .mime = ctx->mime};
+	const event_new_es_t event = {.pid = 0, .mime = ctx->mime, .jitte = JITTE_HIGH};
 	event_listener_t *listener = ctx->listener;
 	while (listener)
 	{
-		listener->cb(ctx->listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
+		listener->cb(listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
 		listener = listener->next;
 	}
 	return 0;
@@ -132,6 +134,7 @@ static int demux_attach(demux_ctx_t *ctx, long index, decoder_t *decoder)
 {
 	if (index > 0)
 		return -1;
+	dbg("demux: attach");
 	ctx->estream = decoder;
 }
 
@@ -142,6 +145,8 @@ static decoder_t *demux_estream(demux_ctx_t *ctx, long index)
 
 static void demux_destroy(demux_ctx_t *ctx)
 {
+	if (ctx->estream != NULL)
+		ctx->estream->ops->destroy(ctx->estream->ctx);
 	event_listener_t *listener = ctx->listener;
 	while (listener)
 	{

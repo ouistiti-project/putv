@@ -67,6 +67,8 @@ struct decoder_ctx_s
 #define DECODER_CTX
 #include "decoder.h"
 #include "media.h"
+#include "event.h"
+#include "src.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -78,10 +80,16 @@ struct decoder_ctx_s
 
 #define decoder_dbg(...)
 
+#ifdef HEARTBEAT_0
+#define DECODER_HEARTBEAT
+#endif
+
 //#define JITTER_init jitter_scattergather_init
 //#define JITTER_destroy jitter_scattergather_destroy
 #define JITTER_init jitter_ringbuffer_init
 #define JITTER_destroy jitter_ringbuffer_destroy
+
+static jitter_t *decoder_jitter(decoder_ctx_t *ctx, jitte_t jitte);
 
 static
 enum mad_flow input(void *data,
@@ -112,6 +120,11 @@ enum mad_flow input(void *data,
 	return MAD_FLOW_CONTINUE;
 }
 
+#ifdef DEBUG
+static clockid_t clockid = CLOCK_REALTIME;
+static struct timespec start = {0, 0};
+#endif
+
 static
 enum mad_flow output(void *data,
 		     struct mad_header const *header,
@@ -121,6 +134,21 @@ enum mad_flow output(void *data,
 	filter_audio_t audio;
 
 	/* pcm->samplerate contains the sampling frequency */
+
+#ifdef DEBUG
+	if (start.tv_nsec == 0)
+	{
+		clock_gettime(clockid, &start);
+	}
+#endif
+#ifdef DEBUG
+	unsigned long duration = (header->duration.fraction);
+	duration /= (MAD_TIMER_RESOLUTION / 100000);
+	decoder_dbg("duration 1 %lu.%02lums", duration / 100, duration % 100);
+	duration = pcm->length * 1000;
+	duration /= (pcm->samplerate / 100);
+	decoder_dbg("duration 2 %lu.%02lums", duration / 100, duration % 100);
+#endif
 
 	audio.samplerate = pcm->samplerate;
 	if (ctx->out->ctx->frequence == 0)
@@ -244,9 +272,24 @@ enum mad_flow header(void *data, struct mad_header const *header)
 //#define BUFFERSIZE MAD_BUFFER_MDLEN
 
 /// NBBUFFER must be at least 3 otherwise the decoder block on the end of the source
-#define NBUFFER 6
+#define NBUFFER 4
 
 static const char *jitter_name = "mad decoder";
+
+static void _decoder_listener(void *arg, event_t event, void *eventarg)
+{
+	decoder_ctx_t *ctx = (decoder_ctx_t *)arg;
+	switch(event)
+	{
+		case SRC_EVENT_NEW_ES:
+		{
+			event_new_es_t *event_data = (event_new_es_t *)eventarg;
+			decoder_jitter(ctx, event_data->jitte);
+		}
+		break;
+	}
+}
+
 static decoder_ctx_t *mad_init(player_ctx_t *player, const filter_t *filter)
 {
 	decoder_ctx_t *ctx = calloc(1, sizeof(*ctx));
@@ -257,18 +300,28 @@ static decoder_ctx_t *mad_init(player_ctx_t *player, const filter_t *filter)
 			input, header /* header */, 0 /* filter */, output,
 			error, 0 /* message */);
 
-	jitter_t *jitter = JITTER_init(jitter_name, NBUFFER, BUFFERSIZE);
-	//jitter_t *jitter = jitter_ringbuffer_init(jitter_name, NBUFFER, BUFFERSIZE);
-	ctx->in = jitter;
-	jitter->format = MPEG2_3_MP3;
-	jitter->ctx->thredhold = NBUFFER / 2;
-
+	const src_t *src = player_source(player);
+	if (src->ops->eventlistener)
+	{
+		src->ops->eventlistener(src->ctx, _decoder_listener, ctx);
+	}
 	return ctx;
 }
 
-static jitter_t *mad_jitter(decoder_ctx_t *decoder)
+static jitter_t *decoder_jitter(decoder_ctx_t *ctx, jitte_t jitte)
 {
-	return decoder->in;
+	if (ctx->in == NULL)
+	{
+		int factor = jitte;
+		int nbbuffer = NBUFFER << factor;
+		jitter_t *jitter = JITTER_init(jitter_name, nbbuffer, BUFFERSIZE);
+		//jitter_t *jitter = jitter_ringbuffer_init(jitter_name, NBUFFER, BUFFERSIZE);
+		jitter->format = MPEG2_3_MP3;
+		jitter->ctx->thredhold = nbbuffer / 2;
+
+		ctx->in = jitter;
+	}
+	return ctx->in;
 }
 
 static void *mad_thread(void *arg)
@@ -281,6 +334,22 @@ static void *mad_thread(void *arg)
 #endif
 	dbg("decoder: start running");
 	result = mad_decoder_run(&ctx->decoder, MAD_DECODER_MODE_SYNC);
+#ifdef DEBUG
+	clockid_t clockid = CLOCK_REALTIME;
+	static struct timespec now;
+	clock_gettime(clockid, &now);
+	now.tv_sec -= start.tv_sec;
+	if (now.tv_nsec > start.tv_nsec)
+	{
+		now.tv_nsec -= start.tv_nsec;
+	}
+	else
+	{
+		now.tv_nsec -= 1000000000 - start.tv_nsec;
+		now.tv_sec -= 1;
+	}
+	dbg("decoder: end %lu.%09lu", now.tv_sec, now.tv_nsec);
+#endif
 	dbg("decoder: stop running");
 	/**
 	 * push the last buffer to the encoder, otherwise the next
@@ -347,7 +416,7 @@ const decoder_ops_t *decoder_mad = &(const decoder_ops_t)
 {
 	.check = decoder_check,
 	.init = mad_init,
-	.jitter = mad_jitter,
+	.jitter = decoder_jitter,
 	.run = mad_run,
 	.destroy = mad_destroy,
 	.mime = mad_mime,

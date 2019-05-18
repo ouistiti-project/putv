@@ -32,6 +32,7 @@
 
 #define __USE_GNU
 #include <pthread.h>
+#include <sys/mman.h>
 
 #include "jitter.h"
 
@@ -146,6 +147,17 @@ static heartbeat_t *jitter_heartbeat(jitter_ctx_t *ctx, heartbeat_t *new)
 		ctx->heartbeat = new;
 	return old;
 }
+
+#ifdef USE_REALTIME
+static void jitter_lock(jitter_ctx_t *ctx)
+{
+	jitter_private_t *private = (jitter_private_t *)ctx->private;
+
+	mlock(private->buffer, (ctx->count + VARIATIC_INPUT) * ctx->size);
+}
+#else
+#define jitter_lock NULL
+#endif
 
 static unsigned char *jitter_pull(jitter_ctx_t *jitter)
 {
@@ -337,7 +349,7 @@ static void jitter_pop(jitter_ctx_t *jitter, size_t len)
 	{
 		jitter_dbg("jitter %s pop B %ld/%d %p %p", jitter->name, len, private->level, private->in, private->out);
 	}
-	if (private->level <= 0)
+	if (private->level <= jitter->size)
 		private->state = JITTER_FILLING;
 }
 
@@ -408,6 +420,7 @@ static const jitter_ops_t *jitter_ringbuffer = &(jitter_ops_t)
 {
 	.heartbeat = jitter_heartbeat,
 	.reset = jitter_reset,
+	.lock = jitter_lock,
 	.pull = jitter_pull,
 	.push = jitter_push,
 	.peer = jitter_peer,

@@ -100,7 +100,7 @@ static void *_heartbeat_thread(void *arg)
 	while (ctx->run)
 	{
 		clock.tv_sec = 0;
-		clock.tv_nsec = ctx->ms * 1000000;
+		clock.tv_nsec = ctx->ms * HEARTBEAT_COEF_1000 * 1000;
 		clock_nanosleep(clockid, flags, &clock, &rest);
 		pthread_cond_broadcast(&ctx->cond);
 	}

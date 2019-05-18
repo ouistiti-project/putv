@@ -247,8 +247,8 @@ static void _player_listener(void *arg, event_t event, void *eventarg)
 		decoder = decoder_build(player, event_data->mime, player_filter(player));
 		if (decoder != NULL)
 		{
-			decoder->ops->run(decoder->ctx, player->audioout);
 			src->ops->attach(src->ctx, event_data->pid, decoder);
+			decoder->ops->run(decoder->ctx, player->audioout);
 		}
 		else
 			err("player: decoder not found for %s", event_data->mime);
@@ -259,7 +259,7 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 {
 	struct _player_play_s *data = (struct _player_play_s *)arg;
 	player_ctx_t *player = data->ctx;
-	src_t *src = NULL;
+	const src_t *src = NULL;
 
 	dbg("player: prepare %d %s %s", id, url, mime);
 	src = src_build(player, url, mime);
@@ -275,11 +275,8 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 		}
 		else
 		{
-			decoder_t *decoder = NULL;
-			decoder = decoder_build(player, mime, player_filter(player));
-
-			src->ops->attach(src->ctx, 0, decoder);
-			decoder->ops->run(decoder->ctx, player->audioout);
+			const event_new_es_t event = {.pid = 0, .mime = mime, .jitte = JITTE_LOW};
+			_player_listener(player, SRC_EVENT_NEW_ES, (void *)&event);
 		}
 
 		return 0;
@@ -364,7 +361,8 @@ int player_run(player_ctx_t *ctx)
 				 * the src needs to be ready before the decoder
 				 * to set a producer if it's needed
 				 */
-				ctx->current->src->ops->run(ctx->current->src->ctx);
+				const src_t *src = ctx->current->src;
+				src->ops->run(src->ctx);
 				if (ctx->media->ops->next)
 				{
 					ctx->media->ops->next(ctx->media->ctx);

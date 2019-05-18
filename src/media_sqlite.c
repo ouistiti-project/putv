@@ -271,6 +271,7 @@ static int opus_insert_word(media_ctx_t *ctx, const char *table, const char *wor
 		ret = sqlite3_prepare_v2(db, sql, -1, &st_insert, NULL);
 		SQLITE3_CHECK(ret, -1, wordinsert);
 
+		index = sqlite3_bind_parameter_index(st_insert, "@WORD");
 		ret = sqlite3_bind_text(st_insert, index, word, -1, SQLITE_STATIC);
 		SQLITE3_CHECK(ret, -1, wordinsert);
 

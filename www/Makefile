@@ -1,13 +1,16 @@
-data-y+=htdocs/ouiradio.html
-htdocs/ouiradio.html_ALIAS+=htdocs/index.html
-data-y+=htdocs/ouiradio.js
-data-y+=htdocs/js/jsonrpc.js
+HTDOCS?=htdocs/apps/
+TRUSTDOCS?=htdocs/trust/
 
-data-y+=htdocs/css/bootstrap.min.css
-data-y+=htdocs/css/bootstrap.min.css.map
-data-y+=htdocs/fonts/glyphicons-halflings-regular.woff2
-data-y+=htdocs/js/bootstrap.min.js
-data-y+=htdocs/js/jquery.min.js
+data-y+=$(HTDOCS)ouiradio.html
+$(HTDOCS)ouiradio.html_ALIAS-$(HTINDEX)+=$(HTDOCS)index.html
+data-y+=$(HTDOCS)ouiradio.json
+data-y+=$(HTDOCS)js/jsonrpc.js
+
+data-y+=$(TRUSTDOCS)css/bootstrap.min.css
+data-y+=$(TRUSTDOCS)css/bootstrap.min.css.map
+data-y+=$(TRUSTDOCS)fonts/glyphicons-halflings-regular.woff2
+data-y+=$(TRUSTDOCS)js/bootstrap.min.js
+data-y+=$(TRUSTDOCS)js/jquery.min.js
 
 BOOTSTRAP_VERSION=3.3.7
 bootstrap-$(BOOTSTRAP_VERSION)-dist.zip:
@@ -16,19 +19,19 @@ bootstrap-$(BOOTSTRAP_VERSION)-dist.zip:
 bootstrap-$(BOOTSTRAP_VERSION)-dist: bootstrap-$(BOOTSTRAP_VERSION)-dist.zip
 	unzip bootstrap-$(BOOTSTRAP_VERSION)-dist.zip
 
-htdocs/css/bootstrap.min.css: bootstrap-$(BOOTSTRAP_VERSION)-dist
-	mkdir -p htdocs/css
-	mkdir -p htdocs/js
-	mkdir -p htdocs/fonts
-	mv -f bootstrap-$(BOOTSTRAP_VERSION)-dist/css/* htdocs/css/
-	mv -f bootstrap-$(BOOTSTRAP_VERSION)-dist/js/* htdocs/js/
-	mv -f bootstrap-$(BOOTSTRAP_VERSION)-dist/fonts/* htdocs/fonts/
+$(TRUSTDOCS)css/bootstrap.min.css: bootstrap-$(BOOTSTRAP_VERSION)-dist
+	mkdir -p $(TRUSTDOCS)css
+	mkdir -p $(TRUSTDOCS)js
+	mkdir -p $(TRUSTDOCS)fonts
+	mv -f bootstrap-$(BOOTSTRAP_VERSION)-dist/css/* $(TRUSTDOCS)css/
+	mv -f bootstrap-$(BOOTSTRAP_VERSION)-dist/js/* $(TRUSTDOCS)js/
+	mv -f bootstrap-$(BOOTSTRAP_VERSION)-dist/fonts/* $(TRUSTDOCS)fonts/
 	rm -rf bootstrap-$(BOOTSTRAP_VERSION)-dist
 
 JQUERY_VERSION=3.3.1
 jquery$(JQUERY_VERSION:%=-%).min.js:
 	wget https://code.jquery.com/jquery$(JQUERY_VERSION:%=-%).min.js
 
-htdocs/js/jquery.min.js: jquery$(JQUERY_VERSION:%=-%).min.js
+$(TRUSTDOCS)js/jquery.min.js: jquery$(JQUERY_VERSION:%=-%).min.js
 	mkdir -p htdocs/js/
-	cp -f jquery$(JQUERY_VERSION:%=-%).min.js htdocs/js/jquery.min.js
+	cp -f jquery$(JQUERY_VERSION:%=-%).min.js $(TRUSTDOCS)js/jquery.min.js

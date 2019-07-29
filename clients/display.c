@@ -1,5 +1,5 @@
 /*****************************************************************************
- * main.c
+ * display.c
  * this file is part of https://github.com/ouistiti-project/putv
  *****************************************************************************
  * Copyright (C) 2016-2017
@@ -40,6 +40,7 @@
 
 #include "client_json.h"
 #include "../version.h"
+#include "display.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -49,58 +50,32 @@
 #define dbg(...)
 #endif
 
-
-typedef int (*print_t)(void *data, char *string);
-
 typedef struct display_ctx_s display_ctx_t;
 struct display_ctx_s
 {
 	int inotifyfd;
 	int dirfd;
-	int linelength;
-	print_t print;
-	void *print_data;
+	display_t disp;
 	const char *root;
 	const char *name;
 	char run;
 };
 
-int display_string(void *arg, char *string)
-{
-	display_ctx_t *data = (display_ctx_t *)arg;
-	int length = strlen(string);
-	int indent = (data->linelength - length) / 2;
-	if (indent < 0)
-	{
-		char *cut = strstr(string," ");
-		if (cut != NULL)
-		{
-			*cut = 0;
-			cut++;
-			display_string(data, string);
-		}
-		else
-		{
-			string[data->linelength] = 0;
-			printf("%s\n", string);
-		}
-	}
-	else
-	{
-		printf("%*s%s\n",indent,"",string);
-	}
-	return 0;
-}
-
 int display_default(void *eventdata, json_t *json_params)
 {
 	display_ctx_t *data = (display_ctx_t *)eventdata;
+	display_t *disp = &data->disp;
 	char *state;
 	int id;
 	json_t *info = json_object();
 
 	json_unpack(json_params, "{ss,si,so}", "state", &state,"id", &id, "info", &info);
-	data->print(data->print_data,  state);
+	if (!strcmp(state, "play"))
+		disp->ops->print(disp->ctx, E_PLAY, state);
+	else if (!strcmp(state, "pause"))
+		disp->ops->print(disp->ctx, E_PAUSE, state);
+	else if (!strcmp(state, "stop"))
+		disp->ops->print(disp->ctx, E_STOP, state);
 
 	const char *title = NULL;
 	const char *album = NULL;
@@ -109,19 +84,19 @@ int display_default(void *eventdata, json_t *json_params)
 	if (artist != NULL)
 	{
 		char *string = strdup(artist);
-		data->print(data->print_data, string);
+		disp->ops->print(disp->ctx, E_ARTIST, string);
 		free(string);
 	}
 	if (title != NULL)
 	{
 		char *string = strdup(title);
-		data->print(data->print_data, string);
+		disp->ops->print(disp->ctx, E_TITLE, string);
 		free(string);
 	}
 	if (album != NULL)
 	{
 		char *string = strdup(album);
-		data->print(data->print_data, string);
+		disp->ops->print(disp->ctx, E_ALBUM, string);
 		free(string);
 	}
 	return 0;
@@ -197,11 +172,9 @@ int main(int argc, char **argv)
 	display_ctx_t display_data = {
 		.root = "/tmp",
 		.name = basename(argv[0]),
-		.linelength = 40,
-		.print = display_string,
-		.print_data = &display_data,
+		.disp.ops = display_console,
 	};
-	
+
 	int opt;
 	do
 	{
@@ -228,6 +201,8 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
+	display_data.disp.ctx = display_data.disp.ops->create();
+
 #ifdef USE_INOTIFY
 	display_data.inotifyfd = inotify_init();
 	int dirfd = inotify_add_watch(display_data.inotifyfd, display_data.root,
@@ -241,5 +216,7 @@ int main(int argc, char **argv)
 	run_client(socketpath, &display_data);
 	free(socketpath);
 #endif
+
+	display_data.disp.ops->destroy(display_data.disp.ctx);
 	return 0;
 }

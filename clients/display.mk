@@ -1,5 +1,6 @@
 bin-y+=display
 display_SOURCES+=display.c
+display_SOURCES+=display_console.c
 display_SOURCES+=client_json.c
 display_CFLAGS+=-I../lib/jsonrpc
 display_CFLAGS+=-DUSE_INOTIFY

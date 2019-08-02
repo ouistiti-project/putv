@@ -50,6 +50,14 @@
 #define dbg(...)
 #endif
 
+extern unsigned int crc32b(unsigned char *message);
+
+unsigned int c_album;
+unsigned int c_artist;
+unsigned int c_title;
+unsigned int c_genre;
+unsigned int c_state;
+
 typedef struct display_ctx_s display_ctx_t;
 struct display_ctx_s
 {
@@ -69,36 +77,30 @@ int display_default(void *eventdata, json_t *json_params)
 	int id;
 	json_t *info = json_object();
 
+	disp->ops->clear(disp->ctx);
 	json_unpack(json_params, "{ss,si,so}", "state", &state,"id", &id, "info", &info);
 	if (!strcmp(state, "play"))
-		disp->ops->print(disp->ctx, E_PLAY, state);
+		disp->ops->print(disp->ctx, c_state, state);
 	else if (!strcmp(state, "pause"))
-		disp->ops->print(disp->ctx, E_PAUSE, state);
+		disp->ops->print(disp->ctx, c_state, state);
 	else if (!strcmp(state, "stop"))
-		disp->ops->print(disp->ctx, E_STOP, state);
+		disp->ops->print(disp->ctx, c_state, state);
 
-	const char *title = NULL;
-	const char *album = NULL;
-	const char *artist = NULL;
-	json_unpack(info, "{ss,ss,ss}", "album", &album,"title", &title, "artist", &artist);
-	if (artist != NULL)
+	char *key = NULL;
+	json_t *value;
+	json_object_foreach(info, key, value)
 	{
-		char *string = strdup(artist);
-		disp->ops->print(disp->ctx, E_ARTIST, string);
-		free(string);
+		if (json_is_string(value))
+		{
+			char *string = json_string_value(value);
+			if (string != NULL)
+			{
+				disp->ops->print(disp->ctx, crc32b(key), string);
+			}
+		}
 	}
-	if (title != NULL)
-	{
-		char *string = strdup(title);
-		disp->ops->print(disp->ctx, E_TITLE, string);
-		free(string);
-	}
-	if (album != NULL)
-	{
-		char *string = strdup(album);
-		disp->ops->print(disp->ctx, E_ALBUM, string);
-		free(string);
-	}
+	disp->ops->flush(disp->ctx);
+
 	return 0;
 }
 
@@ -108,6 +110,7 @@ int run_client(char * socketpath, display_ctx_t *display_data)
 
 	client_data_t data = {0};
 	client_unix(socketpath, &data);
+
 	client_eventlistener(&data, "onchange", display, display_data);
 	int ret = client_loop(&data);
 	unlink(socketpath);
@@ -121,6 +124,13 @@ int run_client(char * socketpath, display_ctx_t *display_data)
 static void *_check_socket(void *arg)
 {
 	display_ctx_t *ctx = (display_ctx_t *)arg;
+	char *socketpath;
+	socketpath = malloc(strlen(ctx->root) + 1 + strlen(ctx->name) + 1);
+	sprintf(socketpath, "%s/%s", ctx->root, ctx->name);
+	if (!access(socketpath, R_OK | W_OK))
+	{
+		run_client(socketpath, (void *)ctx);
+	}
 	while (ctx->run)
 	{
 		char buffer[BUF_LEN];
@@ -140,14 +150,10 @@ static void *_check_socket(void *arg)
 			{
 				if (event->mask & IN_CREATE)
 				{
-					char *socketpath = malloc(strlen(ctx->root) + 1 + strlen(ctx->name) + 1);
-					sprintf(socketpath, "%s/%s", ctx->root, ctx->name);
-
 					if (!access(socketpath, R_OK | W_OK))
 					{
 						run_client(socketpath, ctx);
 					}
-					free(socketpath);
 				}
 #if 0
 				else if (event->mask & IN_DELETE)

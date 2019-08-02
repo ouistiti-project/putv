@@ -387,7 +387,7 @@ int media_insert(client_data_t *data, client_event_prototype_t proto, void *prot
 	data->proto = proto;
 	data->data = protodata;
 	data->params = media;
-	client_cmd(data, "append");	
+	client_cmd(data, "append");
 	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
@@ -400,7 +400,7 @@ int media_remove(client_data_t *data, client_event_prototype_t proto, void *prot
 	data->proto = proto;
 	data->data = protodata;
 	data->params = media;
-	client_cmd(data, "remove");	
+	client_cmd(data, "remove");
 	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
@@ -413,7 +413,7 @@ int media_list(client_data_t *data, client_event_prototype_t proto, void *protod
 	data->proto = proto;
 	data->data = protodata;
 	data->list = list;
-	client_cmd(data, "list");	
+	client_cmd(data, "list");
 	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
@@ -423,8 +423,10 @@ static size_t recv_cb(void *buffer, size_t len, void *arg)
 {
 	client_data_t *data = (client_data_t *)arg;
 	int ret = recv(data->sock, buffer, len, MSG_NOSIGNAL);
-	if (ret >= 0)
+	if (ret > 0)
 		((char*)buffer)[ret] = 0;
+	else
+		ret = -1;
 	return ret;
 }
 #endif
@@ -454,7 +456,10 @@ int client_loop(client_data_t *data)
 			if (response != NULL)
 				jsonrpc_jresponse(response, table, data);
 			else
+			{
 				err("receive mal formated json %s", error.text);
+				run = 0;
+			}
 #else
 			int len;
 			ret = ioctl(data->sock, FIONREAD, &len);
@@ -463,9 +468,9 @@ int client_loop(client_data_t *data)
 			buffer[ret] = 0;
 			if (ret > 0)
 				jsonrpc_handler(buffer, strlen(buffer), table, data);
-#endif
 			if (ret == 0)
 				run = 0;
+#endif
 		}
 		if (ret < 0)
 			run = 0;

@@ -44,7 +44,7 @@ static void * display_create()
 	return ctx;
 }
 
-static int display_print(void *arg, int type, char *string)
+static int display_print(void *arg, int type, const char *string)
 {
 	display_console_ctx_t *data = (display_console_ctx_t *)arg;
 	int length = strlen(string);
@@ -60,8 +60,7 @@ static int display_print(void *arg, int type, char *string)
 		}
 		else
 		{
-			string[data->linelength] = 0;
-			printf("%s\n", string);
+			printf("%.*s\n", data->linelength, string);
 		}
 	}
 	else
@@ -69,6 +68,14 @@ static int display_print(void *arg, int type, char *string)
 		printf("%*s%s\n",indent,"",string);
 	}
 	return 0;
+}
+
+static void display_clear(void *arg)
+{
+}
+
+static void display_flush(void *arg)
+{
 }
 
 static void display_destroy(void *arg)
@@ -79,6 +86,8 @@ static void display_destroy(void *arg)
 display_ops_t *display_console = &(display_ops_t)
 {
 	.create = display_create,
+	.clear = display_clear,
 	.print = display_print,
+	.flush = display_flush,
 	.destroy = display_destroy,
 };

@@ -168,8 +168,70 @@ static void *_check_socket(void *arg)
 			i += EVENT_SIZE + event->len;
 		}
 	}
+	free(socketpath);
 }
 #endif
+
+static display_elem_t *catalog_generate(display_ops_t *display, void *arg)
+{
+	const generator_ops_t *generator = display->generator;
+	const window_ops_t *window = &generator->window;
+	display_elem_t *elems = NULL;
+	display_elem_t *elem;
+
+	int lineh = (int)(window->height(arg) * 0.20);
+	int seph = (int)(window->height(arg) * 0.05);
+	int sideright = (int)(window->width(arg) * 0.20);
+	int sideleft = (int)(window->width(arg) * 0.70);
+	int sidesep = (int)(window->width(arg) * 0.10);
+
+	elem = generator->new_elem(arg, T_DIV, c_artist, 0, 0, sideleft, lineh);
+	elem->setpadding(elem, window->getpadding(arg));
+	elem->setfgcolor(elem, window->getfgcolor(arg));
+	elem->setfont(elem, window->getlfont(arg));
+	elem->settextalign(elem, ELEM_CENTER);
+	elem->next = elems;
+	elems = elem;
+
+	elem = generator->new_elem(arg, T_DIV, c_title, 0, (lineh + seph) * 1, sideleft, lineh * 2 + seph);
+	elem->setpadding(elem, window->getpadding(arg));
+	elem->setfgcolor(elem, window->getfgcolor(arg));
+	elem->setfont(elem, window->getlfont(arg));
+	elem->settextalign(elem, ELEM_CENTER);
+	elem->next = elems;
+	elems = elem;
+
+	elem = generator->new_elem(arg, T_DIV, c_album, 0, (lineh + seph) * 3, sideleft, lineh);
+	elem->setpadding(elem, window->getpadding(arg));
+	elem->setfgcolor(elem, window->getfgcolor(arg));
+	elem->setfont(elem, window->getfont(arg));
+	elem->settextalign(elem, ELEM_CENTER);
+	elem->next = elems;
+	elems = elem;
+
+	elem = generator->new_elem(arg, T_DIV, c_state, sideleft + sidesep, (window->height(arg) / 2) - (lineh - seph ), sideright, lineh);
+	elem->setpadding(elem, window->getpadding(arg));
+	elem->setfgcolor(elem, window->getfgcolor(arg));
+	elem->setfont(elem, window->getfont(arg));
+	elem->appendfunc(elem, window->printborder, arg);
+	elem->settextalign(elem, ELEM_CENTER);
+	elem->next = elems;
+	elems = elem;
+
+	return elems;
+}
+
+void catalog_free(display_elem_t *elems)
+{
+	display_elem_t *elem = elems;
+	while (elem != NULL)
+	{
+		elem = elems->next;
+		elems->destroy(elems);
+		elems = elem;
+	}
+}
+
 
 #define DAEMONIZE 0x01
 int main(int argc, char **argv)
@@ -178,13 +240,17 @@ int main(int argc, char **argv)
 	display_ctx_t display_data = {
 		.root = "/tmp",
 		.name = basename(argv[0]),
+#ifdef DIRECTFB
+		.disp.ops = display_directfb,
+#else
 		.disp.ops = display_console,
+#endif
 	};
 
 	int opt;
 	do
 	{
-		opt = getopt(argc, argv, "R:n:hD");
+		opt = getopt(argc, argv, "R:n:hDc");
 		switch (opt)
 		{
 			case 'R':
@@ -194,10 +260,14 @@ int main(int argc, char **argv)
 				display_data.name = optarg;
 			break;
 			case 'h':
+				printf("display -R <dir> -n <socketname> -D -c");
 				return -1;
 			break;
 			case 'D':
 				mode |= DAEMONIZE;
+			break;
+			case 'c':
+				display_data.disp.ops = display_console;
 			break;
 		}
 	} while(opt != -1);
@@ -207,7 +277,22 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
-	display_data.disp.ctx = display_data.disp.ops->create();
+	c_album = crc32b("album");
+	c_title = crc32b("title");
+	c_artist = crc32b("artist");
+	c_genre = crc32b("genre");
+	c_state = crc32b("state");
+
+	display_data.disp.ctx = display_data.disp.ops->create(argc, argv);
+
+	if (display_data.disp.ctx == NULL)
+		return -1;
+	display_elem_t *dom = NULL;
+	if (display_data.disp.ops->setdom != NULL)
+	{
+		dom = catalog_generate(display_data.disp.ops, display_data.disp.ctx);
+		display_data.disp.ops->setdom(display_data.disp.ctx, dom);
+	}
 
 #ifdef USE_INOTIFY
 	display_data.inotifyfd = inotify_init();
@@ -222,7 +307,8 @@ int main(int argc, char **argv)
 	run_client(socketpath, &display_data);
 	free(socketpath);
 #endif
-
+	if (dom != NULL)
+		catalog_free(dom);
 	display_data.disp.ops->destroy(display_data.disp.ctx);
 	return 0;
 }

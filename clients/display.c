@@ -260,7 +260,10 @@ int main(int argc, char **argv)
 				display_data.name = optarg;
 			break;
 			case 'h':
-				printf("display -R <dir> -n <socketname> -D -c");
+				fprintf(stderr, "display -R <dir> -n <socketname> -D -c");
+				fprintf(stderr, " -R <DIR>   change the socket directory directory")
+				fprintf(stderr, " -n <NAME>  change the socket name")
+				fprintf(stderr, " -c         force display on the console")
 				return -1;
 			break;
 			case 'D':

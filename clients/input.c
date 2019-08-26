@@ -235,7 +235,10 @@ int run_client(void *arg)
 			ret = read(ctx->inputfd, &event, sizeof(event));
 			input_parseevent(ctx, &event);
 		}
+		if (ret < 0)
+			break;
 	}
+	close(ctx->inputfd);
 #endif
 	pthread_join(thread, NULL);
 	unlink(ctx->socketpath);
@@ -306,7 +309,7 @@ int main(int argc, char **argv)
 		.input_path = "/dev/input/event0",
 	};
 	const char *media_path;
-	
+
 	int opt;
 	do
 	{

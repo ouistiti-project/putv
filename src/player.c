@@ -133,7 +133,7 @@ media_t *player_media(player_ctx_t *ctx)
 {
 	return ctx->media;
 }
-	
+
 void player_destroy(player_ctx_t *ctx)
 {
 	player_state(ctx, STATE_ERROR);
@@ -186,17 +186,14 @@ state_t player_state(player_ctx_t *ctx, state_t state)
 	{
 		ctx->state = state;
 		pthread_cond_broadcast(&ctx->cond);
-		if (state == STATE_PAUSE)
+		player_event_t *it = ctx->events;
+		while (it != NULL)
 		{
-			player_event_t *it = ctx->events;
-			while (it != NULL)
-			{
-				it->cb(it->ctx, ctx, ctx->state);
-				it = it->next;
-			}
+			it->cb(it->ctx, ctx, ctx->state);
+			it = it->next;
 		}
 	}
-	
+
 	return ctx->state;
 }
 

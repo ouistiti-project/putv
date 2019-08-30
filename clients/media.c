@@ -111,7 +111,7 @@ int _display(void *data, json_t *entry)
 	}
 	else
 		printf("Media unkonwn:\n");
-	
+
 	json_t *info = json_object_get(entry, "info");
 	if (json_is_object(info))
 	{
@@ -236,6 +236,20 @@ int main(int argc, char **argv)
 				data.list.first = data.media.id;
 			break;
 			case 'h':
+				fprintf(stderr, "media -R <dir> -n <socketname> -D -m <jsonfile>");
+				fprintf(stderr, "manage mediadb on PUTVs, application\n");
+				fprintf(stderr, " -D         daemonize");
+				fprintf(stderr, " -R <DIR>   change the socket directory directory");
+				fprintf(stderr, " -n <NAME>  change the socket name");
+				fprintf(stderr, " -i         insert media");
+				fprintf(stderr, " -r         remove media");
+				fprintf(stderr, " -l         list all media");
+				fprintf(stderr, " -I <ID>    set ID of the media");
+				fprintf(stderr, " -T <Title> set Title of the media");
+				fprintf(stderr, " -A <Name>  set Artist of the media");
+				fprintf(stderr, " -B <Name>  set Album of the media");
+				fprintf(stderr, " -G <Name>  set AGenre of the media");
+				fprintf(stderr, " -U <URL>   set URL of the media");
 				return -1;
 			break;
 			case 'D':

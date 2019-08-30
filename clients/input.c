@@ -329,6 +329,12 @@ int main(int argc, char **argv)
 				media_path = optarg;
 			break;
 			case 'h':
+				fprintf(stderr, "input -R <dir> -n <socketname> -D -m <jsonfile>");
+				fprintf(stderr, "send events from input to putv applications\n");
+				fprintf(stderr, " -D         daemonize");
+				fprintf(stderr, " -R <DIR>   change the socket directory directory");
+				fprintf(stderr, " -n <NAME>  change the socket name");
+				fprintf(stderr, " -m <FILE>  load Json file to mqnqge media");
 				return -1;
 			break;
 			case 'D':

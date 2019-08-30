@@ -261,9 +261,11 @@ int main(int argc, char **argv)
 			break;
 			case 'h':
 				fprintf(stderr, "display -R <dir> -n <socketname> -D -c");
-				fprintf(stderr, " -R <DIR>   change the socket directory directory")
-				fprintf(stderr, " -n <NAME>  change the socket name")
-				fprintf(stderr, " -c         force display on the console")
+				fprintf(stderr, "display events from putv applications\n");
+				fprintf(stderr, " -D         daemonize");
+				fprintf(stderr, " -R <DIR>   change the socket directory directory");
+				fprintf(stderr, " -n <NAME>  change the socket name");
+				fprintf(stderr, " -c         force display on the console");
 				return -1;
 			break;
 			case 'D':

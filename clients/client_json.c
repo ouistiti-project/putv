@@ -265,6 +265,14 @@ int client_unix(const char *socketpath, client_data_t *data)
 	return sock;
 }
 
+void client_async(client_data_t *data,int async)
+{
+	if (async)
+		data->options |= OPTION_ASYNC;
+	else
+		data->options &= ~OPTION_ASYNC;
+}
+
 int client_cmd(client_data_t *data, char * cmd)
 {
 	int ret;
@@ -274,12 +282,17 @@ int client_cmd(client_data_t *data, char * cmd)
 	int pid = data->pid;
 	ret = send(data->sock, buffer, strlen(buffer) + 1, MSG_NOSIGNAL);
 	if (data->options & OPTION_ASYNC)
-		return ret;
-	while (data->pid == pid)
+		return 0;
+	return pid;
+}
+
+int client_wait(client_data_t *data, int pid)
+{
+	while (pid > 0 && data->pid == pid)
 	{
 		pthread_cond_wait(&data->cond, &data->mutex);
 	}
-	return ret;
+	return 0;
 }
 
 int client_next(client_data_t *data, client_event_prototype_t proto, void *protodata)
@@ -289,8 +302,9 @@ int client_next(client_data_t *data, client_event_prototype_t proto, void *proto
 	pthread_mutex_lock(&data->mutex);
 	data->proto = proto;
 	data->data = protodata;
-	client_cmd(data, "next");
+	int pid = client_cmd(data, "next");
 	pthread_mutex_unlock(&data->mutex);
+	client_wait(data, pid);
 	return 0;
 }
 
@@ -301,8 +315,9 @@ int client_play(client_data_t *data, client_event_prototype_t proto, void *proto
 	pthread_mutex_lock(&data->mutex);
 	data->proto = proto;
 	data->data = protodata;
-	client_cmd(data, "play");
+	int pid = client_cmd(data, "play");
 	pthread_mutex_unlock(&data->mutex);
+	client_wait(data, pid);
 	return 0;
 }
 
@@ -313,8 +328,9 @@ int client_pause(client_data_t *data, client_event_prototype_t proto, void *prot
 	pthread_mutex_lock(&data->mutex);
 	data->proto = proto;
 	data->data = protodata;
-	client_cmd(data, "pause");
+	int pid = client_cmd(data, "pause");
 	pthread_mutex_unlock(&data->mutex);
+	client_wait(data, pid);
 	return 0;
 }
 
@@ -325,8 +341,9 @@ int client_stop(client_data_t *data, client_event_prototype_t proto, void *proto
 	pthread_mutex_lock(&data->mutex);
 	data->proto = proto;
 	data->data = protodata;
-	client_cmd(data, "stop");
+	int pid = client_cmd(data, "stop");
 	pthread_mutex_unlock(&data->mutex);
+	client_wait(data, pid);
 	return 0;
 }
 
@@ -337,8 +354,9 @@ int client_status(client_data_t *data, client_event_prototype_t proto, void *pro
 	pthread_mutex_lock(&data->mutex);
 	data->proto = proto;
 	data->data = protodata;
-	client_cmd(data, "status");
+	int pid = client_cmd(data, "status");
 	pthread_mutex_unlock(&data->mutex);
+	client_wait(data, pid);
 	return 0;
 }
 
@@ -350,8 +368,9 @@ int client_volume(client_data_t *data, client_event_prototype_t proto, void *pro
 	data->proto = proto;
 	data->data = protodata;
 	data->params = step;
-	client_cmd(data, "volume");
+	int pid = client_cmd(data, "volume");
 	pthread_mutex_unlock(&data->mutex);
+	client_wait(data, pid);
 	return 0;
 }
 

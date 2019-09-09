@@ -187,6 +187,7 @@ int run_client(void *arg)
 
 	client_data_t data = {0};
 	client_unix(ctx->socketpath, &data);
+	client_async(&data, 1);
 	ctx->client = &data;
 
 	pthread_t thread;

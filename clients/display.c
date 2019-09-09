@@ -86,16 +86,16 @@ int display_default(void *eventdata, json_t *json_params)
 	else if (!strcmp(state, "stop"))
 		disp->ops->print(disp->ctx, c_state, state);
 
-	char *key = NULL;
+	const unsigned char *key = NULL;
 	json_t *value;
 	json_object_foreach(info, key, value)
 	{
 		if (json_is_string(value))
 		{
-			char *string = json_string_value(value);
+			const char *string = json_string_value(value);
 			if (string != NULL)
 			{
-				disp->ops->print(disp->ctx, crc32b(key), string);
+				disp->ops->print(disp->ctx, crc32b((unsigned char *)key), string);
 			}
 		}
 	}

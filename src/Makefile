@@ -7,6 +7,8 @@ ifeq ($(HEARTBEAT),)
 	endif
 endif
 
+PUTV?=putv
+
 bin-y+=$(PUTV)
 $(PUTV)_SOURCES+=main.c
 $(PUTV)_SOURCES+=player.c

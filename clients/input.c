@@ -118,12 +118,15 @@ int input_checkstate(void *data, json_t *params)
 int input_parseevent(input_ctx_t *ctx, const struct input_event *event)
 {
 	if (event->type != EV_KEY)
+	{
 		return -1;
+	}
 	if (event->value != 0) // check only keyrelease event
 		return 0;
 	switch (event->code)
 	{
 	case KEY_PLAYPAUSE:
+		dbg("key KEY_PLAYPAUSE");
 		if (ctx->state == STATE_PLAY)
 			client_pause(ctx->client, input_checkstate, ctx);
 		else
@@ -131,27 +134,34 @@ int input_parseevent(input_ctx_t *ctx, const struct input_event *event)
 	break;
 	case KEY_PLAYCD:
 	case KEY_PLAY:
+		dbg("key KEY_PLAY");
 		client_play(ctx->client, input_checkstate, ctx);
 	break;
 	case KEY_PAUSECD:
 	case KEY_PAUSE:
+		dbg("key KEY_PAUSE");
 		client_pause(ctx->client, input_checkstate, ctx);
 	break;
 	case KEY_STOPCD:
 	case KEY_STOP:
+		dbg("key KEY_STOP");
 		client_stop(ctx->client, input_checkstate, ctx);
 	break;
 	case KEY_NEXTSONG:
 	case KEY_NEXT:
+		dbg("key KEY_NEXT");
 		client_next(ctx->client, input_checkstate, ctx);
 	break;
 	case KEY_VOLUMEDOWN:
+		dbg("key KEY_VOLUMEDOWN");
 		client_volume(ctx->client, NULL, ctx, json_integer(-5));
 	break;
 	case KEY_VOLUMEUP:
+		dbg("key KEY_VOLUMEUP");
 		client_volume(ctx->client, NULL, ctx, json_integer(+5));
 	break;
 	case KEY_PROG1:
+		dbg("key KEY_PROG1");
 		if (ctx->media)
 		{
 			int i = ctx->media_id + 1;
@@ -165,6 +175,7 @@ int input_parseevent(input_ctx_t *ctx, const struct input_event *event)
 		}
 	break;
 	case KEY_PROG2:
+		dbg("key KEY_PROG2");
 		if (ctx->media)
 		{
 			int i = ctx->media_id - 1;
@@ -177,6 +188,8 @@ int input_parseevent(input_ctx_t *ctx, const struct input_event *event)
 			}
 		}
 	break;
+	default:
+		dbg("key %d", event->code);
 	}
 	return 0;
 }
@@ -208,7 +221,7 @@ int run_client(void *arg)
 			struct libinput_event_keyboard *event_kb = libinput_event_get_keyboard_event(ievent);
 			if (event_kb)
 			{
-				dbg("event %p", event_kb);
+				warn("event %p", event_kb);
 				struct input_event event;
 				event.type = EV_KEY;
 				event.code = libinput_event_keyboard_get_key(event_kb);
@@ -350,12 +363,18 @@ int main(int argc, char **argv)
 	}
 
 	json_error_t error;
-	input_data.media = json_load_file(media_path, 0, &error);
+	json_t *media;
+	media = json_load_file(media_path, 0, &error);
+	if (json_is_object(media))
+	{
+		media = json_object_get(media, "media");
+	}
 	if (! json_is_array(input_data.media))
 	{
 		json_decref(input_data.media);
 		input_data.media = NULL;
 	}
+	input_data.media = media;
 #ifdef USE_INOTIFY
 	input_data.inotifyfd = inotify_init();
 	int dirfd = inotify_add_watch(input_data.inotifyfd, input_data.root,

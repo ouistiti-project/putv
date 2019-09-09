@@ -229,7 +229,7 @@ static int _find(media_ctx_t *ctx, int level, media_dirlist_t **pit, int *pmedia
 		it->nitems = scandir(it->path, &it->items, NULL, alphasort);
 		*pmediaid = 0;
 		ctx->first = it;
-		
+
 	}
 	else if (it->level > level)
 	{
@@ -256,7 +256,7 @@ static int _find(media_ctx_t *ctx, int level, media_dirlist_t **pit, int *pmedia
 			case DT_DIR:
 			{
 				media_dirlist_t *new = calloc(1, sizeof(*new));
-				
+
 				if (new)
 				{
 					new->level = level + 1;
@@ -490,8 +490,7 @@ static void *_check_dir(void *arg)
 						_find_mediaid_t data = {ctx->mediaid, NULL, NULL};
 						_find(ctx, 0, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
 					}
-					if (ctx->options & OPTION_LOOP)
-						media_next(ctx);
+					media_next(ctx);
 				}
 				else if (event->mask & IN_DELETE)
 				{

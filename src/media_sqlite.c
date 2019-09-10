@@ -352,19 +352,19 @@ static int opus_parse_info(const char *info, char **ptitle, char **partist, char
 	{
 		json_t *value;
 		value = json_object_get(jinfo, str_title);
-		if (value != NULL)
+		if (value != NULL && json_is_string(value))
 			*ptitle = strdup(json_string_value(value));
 		value = json_object_get(jinfo, str_artist);
-		if (value != NULL)
+		if (value != NULL && json_is_string(value))
 			*partist = strdup(json_string_value(value));
 		value = json_object_get(jinfo, str_album);
-		if (value != NULL)
+		if (value != NULL && json_is_string(value))
 			*palbum = strdup(json_string_value(value));
 		value = json_object_get(jinfo, str_genre);
-		if (value != NULL)
+		if (value != NULL && json_is_string(value))
 			*pgenre = strdup(json_string_value(value));
 		value = json_object_get(jinfo, str_cover);
-		if (value != NULL)
+		if (value != NULL && json_is_string(value))
 			*pcover = strdup(json_string_value(value));
 	}
 	json_decref(jinfo);
@@ -718,7 +718,7 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int *pcoverid)
 			type = sqlite3_column_type(st_select, 1);
 			if (type == SQLITE_INTEGER)
 				coverid = sqlite3_column_int(st_select, 1);
-					
+
 			if (coverid != -1)
 			{
 				char *sql = "update \"opus\" set \"coverid\"=@COVERID where id=@OPUSID";

@@ -207,13 +207,17 @@ static int _find_mediaid(void *arg, media_ctx_t *ctx, int mediaid, const char *p
 	{
 		_run_cb(mdata, mediaid, path, mime);
 	}
-
 	return ret;
 }
 
-static int _find_display(void *arg, media_ctx_t *ctx, int mediaid, const char *path, const char mime)
+static int _find_display(void *arg, media_ctx_t *ctx, int mediaid, const char *path, const char *mime)
 {
 	printf("Media: %d, %s\n", mediaid, path);
+	return 1;
+}
+
+static int _find_count(void *arg, media_ctx_t *ctx, int mediaid, const char *path, const char *mime)
+{
 	return 1;
 }
 
@@ -229,7 +233,6 @@ static int _find(media_ctx_t *ctx, int level, media_dirlist_t **pit, int *pmedia
 		it->nitems = scandir(it->path, &it->items, NULL, alphasort);
 		*pmediaid = 0;
 		ctx->first = it;
-
 	}
 	else if (it->level > level)
 	{
@@ -324,8 +327,6 @@ static int _find(media_ctx_t *ctx, int level, media_dirlist_t **pit, int *pmedia
 		it = _free_medialist(it, 1);
 	}
 
-	if (*pmediaid > ctx->count)
-		ctx->count = *pmediaid;
 	*pit = it;
 	return ret;
 }
@@ -459,6 +460,18 @@ static option_state_t media_random(media_ctx_t *ctx, option_state_t enable)
 	return (ctx->options & OPTION_RANDOM)? OPTION_ENABLE: OPTION_DISABLE;
 }
 
+static int _count_media(media_ctx_t *ctx)
+{
+	int ret;
+	_find_mediaid_t data = {-1, NULL, NULL};
+	_free_medialist(ctx->current, 0);
+	ctx->current = NULL;
+	ctx->count = 0;
+
+	ret = _find(ctx, 0, &ctx->current, &ctx->count, _find_count, &data);
+	return ctx->count;
+}
+
 #ifdef USE_INOTIFY
 #define EVENT_SIZE  (sizeof(struct inotify_event))
 #define BUF_LEN     (1024 * (EVENT_SIZE + 16))
@@ -474,7 +487,7 @@ static void *_check_dir(void *arg)
 
 		if (length < 0)
 		{
-			err("read");
+			err("inotify read");
 		}
 
 		while (i < length)
@@ -483,21 +496,24 @@ static void *_check_dir(void *arg)
 				(struct inotify_event *) &buffer[i];
 			if (event->len)
 			{
-				if (event->mask & IN_CREATE)
+				if ((event->mask & (IN_CREATE | IN_ISDIR)) == (IN_CREATE | IN_ISDIR))
 				{
-					if (ctx->mediaid != -1)
+					/*
+					 * dirty patch but between the event and the directory is ready
+					 * it may take some time
+					 */
+					sleep(1);
+					int count = _count_media(ctx);
+					if (count > 0)
 					{
-						_find_mediaid_t data = {ctx->mediaid, NULL, NULL};
-						_find(ctx, 0, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
+						//media_next(ctx);
+						player_state(ctx->player, STATE_PLAY);
 					}
-					media_next(ctx);
 				}
 				else if (event->mask & IN_DELETE)
 				{
-					_find_mediaid_t data = {ctx->mediaid, NULL, NULL};
-					ctx->mediaid = -1;
-					_find(ctx, 0, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
-					if (ctx->mediaid == -1)
+					int count = _count_media(ctx);
+					if (count == 0)
 					{
 						media_end(ctx);
 						player_state(ctx->player, STATE_STOP);
@@ -541,8 +557,7 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url,...)
 		ctx->root = path;
 		ctx->mediaid = -1;
 		ctx->firstmediaid = 0;
-		_find_mediaid_t data = {-1, NULL, NULL};
-		_find(ctx, 0, &ctx->current, &ctx->count, _find_mediaid, &data);
+		_count_media(ctx);
 
 #ifdef USE_INOTIFY
 		ctx->inotifyfd = inotify_init();

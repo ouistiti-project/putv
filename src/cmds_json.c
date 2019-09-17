@@ -532,9 +532,9 @@ static int method_onchange(json_t *json_params, json_t **result, void *userdata)
 	json_object_set(*result, "media", json_string(mediapath));
 
 	json_t *options = json_array();
-	if (media->ops->loop(media->ctx, OPTION_REQUEST) == OPTION_ENABLE)
+	if (media->ops->loop && media->ops->loop(media->ctx, OPTION_REQUEST) == OPTION_ENABLE)
 		json_array_append(options, json_string("loop"));
-	if (media->ops->random(media->ctx, OPTION_REQUEST) == OPTION_ENABLE)
+	if (media->ops->random && media->ops->random(media->ctx, OPTION_REQUEST) == OPTION_ENABLE)
 		json_array_append(options, json_string("random"));
 	json_object_set(*result, "options", options);
 

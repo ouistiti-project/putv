@@ -255,7 +255,6 @@ int run_client(void *arg)
 	close(ctx->inputfd);
 #endif
 	pthread_join(thread, NULL);
-	unlink(ctx->socketpath);
 	return 0;
 }
 

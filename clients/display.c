@@ -113,7 +113,6 @@ int run_client(char * socketpath, display_ctx_t *display_data)
 
 	client_eventlistener(&data, "onchange", display, display_data);
 	int ret = client_loop(&data);
-	unlink(socketpath);
 	return ret;
 }
 

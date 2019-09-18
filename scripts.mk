@@ -139,14 +139,16 @@ TARGETAR:=$(AR)
 TARGETRANLIB:=$(RANLIB)
 
 CCVERSION:=$(shell $(TARGETCC) -v 2>&1)
-ifneq ($(dirname $(TARGETCC)),)
-TARGETPREFIX=
-elifneq ($(CROSS_COMPILE),)
-ifeq ($(findstring $(CROSS_COMPILE),$(TARGETCC)),)
-TARGETPREFIX=$(CROSS_COMPILE:%-=%)-
-endif
+ifneq ($(dir $(TARGETCC)),./)
+	TARGETPREFIX=
 else
-TARGETPREFIX=
+	ifneq ($(CROSS_COMPILE),)
+		ifeq ($(findstring $(CROSS_COMPILE),$(TARGETCC)),)
+			TARGETPREFIX=$(CROSS_COMPILE:%-=%)-
+		endif
+	else
+		TARGETPREFIX=
+	endif
 endif
 TARGETCC:=$(TARGETPREFIX)$(TARGETCC)
 TARGETLD:=$(TARGETPREFIX)$(LD)
@@ -305,6 +307,9 @@ subdir-files:=$(foreach dir,$(subdir-y),$(filter %$(makefile-ext:%=.%),$(dir)) $
 subdir-target:=$(wildcard $(addsuffix /Makefile,$(subdir-dir:%/.=%)))
 subdir-target+=$(wildcard $(subdir-files))
 
+#download-target+=$(foreach dl,$(download-y),$(DL)/$(dl)/$($(dl)_SOURCE))
+$(foreach dl,$(download-y),$(if $(findstring git,$($(dl)_SITE_METHOD)),$(eval gitclone-target+=$(dl)),$(eval download-target+=$(dl))))
+
 objdir:=$(sort $(dir $(target-objs)))
 
 targets:=
@@ -356,7 +361,7 @@ _hostbuild: $(if $(strip $(hostslib-y) $(hostbin-y)), $(hostobj) $(hostslib-targ
 _configbuild: $(obj) $(if $(wildcard $(CONFIGFILE)),$(join $(builddir),config.h))
 _versionbuild: $(if $(package) $(version), $(join $(builddir),$(VERSIONFILE:%=%.h)))
 
-_build: _info $(objdir) $(subdir-project) $(subdir-target) _hostbuild $(targets)
+_build: _info $(download-target) $(gitclone-target) $(objdir) $(subdir-project) $(subdir-target) _hostbuild $(data-y) $(targets)
 	@:
 
 _install: action:=_install
@@ -391,6 +396,8 @@ distclean: build:=$(action) -f $(srcdir)$(makemore) file
 distclean: $(.DEFAULT_GOAL)
 distclean:
 	$(Q)$(call cmd,clean_dir,$(wildcard $(buildpath:%=%/)host))
+	$(Q)$(call cmd,clean_dir,$(wildcard $(gitclone-target)))
+	$(Q)$(call cmd,clean,$(wildcard $(download-target)))
 	$(Q)$(call cmd,clean,$(wildcard $(builddir)$(CONFIG)))
 	$(Q)$(call cmd,clean,$(wildcard $(join $(builddir),$(CONFIG:.%=%.h))))
 	$(Q)$(call cmd,clean,$(wildcard $(join $(builddir),$(VERSIONFILE:%=%.h))))
@@ -638,6 +645,38 @@ $(bin-install): $(DESTDIR)$(bindir:%/=%)/%$(bin-ext:%=.%): $(obj)%$(bin-ext:%=.%
 $(sbin-install): $(DESTDIR)$(sbindir:%/=%)/%$(bin-ext:%=.%): $(obj)%$(bin-ext:%=.%)
 	@$(call cmd,install_bin)
 	@$(foreach a,$($*_ALIAS) $($*_ALIAS-y), $(shell cd $(DESTDIR)$(sbindir) && rm -f $(a) && ln -s $(sbindir:%/=%)/$*$(bin-ext:%=.%) $(a)))
+
+##
+# Commands for download
+##
+DL?=$(srcdir)/.dl
+
+quiet_cmd_download=DOWNLOAD $*
+define cmd_download
+	wget -q -O $(OUTPUT) $(URL)
+endef
+
+quiet_cmd_gitclone=CLONE $*
+define cmd_gitclone
+	git clone $(URL) $(VERSION) $(OUTPUT)
+endef
+
+$(DL)/:
+	mkdir -p $@
+
+$(download-target): %: $(DL)/
+	$(eval URL=$($*_SITE)/$($*_SOURCE))
+	$(eval DL=$(realpath $(DL)))
+	$(eval OUTPUT=$(DL)/$($*_SOURCE))
+	@$(call cmd,download)
+	@$(if $(findstring .zip, $($*_SOURCE)),unzip -o -d $(srcdir)/$* $(OUTPUT))
+	@$(if $(findstring .tar.gz, $($*_SOURCE)),tar -xzf $(OUTPUT) -C $(srcdir)/$*)
+
+$(gitclone-target): %:
+	$(eval URL=$($*_SITE)/$($*_SOURCE))
+	$(eval OUTPUT=$(srcdir)/$*)
+	$(eval VERSION=$(if $($*_VERSION),-b $($*_VERSION)))
+	@$(call cmd,gitclone)
 
 #if inside makemore
 endif

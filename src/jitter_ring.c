@@ -34,6 +34,7 @@
 #include <pthread.h>
 #include <sys/mman.h>
 
+#include "../config.h"
 #include "jitter.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -66,7 +67,7 @@ struct jitter_private_s
 	pthread_mutex_t mutex;
 	pthread_cond_t condpush;
 	pthread_cond_t condpeer;
-	int level; 
+	int level;
 	enum
 	{
 		JITTER_STOP,

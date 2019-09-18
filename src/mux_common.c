@@ -32,6 +32,7 @@
 #include <errno.h>
 #include <stdlib.h>
 
+#include "../config.h"
 #include "player.h"
 #include "mux.h"
 #include "filter.h"

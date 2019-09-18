@@ -44,6 +44,7 @@
 #include <poll.h>
 #include <sched.h>
 
+#include "../config.h"
 #include "player.h"
 #include "mux.h"
 #include "jitter.h"
@@ -301,7 +302,7 @@ static void *sink_thread(void *arg)
 	pthread_t self = pthread_self();
 	CPU_ZERO(&cpuset);
 	CPU_SET(0, &cpuset);
-	
+
 	ret = pthread_setaffinity_np(self, 1, &cpuset);
 	if (ret != 0)
 		err("src: CPUC affinity error: %s", strerror(errno));

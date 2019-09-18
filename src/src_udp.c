@@ -40,6 +40,7 @@
 #include <fcntl.h>
 #include <pwd.h>
 
+#include "../config.h"
 #include "player.h"
 #include "jitter.h"
 #include "demux.h"
@@ -89,7 +90,7 @@ struct src_ctx_s
 
 /**
  * UDP_THREAD: This feature should minimize the resources, but in fact
- * to receiv data in the decoding thread is too slow and the thread is often 
+ * to receiv data in the decoding thread is too slow and the thread is often
  * not ready to receive UDP packet.
  * The feature is alway possible to remember that is not a good solution.
  */
@@ -322,7 +323,7 @@ static void *src_thread(void *arg)
 	pthread_t self = pthread_self();
 	CPU_ZERO(&cpuset);
 	CPU_SET(0, &cpuset);
-	
+
 	ret = pthread_setaffinity_np(self, 1, &cpuset);
 	if (ret != 0)
 		err("src: CPUC affinity error: %s", strerror(errno));

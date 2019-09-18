@@ -32,6 +32,7 @@
 #include <pthread.h>
 #include <sys/mman.h>
 
+#include "../config.h"
 #include "jitter.h"
 #include "heartbeat.h"
 
@@ -71,7 +72,7 @@ struct jitter_private_s
 	pthread_mutex_t mutex;
 	pthread_cond_t condpush;
 	pthread_cond_t condpeer;
-	unsigned int level; 
+	unsigned int level;
 	enum
 	{
 		JITTER_STOP,
@@ -111,7 +112,7 @@ jitter_t *jitter_scattergather_init(const char *name, unsigned int count, size_t
 	pthread_cond_init(&private->condpeer, NULL);
 
 	// create the scatter gather
-	private->sg = calloc(count, sizeof(*private->sg)); 
+	private->sg = calloc(count, sizeof(*private->sg));
 	if (private->sg == NULL)
 	{
 		err("jitter %s not enought memory", name);

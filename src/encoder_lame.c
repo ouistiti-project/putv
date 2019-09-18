@@ -37,6 +37,7 @@
 
 #include <lame/lame.h>
 
+#include "../config.h"
 #include "player.h"
 #include "jitter.h"
 #include "heartbeat.h"

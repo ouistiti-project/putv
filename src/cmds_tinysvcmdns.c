@@ -46,6 +46,7 @@
 
 #include <pthread.h>
 
+#include "../config.h"
 #include "mdns.h"
 #include "mdnsd.h"
 
@@ -187,7 +188,7 @@ static cmds_ctx_t *cmds_tinysvcmdns_init(player_ctx_t *player, sink_t *sink, voi
 	freeifaddrs(ifa_list);
 
 	txt = (const char **)arg;
-	struct mdns_service *svc = mdnsd_register_svc(svr, "Pump Up The Volume", 
+	struct mdns_service *svc = mdnsd_register_svc(svr, "Pump Up The Volume",
 									"_http._tcp.local", 80, NULL, txt);
 
 	cmds_ctx_t *ctx = NULL;

@@ -29,6 +29,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "../config.h"
+
 # define SIZEOF_INT 4
 
 #if SIZEOF_INT >= 4
@@ -154,10 +156,10 @@ void filter_destroy(filter_ctx_t *ctx)
 #ifdef FILTER_SCALING
 /**
  * @brief this function comes from mad decoder
- * 
+ *
  * @arg sample the 32bits sample
  * @arg length the length of scaling (16 or 24)
- * 
+ *
  * @return sample
  */
 static

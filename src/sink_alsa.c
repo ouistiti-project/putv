@@ -32,6 +32,7 @@
 #include <stdlib.h>
 #include <alsa/asoundlib.h>
 
+#include "../config.h"
 #include "player.h"
 #include "jitter.h"
 typedef struct sink_s sink_t;
@@ -112,6 +113,9 @@ unsigned int _mixer_getvolume(sink_ctx_t *ctx)
 	dbg("sink: alsa volume %ld < %ld < %ld", min, volume, max);
 	return (unsigned int) (volume - min) * 100 / (max - min);
 }
+#else
+# define _mixer_setvolume NULL
+# define _mixer_getvolume NULL
 #endif
 
 static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate, unsigned int *size)

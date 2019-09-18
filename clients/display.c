@@ -34,12 +34,13 @@
 
 #include <pthread.h>
 
+#include "../config.h"
+
 #ifdef USE_INOTIFY
 #include <sys/inotify.h>
 #endif
 
 #include "client_json.h"
-#include "../version.h"
 #include "display.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -239,7 +240,7 @@ int main(int argc, char **argv)
 	display_ctx_t display_data = {
 		.root = "/tmp",
 		.name = basename(argv[0]),
-#ifdef DIRECTFB
+#ifdef DISPLAY_DIRECTFB
 		.disp.ops = display_directfb,
 #else
 		.disp.ops = display_console,

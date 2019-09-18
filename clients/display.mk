@@ -12,9 +12,6 @@ putv_display_LIBRARY+=jsonrpc
 
 putv_display_SOURCES-$(DISPLAY_DIRECTFB)+=display_directfb.c
 putv_display_CFLAGS-$(DISPLAY_DIRECTFB)+=-I=/usr/include/directfb
-putv_display_CFLAGS-$(DISPLAY_DIRECTFB)+=-DDIRECTFB
 putv_display_LIBS-$(DISPLAY_DIRECTFB)+=directfb pthread
-
-putv_display_CFLAGS-$(JSONRPC_LARGEPACKET)+=-DJSONRPC_LARGEPACKET
 
 putv_display_CFLAGS-$(DEBUG)+=-g -DDEBUG

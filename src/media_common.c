@@ -37,6 +37,8 @@
 #include <sched.h>
 #include <limits.h>
 
+#include "../config.h"
+
 #ifdef USE_ID3TAG
 #include <id3tag.h>
 #include <jansson.h>

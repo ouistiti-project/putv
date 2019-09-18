@@ -36,6 +36,7 @@
 
 #include <pthread.h>
 
+#include "../config.h"
 #include "player.h"
 #include "decoder.h"
 #include "event.h"

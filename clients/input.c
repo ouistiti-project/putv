@@ -36,6 +36,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+#include "../config.h"
+
 #ifdef USE_INOTIFY
 #include <sys/inotify.h>
 #endif
@@ -48,7 +50,6 @@
 #endif
 
 #include "client_json.h"
-#include "../version.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)

@@ -31,6 +31,7 @@
 #include <fcntl.h>
 #include <stdlib.h>
 
+#include "../config.h"
 #include "player.h"
 typedef struct encoder_s encoder_t;
 typedef struct encoder_ctx_s encoder_ctx_t;

@@ -32,6 +32,8 @@
 #include <errno.h>
 #include <stdlib.h>
 
+#include "../config.h"
+
 #include <mad.h>
 #ifdef USE_ID3TAG
 #include <id3tag.h>

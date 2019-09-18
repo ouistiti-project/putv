@@ -34,6 +34,7 @@
 #include <errno.h>
 #include <sys/types.h>
 
+#include "../config.h"
 #include "jitter.h"
 typedef struct heartbeat_ctx_s heartbeat_ctx_t;
 struct heartbeat_ctx_s
@@ -75,7 +76,7 @@ static heartbeat_ctx_t *heartbeat_init(void *arg)
 	ctx->thredhold = ctx->bitrate * config->ms / 8;
 	pthread_mutex_init(&ctx->mutex, NULL);
 	pthread_cond_init(&ctx->cond, NULL);
-	
+
 	return ctx;
 }
 

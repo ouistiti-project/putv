@@ -36,6 +36,7 @@
 
 #include <pwd.h>
 
+#include "../config.h"
 #include "player.h"
 #include "event.h"
 typedef struct src_ops_s src_ops_t;

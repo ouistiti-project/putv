@@ -34,6 +34,7 @@
 
 #include <FLAC/stream_decoder.h>
 
+#include "../config.h"
 #include "player.h"
 #include "filter.h"
 typedef struct decoder_s decoder_t;
@@ -102,7 +103,7 @@ static jitter_t *decoder_jitter(decoder_ctx_t *ctx, jitte_t jitte)
 }
 
 static FLAC__StreamDecoderReadStatus
-input(const FLAC__StreamDecoder *decoder, 
+input(const FLAC__StreamDecoder *decoder,
 			FLAC__byte buffer[], size_t *bytes,
 			void *data)
 {

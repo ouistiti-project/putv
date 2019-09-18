@@ -33,6 +33,7 @@
 #include <pthread.h>
 #include <jansson.h>
 
+#include "../config.h"
 #include "unix_server.h"
 #include "player.h"
 #include "jsonrpc.h"

@@ -33,6 +33,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "../config.h"
 #include "player.h"
 typedef struct decoder_s decoder_t;
 typedef struct decoder_ops_s decoder_ops_t;

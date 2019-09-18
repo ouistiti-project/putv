@@ -324,17 +324,20 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 	}
 
 #ifdef SINK_ALSA_MIXER
-	snd_mixer_selem_id_t *sid;
+	if (strncasecmp(ctx->mixerch, "disable", 7))
+	{
+		snd_mixer_selem_id_t *sid;
 
-	snd_mixer_open(&ctx->mixer, 0);
-	snd_mixer_attach(ctx->mixer, ctx->soundcard);
-	snd_mixer_selem_register(ctx->mixer, NULL, NULL);
-	snd_mixer_load(ctx->mixer);
+		snd_mixer_open(&ctx->mixer, 0);
+		snd_mixer_attach(ctx->mixer, ctx->soundcard);
+		snd_mixer_selem_register(ctx->mixer, NULL, NULL);
+		snd_mixer_load(ctx->mixer);
 
-	snd_mixer_selem_id_alloca(&sid);
-	snd_mixer_selem_id_set_index(sid, 0);
-	snd_mixer_selem_id_set_name(sid, ctx->mixerch);
-	ctx->mixerchannel = snd_mixer_find_selem(ctx->mixer, sid);
+		snd_mixer_selem_id_alloca(&sid);
+		snd_mixer_selem_id_set_index(sid, 0);
+		snd_mixer_selem_id_set_name(sid, ctx->mixerch);
+		ctx->mixerchannel = snd_mixer_find_selem(ctx->mixer, sid);
+	}
 	if (ctx->mixerchannel == NULL)
 	{
 		warn("sink: alsa mixer not found %s", ctx->mixerch);
@@ -343,7 +346,7 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 		ops->setvolume = NULL;
 	}
 #endif
-	
+
 	dbg("sink: alsa card %s mixer %s", ctx->soundcard, ctx->mixerch);
 	jitter_t *jitter = jitter_scattergather_init(jitter_name, NB_BUFFER, size);
 #ifdef SAMPLERATE_AUTO

@@ -57,6 +57,7 @@ struct client_data_s
 };
 
 int client_unix(const char *socketpath, client_data_t *data);
+void client_async(client_data_t *data,int async);
 int client_eventlistener(client_data_t *data, const char *name, client_event_prototype_t proto, void *protodata);
 int client_loop(client_data_t *data);
 

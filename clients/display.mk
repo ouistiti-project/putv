@@ -1,10 +1,20 @@
-bin-y+=display
-display_SOURCES+=display.c
-display_SOURCES+=client_json.c
-display_CFLAGS+=-I../lib/jsonrpc
-display_CFLAGS+=-DUSE_INOTIFY
-display_LDFLAGS+=-L../lib/jsonrpc
-display_LIBS+=jansson
-display_LIBRARY+=jsonrpc
-display_CFLAGS-$(JSONRPC_LARGEPACKET)+=-DJSONRPC_LARGEPACKET
-display_CFLAGS-$(DEBUG)+=-g -DDEBUG
+
+bin-y+=putv_display
+putv_display_SOURCES+=display.c
+putv_display_SOURCES+=crc32.c
+putv_display_SOURCES+=display_console.c
+putv_display_SOURCES+=client_json.c
+putv_display_CFLAGS+=-I../lib/jsonrpc
+putv_display_CFLAGS+=-DUSE_INOTIFY
+putv_display_LDFLAGS+=-L../lib/jsonrpc
+putv_display_LIBS+=jansson
+putv_display_LIBRARY+=jsonrpc
+
+putv_display_SOURCES-$(DISPLAY_DIRECTFB)+=display_directfb.c
+putv_display_CFLAGS-$(DISPLAY_DIRECTFB)+=-I=/usr/include/directfb
+putv_display_CFLAGS-$(DISPLAY_DIRECTFB)+=-DDIRECTFB
+putv_display_LIBS-$(DISPLAY_DIRECTFB)+=directfb pthread
+
+putv_display_CFLAGS-$(JSONRPC_LARGEPACKET)+=-DJSONRPC_LARGEPACKET
+
+putv_display_CFLAGS-$(DEBUG)+=-g -DDEBUG

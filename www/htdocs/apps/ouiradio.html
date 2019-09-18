@@ -8,10 +8,10 @@
 		<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
 		<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
 		-->
-		<link type="text/css" rel="stylesheet" href="/css/bootstrap.min.css">
-		<script type="text/javascript" src="/js/jquery.min.js"></script>
-		<script type="text/javascript" src="/js/bootstrap.min.js"></script>
-		<script type="text/javascript" src="/js/jsonrpc.js"></script>
+		<link type="text/css" rel="stylesheet" href="/trust/css/bootstrap.min.css">
+		<script type="text/javascript" src="/trust/js/jquery.min.js"></script>
+		<script type="text/javascript" src="/trust/js/bootstrap.min.js"></script>
+		<script type="text/javascript" src="/apps/js/jsonrpc.js"></script>
 		<script type="text/javascript">
 var g_player;
 var g_config;
@@ -345,7 +345,7 @@ $(document).ready(function()
 	{
 		console.log("Configr request error: "+err);
 	}.bind(xhr);
-	
+
 	xhr.open("GET", "ouiradio.json");
 	xhr.responseType = "text/json";
 	xhr.withCredentials = true;

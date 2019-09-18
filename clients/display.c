@@ -1,5 +1,5 @@
 /*****************************************************************************
- * main.c
+ * display.c
  * this file is part of https://github.com/ouistiti-project/putv
  *****************************************************************************
  * Copyright (C) 2016-2017
@@ -40,6 +40,7 @@
 
 #include "client_json.h"
 #include "../version.h"
+#include "display.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -49,81 +50,57 @@
 #define dbg(...)
 #endif
 
+extern unsigned int crc32b(unsigned char *message);
 
-typedef int (*print_t)(void *data, char *string);
+unsigned int c_album;
+unsigned int c_artist;
+unsigned int c_title;
+unsigned int c_genre;
+unsigned int c_state;
 
 typedef struct display_ctx_s display_ctx_t;
 struct display_ctx_s
 {
 	int inotifyfd;
 	int dirfd;
-	int linelength;
-	print_t print;
-	void *print_data;
+	display_t disp;
 	const char *root;
 	const char *name;
 	char run;
 };
 
-int display_string(void *arg, char *string)
-{
-	display_ctx_t *data = (display_ctx_t *)arg;
-	int length = strlen(string);
-	int indent = (data->linelength - length) / 2;
-	if (indent < 0)
-	{
-		char *cut = strstr(string," ");
-		if (cut != NULL)
-		{
-			*cut = 0;
-			cut++;
-			display_string(data, string);
-		}
-		else
-		{
-			string[data->linelength] = 0;
-			printf("%s\n", string);
-		}
-	}
-	else
-	{
-		printf("%*s%s\n",indent,"",string);
-	}
-	return 0;
-}
-
 int display_default(void *eventdata, json_t *json_params)
 {
 	display_ctx_t *data = (display_ctx_t *)eventdata;
+	display_t *disp = &data->disp;
 	char *state;
 	int id;
 	json_t *info = json_object();
 
+	disp->ops->clear(disp->ctx);
 	json_unpack(json_params, "{ss,si,so}", "state", &state,"id", &id, "info", &info);
-	data->print(data->print_data,  state);
+	if (!strcmp(state, "play"))
+		disp->ops->print(disp->ctx, c_state, state);
+	else if (!strcmp(state, "pause"))
+		disp->ops->print(disp->ctx, c_state, state);
+	else if (!strcmp(state, "stop"))
+		disp->ops->print(disp->ctx, c_state, state);
 
-	const char *title = NULL;
-	const char *album = NULL;
-	const char *artist = NULL;
-	json_unpack(info, "{ss,ss,ss}", "album", &album,"title", &title, "artist", &artist);
-	if (artist != NULL)
+	const unsigned char *key = NULL;
+	json_t *value;
+	json_object_foreach(info, key, value)
 	{
-		char *string = strdup(artist);
-		data->print(data->print_data, string);
-		free(string);
+		if (json_is_string(value))
+		{
+			const char *string = json_string_value(value);
+			if (string != NULL)
+			{
+				disp->ops->print(disp->ctx, crc32b((unsigned char *)key), string);
+			}
+		}
 	}
-	if (title != NULL)
-	{
-		char *string = strdup(title);
-		data->print(data->print_data, string);
-		free(string);
-	}
-	if (album != NULL)
-	{
-		char *string = strdup(album);
-		data->print(data->print_data, string);
-		free(string);
-	}
+	disp->ops->flush(disp->ctx);
+
 	return 0;
 }
 
@@ -133,6 +110,7 @@ int run_client(char * socketpath, display_ctx_t *display_data)
 
 	client_data_t data = {0};
 	client_unix(socketpath, &data);
+
 	client_eventlistener(&data, "onchange", display, display_data);
 	int ret = client_loop(&data);
 	unlink(socketpath);
@@ -146,6 +124,13 @@ int run_client(char * socketpath, display_ctx_t *display_data)
 static void *_check_socket(void *arg)
 {
 	display_ctx_t *ctx = (display_ctx_t *)arg;
+	char *socketpath;
+	socketpath = malloc(strlen(ctx->root) + 1 + strlen(ctx->name) + 1);
+	sprintf(socketpath, "%s/%s", ctx->root, ctx->name);
+	if (!access(socketpath, R_OK | W_OK))
+	{
+		run_client(socketpath, (void *)ctx);
+	}
 	while (ctx->run)
 	{
 		char buffer[BUF_LEN];
@@ -165,14 +150,10 @@ static void *_check_socket(void *arg)
 			{
 				if (event->mask & IN_CREATE)
 				{
-					char *socketpath = malloc(strlen(ctx->root) + 1 + strlen(ctx->name) + 1);
-					sprintf(socketpath, "%s/%s", ctx->root, ctx->name);
-
 					if (!access(socketpath, R_OK | W_OK))
 					{
 						run_client(socketpath, ctx);
 					}
-					free(socketpath);
 				}
 #if 0
 				else if (event->mask & IN_DELETE)
@@ -187,8 +168,70 @@ static void *_check_socket(void *arg)
 			i += EVENT_SIZE + event->len;
 		}
 	}
+	free(socketpath);
 }
 #endif
+
+static display_elem_t *catalog_generate(display_ops_t *display, void *arg)
+{
+	const generator_ops_t *generator = display->generator;
+	const window_ops_t *window = &generator->window;
+	display_elem_t *elems = NULL;
+	display_elem_t *elem;
+
+	int lineh = (int)(window->height(arg) * 0.20);
+	int seph = (int)(window->height(arg) * 0.05);
+	int sideright = (int)(window->width(arg) * 0.20);
+	int sideleft = (int)(window->width(arg) * 0.70);
+	int sidesep = (int)(window->width(arg) * 0.10);
+
+	elem = generator->new_elem(arg, T_DIV, c_artist, 0, 0, sideleft, lineh);
+	elem->setpadding(elem, window->getpadding(arg));
+	elem->setfgcolor(elem, window->getfgcolor(arg));
+	elem->setfont(elem, window->getlfont(arg));
+	elem->settextalign(elem, ELEM_CENTER);
+	elem->next = elems;
+	elems = elem;
+
+	elem = generator->new_elem(arg, T_DIV, c_title, 0, (lineh + seph) * 1, sideleft, lineh * 2 + seph);
+	elem->setpadding(elem, window->getpadding(arg));
+	elem->setfgcolor(elem, window->getfgcolor(arg));
+	elem->setfont(elem, window->getlfont(arg));
+	elem->settextalign(elem, ELEM_CENTER);
+	elem->next = elems;
+	elems = elem;
+
+	elem = generator->new_elem(arg, T_DIV, c_album, 0, (lineh + seph) * 3, sideleft, lineh);
+	elem->setpadding(elem, window->getpadding(arg));
+	elem->setfgcolor(elem, window->getfgcolor(arg));
+	elem->setfont(elem, window->getfont(arg));
+	elem->settextalign(elem, ELEM_CENTER);
+	elem->next = elems;
+	elems = elem;
+
+	elem = generator->new_elem(arg, T_DIV, c_state, sideleft + sidesep, (window->height(arg) / 2) - (lineh - seph ), sideright, lineh);
+	elem->setpadding(elem, window->getpadding(arg));
+	elem->setfgcolor(elem, window->getfgcolor(arg));
+	elem->setfont(elem, window->getfont(arg));
+	elem->appendfunc(elem, window->printborder, arg);
+	elem->settextalign(elem, ELEM_CENTER);
+	elem->next = elems;
+	elems = elem;
+
+	return elems;
+}
+
+void catalog_free(display_elem_t *elems)
+{
+	display_elem_t *elem = elems;
+	while (elem != NULL)
+	{
+		elem = elems->next;
+		elems->destroy(elems);
+		elems = elem;
+	}
+}
+
 
 #define DAEMONIZE 0x01
 int main(int argc, char **argv)
@@ -197,15 +240,17 @@ int main(int argc, char **argv)
 	display_ctx_t display_data = {
 		.root = "/tmp",
 		.name = basename(argv[0]),
-		.linelength = 40,
-		.print = display_string,
-		.print_data = &display_data,
+#ifdef DIRECTFB
+		.disp.ops = display_directfb,
+#else
+		.disp.ops = display_console,
+#endif
 	};
-	
+
 	int opt;
 	do
 	{
-		opt = getopt(argc, argv, "R:n:hD");
+		opt = getopt(argc, argv, "R:n:hDc");
 		switch (opt)
 		{
 			case 'R':
@@ -215,10 +260,19 @@ int main(int argc, char **argv)
 				display_data.name = optarg;
 			break;
 			case 'h':
+				fprintf(stderr, "display -R <dir> -n <socketname> -D -c");
+				fprintf(stderr, "display events from putv applications\n");
+				fprintf(stderr, " -D         daemonize");
+				fprintf(stderr, " -R <DIR>   change the socket directory directory");
+				fprintf(stderr, " -n <NAME>  change the socket name");
+				fprintf(stderr, " -c         force display on the console");
 				return -1;
 			break;
 			case 'D':
 				mode |= DAEMONIZE;
+			break;
+			case 'c':
+				display_data.disp.ops = display_console;
 			break;
 		}
 	} while(opt != -1);
@@ -226,6 +280,23 @@ int main(int argc, char **argv)
 	if ((mode & DAEMONIZE) && fork() != 0)
 	{
 		return 0;
+	}
+
+	c_album = crc32b("album");
+	c_title = crc32b("title");
+	c_artist = crc32b("artist");
+	c_genre = crc32b("genre");
+	c_state = crc32b("state");
+
+	display_data.disp.ctx = display_data.disp.ops->create(argc, argv);
+
+	if (display_data.disp.ctx == NULL)
+		return -1;
+	display_elem_t *dom = NULL;
+	if (display_data.disp.ops->setdom != NULL)
+	{
+		dom = catalog_generate(display_data.disp.ops, display_data.disp.ctx);
+		display_data.disp.ops->setdom(display_data.disp.ctx, dom);
 	}
 
 #ifdef USE_INOTIFY
@@ -241,5 +312,8 @@ int main(int argc, char **argv)
 	run_client(socketpath, &display_data);
 	free(socketpath);
 #endif
+	if (dom != NULL)
+		catalog_free(dom);
+	display_data.disp.ops->destroy(display_data.disp.ctx);
 	return 0;
 }

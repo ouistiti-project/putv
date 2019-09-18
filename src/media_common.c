@@ -59,6 +59,8 @@
 #define dbg(...)
 #endif
 
+#define media_dbg(...)
+
 const char const *mime_octetstream = "octet/stream";
 const char const *mime_audiomp3 = "audio/mp3";
 const char const *mime_audioflac = "audio/flac";
@@ -301,7 +303,7 @@ int media_parseid3tag(const char *path, json_t *object)
 		struct id3_frame const *frame = NULL;
 		frame = tag->frames[i];
 		warn("frame %s", frame->id);
-		//dbg("field 0 type %d", field->type);
+		media_dbg("field 0 type %d", field->type);
 	}
 #endif
 	for (i = 0; i < sizeof(labels) / sizeof(labels[0]); ++i)
@@ -322,7 +324,7 @@ int media_parseid3tag(const char *path, json_t *object)
 
 			for (fieldid = 0; (field = id3_frame_field(frame, fieldid)) != NULL && fieldid < 5; fieldid++)
 			{
-				dbg("field[%s][%d] %d", frame->id, fieldid, id3_field_type(field));
+				media_dbg("field[%s][%d] %d", frame->id, fieldid, id3_field_type(field));
 				switch (id3_field_type(field))
 				{
 				case ID3_FIELD_TYPE_TEXTENCODING:
@@ -414,7 +416,7 @@ int media_parseid3tag(const char *path, json_t *object)
 					free(tinfo[fieldid]);
 			if (value == NULL)
 				value = json_null();
-			
+
 			json_object_set(object, labels[i].label, value);
 
 			j++;

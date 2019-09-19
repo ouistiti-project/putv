@@ -34,7 +34,6 @@
 
 #include <FLAC/stream_decoder.h>
 
-#include "../config.h"
 #include "player.h"
 #include "filter.h"
 typedef struct decoder_s decoder_t;

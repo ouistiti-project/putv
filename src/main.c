@@ -54,7 +54,6 @@
  */
 # include <fcntl.h>
 
-#include "../config.h"
 #include "player.h"
 #include "encoder.h"
 #include "sink.h"

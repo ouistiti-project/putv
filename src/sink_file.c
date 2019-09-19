@@ -34,7 +34,6 @@
 #include <string.h>
 #include <errno.h>
 
-#include "../config.h"
 #include "player.h"
 typedef struct sink_s sink_t;
 typedef struct sink_ctx_s sink_ctx_t;

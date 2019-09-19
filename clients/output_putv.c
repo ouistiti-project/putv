@@ -36,8 +36,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#include "../config.h"
-
 #ifdef USE_INOTIFY
 #include <sys/inotify.h>
 #endif

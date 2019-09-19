@@ -46,7 +46,6 @@
 
 #include <pthread.h>
 
-#include "../config.h"
 #include "mdns.h"
 #include "mdnsd.h"
 

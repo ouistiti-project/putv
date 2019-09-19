@@ -29,8 +29,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "../config.h"
-
 # define SIZEOF_INT 4
 
 #if SIZEOF_INT >= 4

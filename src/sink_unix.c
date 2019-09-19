@@ -40,7 +40,6 @@
 #include <poll.h>
 #include <pwd.h>
 
-#include "../config.h"
 #include "player.h"
 #include "jitter.h"
 #include "unix_server.h"

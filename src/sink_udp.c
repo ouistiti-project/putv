@@ -44,7 +44,6 @@
 #include <poll.h>
 #include <sched.h>
 
-#include "../config.h"
 #include "player.h"
 #include "mux.h"
 #include "jitter.h"

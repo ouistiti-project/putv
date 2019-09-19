@@ -32,7 +32,6 @@
 #include <stdlib.h>
 #include <tinyalsa/asoundlib.h>
 
-#include "../config.h"
 #include "player.h"
 #include "jitter.h"
 typedef struct sink_s sink_t;

@@ -36,7 +36,6 @@
 #include <sys/ioctl.h>
 #include <pwd.h>
 
-#include "../config.h"
 #include "player.h"
 #include "decoder.h"
 #include "media.h"

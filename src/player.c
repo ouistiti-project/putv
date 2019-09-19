@@ -33,7 +33,6 @@
 #define __USE_GNU
 #include <pthread.h>
 
-#include "../config.h"
 #include "player.h"
 #include "media.h"
 #include "jitter.h"

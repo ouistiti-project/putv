@@ -32,7 +32,6 @@
 #include <stdlib.h>
 #include <alsa/asoundlib.h>
 
-#include "../config.h"
 #include "player.h"
 #include "jitter.h"
 #include "filter.h"

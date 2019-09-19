@@ -37,7 +37,6 @@
 
 #include <pthread.h>
 
-#include "../config.h"
 #include "player.h"
 typedef struct cmds_ctx_s cmds_ctx_t;
 struct cmds_ctx_s

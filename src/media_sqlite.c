@@ -37,7 +37,6 @@
 
 #include <sqlite3.h>
 
-#include "../config.h"
 #include "player.h"
 #include "media.h"
 

@@ -32,7 +32,6 @@
 #include <pthread.h>
 #include <sys/mman.h>
 
-#include "../config.h"
 #include "jitter.h"
 #include "heartbeat.h"
 

@@ -61,23 +61,6 @@ static int method_subscribe(json_t *json_params, json_t **result, void *userdata
 	return 0;
 }
 
-static int answer_subscribe(json_t *json_params, json_t **result, void *userdata)
-{
-	int state = -1;
-	json_unpack(json_params, "{sb}", "subscribed", &state);
-	client_data_t *data = userdata;
-	pthread_mutex_lock(&data->mutex);
-	data->pid = 0;
-	if (data->proto)
-		data->proto(data->data, json_params);
-	data->proto = NULL;
-	data->data = NULL;
-	pthread_mutex_unlock(&data->mutex);
-	if ((data->options & OPTION_ASYNC) == 0)
-		pthread_cond_signal(&data->cond);
-	return !state;
-}
-
 static int answer_proto(client_data_t * data, json_t *json_params)
 {
 	pthread_mutex_lock(&data->mutex);
@@ -87,8 +70,19 @@ static int answer_proto(client_data_t * data, json_t *json_params)
 	data->proto = NULL;
 	data->data = NULL;
 	pthread_mutex_unlock(&data->mutex);
-	pthread_cond_signal(&data->cond);
+	pthread_cond_broadcast(&data->cond);
 	return 0;
+}
+
+static int answer_subscribe(json_t *json_params, json_t **result, void *userdata)
+{
+	int state = -1;
+	json_unpack(json_params, "{sb}", "subscribed", &state);
+	client_data_t *data = userdata;
+
+	answer_proto(data, json_params);
+
+	return !state;
 }
 
 static int method_next(json_t *json_params, json_t **result, void *userdata)
@@ -107,6 +101,7 @@ static int method_state(json_t *json_params, json_t **result, void *userdata)
 static int answer_state(json_t *json_params, json_t **result, void *userdata)
 {
 	client_data_t *data = userdata;
+
 	answer_proto(data, json_params);
 	return 0;
 }
@@ -287,6 +282,8 @@ int client_cmd(client_data_t *data, char * cmd)
 
 int client_wait(client_data_t *data, int pid)
 {
+	if ((data->options & OPTION_ASYNC) == OPTION_ASYNC)
+		return 0;
 	while (pid > 0 && data->pid == pid)
 	{
 		pthread_cond_wait(&data->cond, &data->mutex);
@@ -302,8 +299,8 @@ int client_next(client_data_t *data, client_event_prototype_t proto, void *proto
 	data->proto = proto;
 	data->data = protodata;
 	int pid = client_cmd(data, "next");
-	pthread_mutex_unlock(&data->mutex);
 	client_wait(data, pid);
+	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
 
@@ -315,8 +312,8 @@ int client_play(client_data_t *data, client_event_prototype_t proto, void *proto
 	data->proto = proto;
 	data->data = protodata;
 	int pid = client_cmd(data, "play");
-	pthread_mutex_unlock(&data->mutex);
 	client_wait(data, pid);
+	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
 
@@ -324,6 +321,7 @@ int client_pause(client_data_t *data, client_event_prototype_t proto, void *prot
 {
 	if (data->pid != 0)
 		return -1;
+
 	pthread_mutex_lock(&data->mutex);
 	data->proto = proto;
 	data->data = protodata;

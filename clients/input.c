@@ -122,6 +122,7 @@ int input_parseevent(input_ctx_t *ctx, const struct input_event *event)
 	}
 	if (event->value != 0) // check only keyrelease event
 		return 0;
+
 	switch (event->code)
 	{
 	case KEY_PLAYPAUSE:

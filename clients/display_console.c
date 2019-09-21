@@ -31,6 +31,14 @@
 
 #include "display.h"
 
+#define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
+#define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
+#ifdef DEBUG
+#define dbg(format, ...) fprintf(stderr, "\x1B[32m"format"\x1B[0m\n",  ##__VA_ARGS__)
+#else
+#define dbg(...)
+#endif
+
 typedef struct display_console_ctx_s
 {
 	int linelength;
@@ -49,6 +57,7 @@ static int display_print(void *arg, int type, const char *string)
 	display_console_ctx_t *data = (display_console_ctx_t *)arg;
 	int length = strlen(string);
 	int indent = (data->linelength - length) / 2;
+
 	if (indent < 0)
 	{
 		char *cut = strstr(string," ");

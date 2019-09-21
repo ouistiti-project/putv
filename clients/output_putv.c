@@ -193,6 +193,7 @@ output_putv_loop()
 	fprintf(stderr,"putv loop\n");
 	client_data_t data = {0};
 	client_unix(gmrenderer_ctx->socketpath, &data);
+	client_async(&data, 1);
 
 	client_eventlistener(&data, "onchange", gmrenderer_checkstate, gmrenderer_ctx);
 	gmrenderer_ctx->client = &data;

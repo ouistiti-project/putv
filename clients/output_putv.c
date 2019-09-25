@@ -171,16 +171,80 @@ static gmrenderer_ctx_t *gmrenderer_ctx = &(gmrenderer_ctx_t)
 	.name = SOCKETNAME,
 };
 
+#ifdef USE_INOTIFY
+#define EVENT_SIZE  (sizeof(struct inotify_event))
+#define BUF_LEN     (1024 * (EVENT_SIZE + 16))
+
+int inotifyfd;
+
+static void *_check_socket(void *arg)
+{
+	gmrenderer_ctx_t *ctx = (gmrenderer_ctx_t *)arg;
+	char *socketpath;
+	socketpath = malloc(strlen(ctx->root) + 1 + strlen(ctx->name) + 1);
+	sprintf(socketpath, "%s/%s", ctx->root, ctx->name);
+	if (!access(socketpath, R_OK | W_OK))
+	{
+		return NULL;
+	}
+	while (1)
+	{
+		char buffer[BUF_LEN];
+		int i = 0;
+		int length = read(inotifyfd, buffer, BUF_LEN);
+
+		if (length < 0)
+		{
+			err("read");
+		}
+
+		while (i < length)
+		{
+			struct inotify_event *event =
+				(struct inotify_event *) &buffer[i];
+			if (event->len)
+			{
+				if (event->mask & IN_CREATE)
+				{
+					if (!access(socketpath, R_OK | W_OK))
+					{
+						return NULL;
+					}
+				}
+#if 0
+				else if (event->mask & IN_DELETE)
+				{
+				}
+				else if (event->mask & IN_MODIFY)
+				{
+					dbg("The file %s was modified.", event->name);
+				}
+#endif
+			}
+			i += EVENT_SIZE + event->len;
+		}
+	}
+	free(socketpath);
+}
+#endif
+
 static int
 output_putv_init(void)
 {
 
+#ifdef USE_INOTIFY
+	inotifyfd = inotify_init();
+	int dirfd = inotify_add_watch(inotifyfd, gmrenderer_ctx->root,
+					IN_MODIFY | IN_CREATE | IN_DELETE);
+	_check_socket((void *)gmrenderer_ctx);
+#else
 	int len = strlen(gmrenderer_ctx->root) + 1;
 	len += strlen(gmrenderer_ctx->name) + 1;
 	gmrenderer_ctx->socketpath = malloc(len);
 	sprintf(gmrenderer_ctx->socketpath, "%s/%s", gmrenderer_ctx->root, gmrenderer_ctx->name);
 	if (access(gmrenderer_ctx->socketpath, R_OK | W_OK))
 		return -1;
+#endif
 	gmrenderer_ctx->current_id = -1;
 	return 0;
 }

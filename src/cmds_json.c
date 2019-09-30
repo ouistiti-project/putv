@@ -537,7 +537,7 @@ static int method_onchange(json_t *json_params, json_t **result, void *userdata)
 		json_array_append(options, json_string("random"));
 	json_object_set(*result, "options", options);
 
-	if (ctx->sink->ops->getvolume != NULL)
+	if (ctx->sink && ctx->sink->ops->getvolume != NULL)
 	{
 		unsigned int volume = ctx->sink->ops->getvolume(ctx->sink->ctx);
 		json_object_set(*result, "volume", json_integer(volume));
@@ -609,7 +609,7 @@ static int method_volume(json_t *json_params, json_t **result, void *userdata)
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 	int ret = -1;
 
-	if (ctx->sink->ops->getvolume == NULL)
+	if (ctx->sink == NULL || ctx->sink->ops->getvolume == NULL)
 	{
 		*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
 		return -1;
@@ -793,7 +793,7 @@ static int method_capabilities(json_t *json_params, json_t **result, void *userd
 		json_object_set(action, "params", params);
 		json_array_append(actions, action);
 	}
-	if (ctx->sink->ops->getvolume != NULL)
+	if (ctx->sink && ctx->sink->ops->getvolume != NULL)
 	{
 		action = json_object();
 		value = json_string("volume");

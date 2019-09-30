@@ -330,23 +330,33 @@ int main(int argc, char **argv)
 
 	int i;
 	for (i = 0; i < nbcmds; i++)
+	{
 		if(cmds[i].ctx != NULL)
-			cmds[i].ops->run(cmds[i].ctx);
-
+		{
+			cmds[i].ops->run(cmds[i].ctx, sink);
+		}
+	}
 #ifdef USE_REALTIME
 	struct sched_param params;
 	params.sched_priority = 50;
 	sched_setscheduler(0, REALTIME_SCHED, &params);
 #endif
+	if (sink == NULL)
+	{
+		err("output not set");
+		pause();
+	}
+	else
+	{
+		/**
+		 * the sink must to run before to start the encoder
+		 */
+		sink->ops->run(sink->ctx);
+		run_player(player, sink);
 
-	/**
-	 * the sink must to run before to start the encoder
-	 */
-	sink->ops->run(sink->ctx);
-	run_player(player, sink);
-
-	sink->ops->destroy(sink->ctx);
-	player_destroy(player);
+		sink->ops->destroy(sink->ctx);
+		player_destroy(player);
+	}
 
 	for (i = 0; i < nbcmds; i++)
 	{

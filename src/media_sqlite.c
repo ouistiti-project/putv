@@ -675,7 +675,7 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int *pcoverid)
 		ret = sqlite3_step(st_insert);
 		if (ret != SQLITE_DONE)
 		{
-			err("media sqlite: error on insert %d", ret);
+			err("media sqlite: error on insert %d %s", ret, sqlite3_errmsg(db));
 			opusid = -1;
 		}
 		else
@@ -746,12 +746,13 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int *pcoverid)
 static int media_insert(media_ctx_t *ctx, const char *path, const char *info, const char *mime)
 {
 	int id;
+	int opusid = -1;
 	int ret = 0;
 	sqlite3 *db = ctx->db;
 
 #ifdef MEDIA_SQLITE_EXT
 	int coverid = -1;
-	int opusid = opus_insert(ctx, info, &coverid);
+	opusid = opus_insert(ctx, info, &coverid);
 	if (path == NULL)
 		return opusid;
 #else
@@ -821,7 +822,8 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 		ret = sqlite3_step(statement);
 		if (ret != SQLITE_DONE)
 		{
-			err("media sqlite: error on insert %d", ret);
+			err("media sqlite: error %d on insert of %s\n\t%s", ret, path, sqlite3_errmsg(db));
+			dbg("media sqlite: %d %d %s", coverid, opusid, mime);
 			ret = -1;
 		}
 		else
@@ -831,6 +833,7 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 		}
 		free(tpath);
 		sqlite3_finalize(statement);
+		opusid = id;
 	}
 #ifdef MEDIA_SQLITE_EXT
 	else
@@ -853,7 +856,7 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 		sqlite3_finalize(statement);
 	}
 #endif
-	if (id != -1)
+	if (opusid != -1)
 	{
 		int index;
 		sqlite3_stmt *statement;
@@ -863,11 +866,7 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 		SQLITE3_CHECK(ret, -1, sql);
 
 		index = sqlite3_bind_parameter_index(statement, "@ID");
-#ifndef MEDIA_SQLITE_EXT
-		ret = sqlite3_bind_int(statement, index, id);
-#else
 		ret = sqlite3_bind_int(statement, index, opusid);
-#endif
 		index = sqlite3_bind_parameter_index(statement, "@LISTID");
 		ret = sqlite3_bind_int(statement, index, ctx->listid);
 
@@ -881,11 +880,7 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 		sqlite3_finalize(statement);
 	}
 
-#ifndef MEDIA_SQLITE_EXT
-	return id;
-#else
 	return opusid;
-#endif
 }
 
 static int _media_execute(media_ctx_t *ctx, sqlite3_stmt *statement, media_parse_t cb, void *data)
@@ -1315,6 +1310,9 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url, ...)
 	}
 	if (db)
 	{
+		char *error = NULL;
+		if (sqlite3_exec(db, "PRAGMA encoding=\"UTF-8\";", NULL, NULL, &error))
+			warn("sqlite pragma error: %s", error);
 		if (ret == SQLITE_CORRUPT)
 		{
 #ifndef MEDIA_SQLITE_EXT

@@ -166,6 +166,8 @@ char *utils_parseurl(const char *url, char **protocol, char **host, char **port,
 			str_port += 1;
 		}
 	}
+	if (!strncmp(str_protocol, "file", 4))
+		str_path = str_host;
 	if (str_path != NULL)
 	{
 		if (str_search && str_search < str_path)

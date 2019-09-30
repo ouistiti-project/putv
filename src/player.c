@@ -100,17 +100,17 @@ int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop
 		ctx->nextmedia = media;
 		ctx->state = STATE_STOP;
 		pthread_cond_broadcast(&ctx->cond);
-		if (loop && media->ops->loop)
-		{
-			media->ops->loop(media->ctx, 1);
-		}
 
-		if (random && media->ops->random)
-		{
-			media->ops->random(media->ctx, 1);
-		}
 		if (ctx->media == NULL)
 			ctx->media = media;
+	}
+	if (media->ops->loop)
+	{
+		media->ops->loop(media->ctx, (loop));
+	}
+	if (media->ops->random)
+	{
+		media->ops->random(media->ctx, (random));
 	}
 	return 0;
 }

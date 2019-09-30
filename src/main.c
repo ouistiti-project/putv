@@ -126,11 +126,12 @@ int main(int argc, char **argv)
 	const char *pidfile = NULL;
 	const char *filtername = "pcm_stereo";
 	const char *logfile = NULL;
+	const char *cwd = NULL;
 
 	int opt;
 	do
 	{
-		opt = getopt(argc, argv, "R:m:o:u:p:f:hDVxalrL:");
+		opt = getopt(argc, argv, "R:m:o:u:p:f:hDVxalrL:d:");
 		switch (opt)
 		{
 			case 'R':
@@ -172,6 +173,9 @@ int main(int argc, char **argv)
 			case 'L':
 				logfile = optarg;
 			break;
+			case 'd':
+				cwd = optarg;
+			break;
 		}
 	} while(opt != -1);
 
@@ -200,6 +204,9 @@ int main(int argc, char **argv)
 		else
 			err("log file error %s", strerror(errno));
 	}
+
+	if (cwd != NULL)
+		chdir(cwd);
 
 	player_ctx_t *player = player_init(filtername);
 	player_change(player, mediapath, (mode & RANDOM), (mode & LOOP));

@@ -525,15 +525,3 @@ const sink_ops_t *sink_alsa = &(sink_ops_t)
 	.getvolume = _mixer_getvolume,
 	.setvolume = _mixer_setvolume,
 };
-
-static sink_t _sink = {0};
-sink_t *sink_build(player_ctx_t *player, const char *arg)
-{
-	const sink_ops_t *sinkops = NULL;
-	sinkops = sink_alsa;
-	_sink.ctx = sinkops->init(player, arg);
-	if (_sink.ctx == NULL)
-		return NULL;
-	_sink.ops = sinkops;
-	return &_sink;
-}

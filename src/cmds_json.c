@@ -471,6 +471,27 @@ static int method_change(json_t *json_params, json_t **result, void *userdata)
 	json_t *value;
 	if (json_is_object(json_params))
 	{
+		int loop = 0;
+		int random = 0;
+		value = json_object_get(json_params, "loop");
+		if (json_is_boolean(value))
+		{
+			loop = json_boolean_value(value);
+		}
+		value = json_object_get(json_params, "random");
+		if (json_is_boolean(value))
+		{
+			random = json_boolean_value(value);
+		}
+		value = json_object_get(json_params, "media");
+		if (json_is_string(value))
+		{
+			const char *media = json_string_value(value);
+			if (player_change(ctx->player, media, random, loop) == 0)
+			{
+				*result = json_pack("{s:s,s:s}", "media", "changed", "state", str_stop);
+			}
+		}
 		value = json_object_get(json_params, "id");
 		if (json_is_integer(value))
 		{
@@ -478,15 +499,6 @@ static int method_change(json_t *json_params, json_t **result, void *userdata)
 			if (media->ops->find(media->ctx, id, _display, &display) == 1)
 			{
 				*result = display.result;
-			}
-		}
-		value = json_object_get(json_params, "media");
-		if (json_is_string(value))
-		{
-			const char *media = json_string_value(value);
-			if (player_change(ctx->player, media, 0, 0) == 0)
-			{
-				*result = json_pack("{s:s,s:s}", "media", "changed", "state", str_stop);
 			}
 		}
 	}

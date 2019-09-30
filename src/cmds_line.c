@@ -247,11 +247,10 @@ void cmds_line_onchange(void *arg, player_ctx_t *player, state_t state)
 	media->ops->find(media->ctx, id, _display, ctx);
 }
 
-static cmds_ctx_t *cmds_line_init(player_ctx_t *player, sink_t *sink, void *arg)
+static cmds_ctx_t *cmds_line_init(player_ctx_t *player, void *arg)
 {
 	cmds_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->player = player;
-	ctx->sink = sink;
 	return ctx;
 }
 
@@ -389,8 +388,9 @@ static void *_cmds_line_pthread(void *arg)
 	return (void*)(intptr_t)ret;
 }
 
-static int cmds_line_run(cmds_ctx_t *ctx)
+static int cmds_line_run(cmds_ctx_t *ctx, sink_t *sink)
 {
+	ctx->sink = sink;
 	pthread_create(&ctx->thread, NULL, _cmds_line_pthread, (void *)ctx);
 
 	return 0;

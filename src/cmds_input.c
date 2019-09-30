@@ -170,7 +170,7 @@ static void *_cmds_input_pthread(void *arg)
 	return (void*)ret;
 }
 
-static int cmds_input_run(cmds_ctx_t *ctx)
+static int cmds_input_run(cmds_ctx_t *ctx, sink_t *sink)
 {
 	dbg("input open %s", ctx->inputpath);
 	ctx->fd = open(ctx->inputpath, O_RDONLY);
@@ -179,7 +179,7 @@ static int cmds_input_run(cmds_ctx_t *ctx)
 	return 0;
 }
 
-static cmds_ctx_t *cmds_input_init(player_ctx_t *player, sink_t *sink, void *arg)
+static cmds_ctx_t *cmds_input_init(player_ctx_t *player, void *arg)
 {
 	cmds_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->player = player;

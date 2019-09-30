@@ -252,20 +252,29 @@ int main(int argc, char **argv)
 		}
 	}
 
-	sink_t *sink = sink_build(player, outarg);
-	if (sink == NULL)
-	{
-		err("output not set");
-		exit(-1);
-	}
+	sink_t *sink = NULL;
 
+	/**
+	 * cmds_json must be initialize as soon as possible.
+	 * Other applications mays needs it "immediatly"
+	 */
 	cmds_t cmds[3];
 	int nbcmds = 0;
+#ifdef JSONRPC
+	char socketpath[256];
+	snprintf(socketpath, sizeof(socketpath) - 1, "%s/%s", root, name);
+	cmds[nbcmds].ops = cmds_json;
+	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, (void *)socketpath);
+	nbcmds++;
+#endif
+
+	sink = sink_build(player, outarg);
+
 	if (!(mode & DAEMONIZE))
 	{
 #ifdef CMDLINE
 		cmds[nbcmds].ops = cmds_line;
-		cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, sink, NULL);
+		cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, NULL);
 		nbcmds++;
 #endif
 	}
@@ -287,7 +296,7 @@ int main(int argc, char **argv)
 	}
 #ifdef CMDINPUT
 	cmds[nbcmds].ops = cmds_input;
-	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, sink, CMDINPUT_PATH);
+	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, CMDINPUT_PATH);
 	nbcmds++;
 #endif
 #ifdef TINYSVCMDNS
@@ -300,7 +309,7 @@ int main(int argc, char **argv)
 		NULL,
 	};
 	cmds[nbcmds].ops = cmds_tinysvcmdns;
-	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, sink, txt);
+	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, txt);
 	nbcmds++;
 #ifdef NETIF2
 	const char *txt2[] =
@@ -313,13 +322,6 @@ int main(int argc, char **argv)
 	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, sink, txt2);
 	nbcmds++;
 #endif
-#endif
-#ifdef JSONRPC
-	char socketpath[256];
-	snprintf(socketpath, sizeof(socketpath) - 1, "%s/%s", root, name);
-	cmds[nbcmds].ops = cmds_json;
-	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, sink, (void *)socketpath);
-	nbcmds++;
 #endif
 
 	setegid(pw_gid);

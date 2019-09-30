@@ -1038,12 +1038,11 @@ static int jsonrpc_command(thread_info_t *info)
 	return ret;
 }
 
-static cmds_ctx_t *cmds_json_init(player_ctx_t *player, sink_t *sink, void *arg)
+static cmds_ctx_t *cmds_json_init(player_ctx_t *player, void *arg)
 {
 	cmds_ctx_t *ctx = NULL;
 	ctx = calloc(1, sizeof(*ctx));
 	ctx->player = player;
-	ctx->sink = sink;
 	ctx->socketpath = (const char *)arg;
 	pthread_mutex_init(&ctx->mutex, NULL);
 	return ctx;
@@ -1058,8 +1057,9 @@ static void *_cmds_json_pthread(void *arg)
 	return NULL;
 }
 
-static int cmds_json_run(cmds_ctx_t *ctx)
+static int cmds_json_run(cmds_ctx_t *ctx, sink_t *sink)
 {
+	ctx->sink = sink;
 	pthread_create(&ctx->thread, NULL, _cmds_json_pthread, (void *)ctx);
 	return 0;
 }

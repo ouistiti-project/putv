@@ -760,7 +760,19 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 		return -1;
 #endif
 
-	id = findmedia(db, path);
+	char *tpath = NULL;
+	if (strstr(path, "://"))
+	{
+		tpath = strdup(path);
+	}
+	else
+	{
+		int len = PROTOCOLNAME_LENGTH + strlen(path) + 1;
+		tpath = malloc(len);
+		snprintf(tpath, len, PROTOCOLNAME"%s", path);
+	}
+
+	id = findmedia(db, tpath);
 	if (id == -1)
 	{
 		sqlite3_stmt *statement;
@@ -774,17 +786,6 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 		SQLITE3_CHECK(ret, -1, sql);
 
 		int index;
-		char *tpath = NULL;
-		if (strstr(path, "://"))
-		{
-			tpath = strdup(path);
-		}
-		else
-		{
-			int len = PROTOCOLNAME_LENGTH + strlen(path) + 1;
-			tpath = malloc(len);
-			snprintf(tpath, len, PROTOCOLNAME"%s", path);
-		}
 		index = sqlite3_bind_parameter_index(statement, "@PATH");
 		ret = sqlite3_bind_text(statement, index, tpath, -1, SQLITE_STATIC);
 		SQLITE3_CHECK(ret, -1, sql);
@@ -831,7 +832,6 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 			id = sqlite3_last_insert_rowid(db);
 			media_dbg("putv: new media[%d] %s", id, path);
 		}
-		free(tpath);
 		sqlite3_finalize(statement);
 		opusid = id;
 	}
@@ -856,6 +856,7 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 		sqlite3_finalize(statement);
 	}
 #endif
+	free(tpath);
 	if (opusid != -1)
 	{
 		int index;

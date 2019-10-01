@@ -631,7 +631,7 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int *palbumid)
 	int opusid = -1;
 
 	int ret;
-	char *select = "select id coverid from opus where titleid=@TITLEID and artistid=@ARTISTID and albumid=@ALBUMID";
+	char *select = "select id coverid from opus where titleid=@TITLEID and artistid=@ARTISTID";
 
 	sqlite3_stmt *st_select;
 	ret = sqlite3_prepare_v2(db, select, -1, &st_select, NULL);
@@ -644,9 +644,6 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int *palbumid)
 	SQLITE3_CHECK(ret, -1, select);
 	index = sqlite3_bind_parameter_index(st_select, "@ARTISTID");
 	ret = sqlite3_bind_int(st_select, index, artistid);
-	SQLITE3_CHECK(ret, -1, select);
-	index = sqlite3_bind_parameter_index(st_select, "@ALBUMID");
-	ret = sqlite3_bind_int(st_select, index, albumid);
 	SQLITE3_CHECK(ret, -1, select);
 	ret = sqlite3_step(st_select);
 	if (ret != SQLITE_ROW)

@@ -710,7 +710,7 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int *pcoverid)
 			sqlite3_finalize(st_update);
 		}
 
-		if (*pcoverid != -1)
+		if (coverid != -1)
 		{
 			int type;
 			type = sqlite3_column_type(st_select, 0);
@@ -732,7 +732,7 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int *pcoverid)
 				ret = sqlite3_bind_int(st_update, index, opusid);
 				SQLITE3_CHECK(ret, -1, sql);
 				index = sqlite3_bind_parameter_index(st_update, "@COVERID");
-				ret = sqlite3_bind_int(st_update, index, *pcoverid);
+				ret = sqlite3_bind_int(st_update, index, coverid);
 				SQLITE3_CHECK(ret, -1, sql);
 				ret = sqlite3_step(st_update);
 				sqlite3_finalize(st_update);

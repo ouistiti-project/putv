@@ -559,7 +559,7 @@ static char *opus_get(media_ctx_t *ctx, int opusid, int coverid)
 	return info;
 }
 
-static int opus_insert(media_ctx_t *ctx, const char *info, int *pcoverid)
+static int opus_insert(media_ctx_t *ctx, const char *info, int *palbumid)
 {
 	sqlite3 *db = ctx->db;
 	char *title = NULL;
@@ -752,8 +752,8 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 	sqlite3 *db = ctx->db;
 
 #ifdef MEDIA_SQLITE_EXT
-	int coverid = -1;
-	opusid = opus_insert(ctx, info, &coverid);
+	int albumid = -1;
+	opusid = opus_insert(ctx, info, &albumid);
 	if (path == NULL)
 		return opusid;
 #else
@@ -1363,10 +1363,10 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url, ...)
 "insert into mimes (id, name) values (3, \"audio/alac\");",
 "insert into mimes (id, name) values (4, \"audio/pcm\");",
 "create table media (id INTEGER PRIMARY KEY, url TEXT UNIQUE NOT NULL, mimeid INTEGER, info BLOB, " \
-	"opusid INTEGER, coverid INTEGER, comment BLOB, " \
+	"opusid INTEGER, albumid INTEGER, comment BLOB, " \
 	"FOREIGN KEY (mimeid) REFERENCES mimes(id) ON UPDATE SET NULL," \
 	"FOREIGN KEY (opusid) REFERENCES opus(id) ON UPDATE SET NULL," \
-	"FOREIGN KEY (coverid) REFERENCES cover(id) ON UPDATE SET NULL);",
+	"FOREIGN KEY (albumid) REFERENCES album(id) ON UPDATE SET NULL);",
 "create table opus (id INTEGER PRIMARY KEY,  titleid INTEGER UNIQUE NOT NULL, " \
 	"artistid INTEGER, otherid INTEGER, albumid INTEGER, " \
 	"genreid INTEGER, coverid INTEGER, comment BLOB, " \

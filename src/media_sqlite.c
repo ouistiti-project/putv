@@ -238,8 +238,7 @@ static int media_remove(media_ctx_t *ctx, int id, const char *path)
 	return ret;
 }
 
-#ifdef MEDIA_SQLITE_EXT
-static int opus_insert_word(media_ctx_t *ctx, const char *table, const char *word, int *exist)
+static int table_insert_word(media_ctx_t *ctx, const char *table, const char *word, int *exist)
 {
 	sqlite3 *db = ctx->db;
 	int ret;
@@ -292,6 +291,7 @@ static int opus_insert_word(media_ctx_t *ctx, const char *table, const char *wor
 	return id;
 }
 
+#ifdef MEDIA_SQLITE_EXT
 static int opus_insert_info(media_ctx_t *ctx, const char *table, int wordid)
 {
 	sqlite3 *db = ctx->db;
@@ -576,29 +576,30 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int *pcoverid)
 
 	opus_parse_info(info, &title, &artist, &album, &genre, &cover);
 
+	warn("%s , %s , %s", title, album, artist);
 	if (title != NULL)
 	{
-		titleid = opus_insert_word(ctx, "word", title, &exist);
+		titleid = table_insert_word(ctx, "word", title, &exist);
 		free(title);
 	}
 	if (artist != NULL)
 	{
-		artistid = opus_insert_word(ctx, "word", artist, &exist);
+		artistid = table_insert_word(ctx, "word", artist, &exist);
 		if (artistid > -1)
 			artistid = opus_insert_info(ctx, "artist", artistid);
 		free(artist);
 	}
 	if (cover != NULL)
 	{
-		coverid = opus_insert_word(ctx, "cover", cover, &exist);
-		*pcoverid = coverid;
+		coverid = table_insert_word(ctx, "cover", cover, &exist);
 		free(cover);
 	}
 	if (album != NULL)
 	{
-		albumid = opus_insert_word(ctx, "word", album, &exist);
+		albumid = table_insert_word(ctx, "word", album, &exist);
 		if (albumid > -1)
 			albumid = opus_insert_info(ctx, "album", albumid);
+		*palbumid = albumid;
 		if (coverid != -1)
 		{
 			int ret;
@@ -621,7 +622,7 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int *pcoverid)
 	}
 	if (genre != NULL)
 	{
-		genreid = opus_insert_word(ctx, "word", genre, NULL);
+		genreid = table_insert_word(ctx, "word", genre, NULL);
 		if (genreid > -1)
 			genreid = opus_insert_info(ctx, "genre", genreid);
 		free(genre);

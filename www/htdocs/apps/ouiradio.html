@@ -15,6 +15,7 @@
 		<script type="text/javascript">
 var g_player;
 var g_config;
+var g_imgbase = "";
 initIHM = function()
 {
 	$('.action-btn').addClass('hidden');
@@ -141,7 +142,7 @@ create_player = function (config)
 				{
 					$(elem).removeClass("hidden");
 					if ($(elem).is("img"))
-						$(elem).attr("src", result.info[info]);
+						$(elem).attr("src", g_imgbase + result.info[info]);
 					else
 						$(elem).text(result.info[info]);
 				}
@@ -300,14 +301,21 @@ create_player = function (config)
 			{
 				options = media.options;
 			}
-			var entry = $("<li class='media'><a href='#' class='select' data-media='"+media.media+"' data-options='"+JSON.stringify(options)+"'>"+media.name+"</a></li>");
+			var base = "";
+			if (media.base != undefined && media.base.length > 0)
+			{
+				base = media.base;
+			}
+			var entry = $("<li class='media'><a href='#' class='select' data-media='"+media.media+"' data-base='"+base+"' data-options='"+JSON.stringify(options)+"'>"+media.name+"</a></li>");
 			$(entry).find('a.select').on("click", function (evt)
 				{
 					$('#PlayList').data('options',$(evt.target).data('options'));
 					$('.media').removeClass('active');
 					$(evt.target).parent('li').addClass('active');
 					var media = $(evt.target).data('media');
-					player.send('change', {media:media});
+					var options = $(evt.target).data('options');
+					player.send('change', {media:media, options:options});
+					g_imgbase = $(evt.target).data('base');
 				});
 			$('#media').removeClass('hidden').append(entry);
 		}

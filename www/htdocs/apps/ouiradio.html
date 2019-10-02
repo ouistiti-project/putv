@@ -354,7 +354,7 @@ $(document).ready(function()
 		console.log("Configr request error: "+err);
 	}.bind(xhr);
 
-	xhr.open("GET", "ouiradio.json");
+	xhr.open("GET", "/apps/ouiradio.json");
 	xhr.responseType = "text/json";
 	xhr.withCredentials = true;
 	xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");

@@ -2,9 +2,9 @@
 "player": "ouiradio",
 "media":[
 	{"name":"radio","media":"db:///home/radio.db","options":[]},
-	{"name":"rock","media":"db://musics.db?rock","options":[],"base":"/home/share/Musics/"},
-	{"name":"inde","media":"db://musics.db?inde","options":[],"base":"/home/share/Musics/"},
-	{"name":"cool","media":"db://musics.db?cool","options":[],"base":"/home/share/Musics/"},
+	{"name":"rock","media":"db://musics.db?rock","options":[],"base":"/Musics/"},
+	{"name":"inde","media":"db://musics.db?inde","options":[],"base":"/Musics/"},
+	{"name":"cool","media":"db://musics.db?cool","options":[],"base":"/Musics/"},
 	{"name":"full","media":"file:///home/share/Musics/","options":[]},
 	{"name":"usb","media":"file:///media/","options":[]}
 ],

@@ -92,14 +92,17 @@ player_ctx_t *player_init(const char *filtername)
 	return ctx;
 }
 
-int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop)
+int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop, int now)
 {
 	media_t *media = media_build(ctx, mediapath);
 	if (media)
 	{
 		ctx->nextmedia = media;
-		ctx->state = STATE_STOP;
-		pthread_cond_broadcast(&ctx->cond);
+		if (now || ctx->media == NULL)
+		{
+			ctx->state = STATE_STOP;
+			pthread_cond_broadcast(&ctx->cond);
+		}
 
 		if (ctx->media == NULL)
 			ctx->media = media;

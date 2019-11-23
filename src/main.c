@@ -209,7 +209,7 @@ int main(int argc, char **argv)
 		chdir(cwd);
 
 	player_ctx_t *player = player_init(filtername);
-	player_change(player, mediapath, (mode & RANDOM), (mode & LOOP));
+	player_change(player, mediapath, (mode & RANDOM), (mode & LOOP), 1);
 
 	if (mode & AUTOSTART)
 	{

@@ -471,6 +471,7 @@ static int method_change(json_t *json_params, json_t **result, void *userdata)
 	json_t *value;
 	if (json_is_object(json_params))
 	{
+		int now = 1;
 		int loop = 0;
 		int random = 0;
 		value = json_object_get(json_params, "loop");
@@ -483,11 +484,16 @@ static int method_change(json_t *json_params, json_t **result, void *userdata)
 		{
 			random = json_boolean_value(value);
 		}
+		value = json_object_get(json_params, "next");
+		if (json_is_boolean(value))
+		{
+			now = ! json_boolean_value(value);
+		}
 		value = json_object_get(json_params, "media");
 		if (json_is_string(value))
 		{
 			const char *media = json_string_value(value);
-			if (player_change(ctx->player, media, random, loop) == 0)
+			if (player_change(ctx->player, media, random, loop, now) == 0)
 			{
 				*result = json_pack("{s:s,s:s}", "media", "changed", "state", str_stop);
 			}

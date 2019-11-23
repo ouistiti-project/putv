@@ -120,7 +120,7 @@ static int method_search(cmds_ctx_t *ctx, char *arg)
 
 static int method_media(cmds_ctx_t *ctx, char *arg)
 {
-	return player_change(ctx->player, arg, 0, 0);
+	return player_change(ctx->player, arg, 0, 0, 1);
 }
 
 static int _import_entry(void *arg, int id, const char *url,

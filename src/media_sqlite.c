@@ -563,7 +563,7 @@ static char *opus_get(media_ctx_t *ctx, int opusid, int coverid)
 	return info;
 }
 
-static int opus_insert(media_ctx_t *ctx, const char *info, int *palbumid)
+static int opus_insert(media_ctx_t *ctx, const char *info, int *palbumid, const char *filename)
 {
 	sqlite3 *db = ctx->db;
 	char *title = NULL;
@@ -585,6 +585,10 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int *palbumid)
 	{
 		titleid = table_insert_word(ctx, "word", title, &exist);
 		free(title);
+	}
+	else
+	{
+		titleid = table_insert_word(ctx, "word", filename, &exist);
 	}
 	if (artist != NULL)
 	{
@@ -754,7 +758,12 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 
 #ifdef MEDIA_SQLITE_EXT
 	int albumid = -1;
-	opusid = opus_insert(ctx, info, &albumid);
+	const char *filename = strrchr(path, '/');
+	if (filename != NULL)
+		filename += 1;
+	else
+		filename = path;
+	opusid = opus_insert(ctx, info, &albumid, filename);
 	if (path == NULL)
 		return opusid;
 #else

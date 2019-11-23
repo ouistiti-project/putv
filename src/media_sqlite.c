@@ -43,6 +43,9 @@
 struct media_ctx_s
 {
 	sqlite3 *db;
+	char *path;
+	char *query;
+	char *playlist;
 	int mediaid;
 	unsigned int options;
 	int listid;
@@ -83,6 +86,7 @@ static int media_next(media_ctx_t *ctx);
 static int media_end(media_ctx_t *ctx);
 static option_state_t media_loop(media_ctx_t *ctx, option_state_t enable);
 static option_state_t media_random(media_ctx_t *ctx, option_state_t enable);
+static void media_destroy(media_ctx_t *ctx);
 
 static int _execute(sqlite3_stmt *statement)
 {
@@ -1234,51 +1238,32 @@ static int _media_changelist(media_ctx_t *ctx, char *playlist)
 	return listid;
 }
 
-static int _media_opendb(sqlite3 **db, const char *dbpath, const char *dbname, char **playlist)
+static int _media_opendb(media_ctx_t *ctx, const char *url)
 {
 	int ret;
 	struct stat dbstat;
+	ctx->path = utils_getpath(url, "db://", &ctx->query);
 
-	*playlist = strchr(dbpath,'?');
-	if (*playlist != NULL)
-	{
-		(*playlist)[0] = '\0';
-		(*playlist)++;
-	}
-	ret = stat(dbpath, &dbstat);
+	ret = stat(ctx->path, &dbstat);
+	dbg("db open %s", ctx->path);
 	if ((ret == 0)  && S_ISREG(dbstat.st_mode))
 	{
-		ret = sqlite3_open_v2(dbpath, db, SQLITE_OPEN_READWRITE, NULL);
+		ret = sqlite3_open_v2(ctx->path, &ctx->db, SQLITE_OPEN_READWRITE, NULL);
 		if (ret == SQLITE_ERROR)
 		{
-			ret = sqlite3_open_v2(dbpath, db, SQLITE_OPEN_READONLY, NULL);
+			ret = sqlite3_open_v2(ctx->path, &ctx->db, SQLITE_OPEN_READONLY, NULL);
 		}
-	}
-	else if ((ret == 0)  && S_ISDIR(dbstat.st_mode))
-	{
-		char *path = malloc(strlen(dbpath) + 1 + strlen(dbname) + 3 + 1);
-		sprintf(path, "%s/%s.db", dbpath, dbname);
-
-		ret = stat(path, &dbstat);
-		if ((ret == 0)  && S_ISREG(dbstat.st_mode))
-		{
-			ret = sqlite3_open_v2(path, db, SQLITE_OPEN_READWRITE, NULL);
-			if (ret == SQLITE_ERROR)
-			{
-				ret = sqlite3_open_v2(path, db, SQLITE_OPEN_READONLY, NULL);
-			}
-		}
-		else
-		{
-			ret = sqlite3_open_v2(path, db, SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE, NULL);
-			ret = SQLITE_CORRUPT;
-		}
-		free(path);
 	}
 	else
 	{
-		ret = sqlite3_open_v2(dbpath, db, SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE, NULL);
+		ret = sqlite3_open_v2(ctx->path, &ctx->db, SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE, NULL);
 		ret = SQLITE_CORRUPT;
+	}
+	ctx->playlist = strstr(ctx->query, "playlist=");
+	if (ctx->playlist != NULL)
+	{
+		ctx->playlist[8] = '\0';
+		ctx->playlist += 9;
 	}
 	return ret;
 }
@@ -1305,33 +1290,14 @@ static int _media_initdb(sqlite3 *db, const char *query[])
 static media_ctx_t *media_init(player_ctx_t *player, const char *url, ...)
 {
 	media_ctx_t *ctx = NULL;
-	sqlite3 *db = NULL;
 	int ret = SQLITE_ERROR;
-	char *playlist;
 
-	if (strstr(url, "db://") == NULL)
-	{
-		return NULL;
-	}
-	const char *dbpath = utils_getpath(url, "db://");
-	if (dbpath)
-	{
-		if (dbpath[0] == '~')
-		{
-			struct passwd *pw = NULL;
-			pw = getpwuid(geteuid());
-			chdir(pw->pw_dir);
-			dbpath++;
-			if (dbpath[0] == '/')
-				dbpath++;
-		}
-
-		ret = _media_opendb(&db, dbpath, "putv", &playlist);
-	}
-	if (db)
+	ctx = calloc(1, sizeof(*ctx));
+	ret = _media_opendb(ctx, url);
+	if (ret != -1 && ctx->db)
 	{
 		char *error = NULL;
-		if (sqlite3_exec(db, "PRAGMA encoding=\"UTF-8\";", NULL, NULL, &error))
+		if (sqlite3_exec(ctx->db, "PRAGMA encoding=\"UTF-8\";", NULL, NULL, &error))
 			warn("sqlite pragma error: %s", error);
 		if (ret == SQLITE_CORRUPT)
 		{
@@ -1350,7 +1316,6 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url, ...)
 "insert into listname (id, name) values (1, \"default\");",
 				NULL,
 			};
-			ret = _media_initdb(db, query);
 #else
 			const char *query[] = {
 "create table mimes (\"id\" INTEGER PRIMARY KEY, \"name\" TEXT UNIQUE NOT NULL);",
@@ -1390,28 +1355,32 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url, ...)
 	"FOREIGN KEY (listid) REFERENCES listname(id) ON UPDATE SET NULL);",
 "create table word (id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL);",
 "insert into word (id, name) values (1, \"default\");",
+"insert into word (id, name) values (2, \"unknown\");",
 "insert into listname (id, wordid) values (1, 1);",
 				NULL,
 			};
-			ret = _media_initdb(db, query);
 #endif
+			ret = _media_initdb(ctx->db, query);
 		}
 		if (ret == SQLITE_OK)
 		{
-			dbg("open db %s", dbpath);
-			ctx = calloc(1, sizeof(*ctx));
-			ctx->db = db;
-			ctx->mediaid = 0;
-			if (playlist != NULL)
-				ctx->listid = _media_changelist(ctx, playlist);
+			dbg("open db %s", url);
+			if (ctx->playlist != NULL)
+				ctx->listid = _media_changelist(ctx, ctx->playlist);
 			else
 				ctx->listid = 1;
 		}
 		else
 		{
 			err("media db open error %d", ret);
-			sqlite3_close_v2(db);
+			media_destroy(ctx);
+			ctx = NULL;
 		}
+	}
+	else
+	{
+		free(ctx);
+		ctx = NULL;
 	}
 	return ctx;
 }
@@ -1420,6 +1389,7 @@ static void media_destroy(media_ctx_t *ctx)
 {
 	if (ctx->db)
 		sqlite3_close_v2(ctx->db);
+	free(ctx->path);
 	free(ctx);
 }
 

@@ -539,17 +539,24 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url,...)
 	{
 		int ret;
 		struct stat pathstat;
-		const char *path = utils_getpath(url, "file://");
+		char *query = NULL;
+		char *path = utils_getpath(url, "file://", &query);
 		if (path == NULL)
-			return NULL;
-		if (path[0] == '~')
 		{
-			path += 2;
-			chdir(getenv("HOME"));
+			err("media dir: error on path %s", url);
+			return NULL;
 		}
 		ret = stat(path, &pathstat);
-		if ((ret != 0)  || ! S_ISDIR(pathstat.st_mode))
+		if (ret != 0)
+		{
+			err("media dir: error %s %s", path, strerror(errno));
 			return NULL;
+		}
+		if (! S_ISDIR(pathstat.st_mode))
+		{
+			err("media dir: error %s in not a directory", path);
+			return NULL;
+		}
 
 		ctx = calloc(1, sizeof(*ctx));
 		ctx->player = player;

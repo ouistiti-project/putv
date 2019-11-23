@@ -111,8 +111,9 @@ const char *utils_getmime(const char *path)
 	return mime_octetstream;
 }
 
-const char *utils_getpath(const char *url, const char *proto)
+char *utils_getpath(const char *url, const char *proto, char **query)
 {
+	char *newpath = NULL;
 	const char *path = strstr(url, proto);
 	if (path == NULL)
 	{
@@ -124,7 +125,38 @@ const char *utils_getpath(const char *url, const char *proto)
 	}
 	else
 		path += strlen(proto);
-	return path;
+	if (!strncmp(path,"://", 3))
+		path+=3;
+	int length = strlen(path);
+	char *search = strchr(path, '?');
+	if (search != NULL)
+		length -= strlen(search);
+	if (path[0] == '~')
+	{
+		path++;
+		if (path[0] == '/')
+			path++;
+
+		char *home = getenv("HOME");
+		length += strlen(home);
+		newpath = malloc(length + 2);
+		snprintf(newpath, length + 2, "%s/%s", home, path);
+	}
+	else
+	{
+		newpath = malloc(length + 1);
+		strncpy(newpath, path, length + 2);
+	}
+#ifndef SQLITE3_OPENQUERY
+	*query = strchr(newpath, '?');
+	if (*query != NULL)
+	{
+		*query[0] = '\0';
+		*query += 1;
+	}
+#endif
+	newpath[length + 1] = 0;
+	return newpath;
 }
 
 char *utils_parseurl(const char *url, char **protocol, char **host, char **port, char **path, char **search)

@@ -115,16 +115,21 @@ static src_ctx_t *src_init(player_ctx_t *ctx, const char *url, const char *mime)
 		}
 		if (path != NULL)
 		{
+			int dirfd = AT_FDCWD;
 			if (path[0] == '~')
 			{
-				struct passwd *pw = NULL;
-				pw = getpwuid(geteuid());
-				chdir(pw->pw_dir);
 				path++;
 				if (path[0] == '/')
 					path++;
+
+				struct passwd *pw = NULL;
+				pw = getpwuid(geteuid());
+				dirfd = open(pw->pw_dir, O_DIRECTORY);
 			}
-			fd = open(path, O_RDONLY);
+			fd = openat(dirfd, path, O_RDONLY);
+			dbg("open %s %d", path ,fd);
+			if (dirfd != AT_FDCWD)
+				close(dirfd);
 		}
 		free(value);
 	}

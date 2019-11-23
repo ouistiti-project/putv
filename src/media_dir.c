@@ -32,6 +32,7 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include <fcntl.h>
+#include <errno.h>
 #include <sys/stat.h>
 
 #define __USE_GNU
@@ -52,7 +53,7 @@ typedef struct media_dirlist_s media_dirlist_t;
 struct media_ctx_s
 {
 	const char *url;
-	const char *root;
+	char *root;
 	player_ctx_t *player;
 	int mediaid;
 	int firstmediaid;
@@ -568,12 +569,14 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url,...)
 
 #ifdef USE_INOTIFY
 		ctx->inotifyfd = inotify_init();
-		ctx->dirfd = inotify_add_watch(ctx->inotifyfd, utils_getpath(ctx->url, "file://"),
+		ctx->dirfd = inotify_add_watch(ctx->inotifyfd, path,
 						IN_MODIFY | IN_CREATE | IN_DELETE);
 		pthread_create(&ctx->thread, NULL, _check_dir, (void *)ctx);
 		ctx->options |= OPTION_INOTIFY;
 #endif
 	}
+	else
+			err("media dir: error on url");
 	return ctx;
 }
 
@@ -586,6 +589,8 @@ static void media_destroy(media_ctx_t *ctx)
 	inotify_rm_watch(ctx->inotifyfd, ctx->dirfd);
 	close(ctx->inotifyfd);
 #endif
+	if (ctx->root != NULL)
+		free(ctx->root);
 	free(ctx);
 }
 

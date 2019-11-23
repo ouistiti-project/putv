@@ -326,7 +326,7 @@ int main(int argc, char **argv)
 		NULL,
 	};
 	cmds[nbcmds].ops = cmds_tinysvcmdns;
-	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, sink, txt2);
+	cmds[nbcmds].ctx = cmds[nbcmds].ops->init(player, txt2);
 	nbcmds++;
 #endif
 #endif

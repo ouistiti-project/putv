@@ -75,6 +75,7 @@ struct gmrenderer_ctx_s
 	const char *root;
 	const char *name;
 	char *socketpath;
+	int volume;
 	int current_id;
 	client_data_t *client;
 	json_t *media;
@@ -158,6 +159,23 @@ static int gmrenderer_checkstate(void *data, json_t *params)
 
 			//if (ctx->meta_cb)
 			//	ctx->meta_cb(&ctx->metadata);
+		}
+	}
+	dbg("putv check end");
+
+	return 0;
+}
+
+static int gmrenderer_checkvolume(void *data, json_t *params)
+{
+	dbg("putv check params %s", json_dumps(params, 0));
+	gmrenderer_ctx_t *ctx = (gmrenderer_ctx_t *)data;
+	if (json_is_object(params))
+	{
+		json_t *jlevel = json_object_get(params, "level");
+		if (json_is_integer(jlevel))
+		{
+			ctx->volume =  json_integer_value(jlevel);
 		}
 	}
 	dbg("putv check end");
@@ -327,7 +345,8 @@ output_putv_get_position(int64_t *track_duration,
 static int
 output_putv_getvolume(float *value)
 {
-	return 0;
+	client_volume(gmrenderer_ctx->client, gmrenderer_checkvolume, gmrenderer_ctx, json_null());
+	return gmrenderer_ctx->volume;
 }
 static int
 output_putv_setvolume(float value)

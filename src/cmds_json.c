@@ -630,7 +630,7 @@ static int method_volume(json_t *json_params, json_t **result, void *userdata)
 	if (json_is_object(json_params))
 	{
 		value = json_object_get(json_params, "level");
-		if (json_is_integer(value))
+		if (value && json_is_integer(value))
 		{
 			if (ctx->sink->ops->setvolume == NULL)
 			{
@@ -646,7 +646,7 @@ static int method_volume(json_t *json_params, json_t **result, void *userdata)
 		}
 		int volume = ctx->sink->ops->getvolume(ctx->sink->ctx);
 		value = json_object_get(json_params, "step");
-		if (json_is_integer(value))
+		if (value && json_is_integer(value))
 		{
 			if (ctx->sink->ops->setvolume == NULL)
 			{

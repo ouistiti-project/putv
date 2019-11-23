@@ -597,6 +597,11 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int *palbumid, const 
 			artistid = opus_insert_info(ctx, "artist", artistid);
 		free(artist);
 	}
+	else
+	{
+		//default wordid is unknown
+		titleid = 2;
+	}
 	if (cover != NULL)
 	{
 		coverid = table_insert_word(ctx, "cover", cover, &exist);
@@ -621,7 +626,7 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int *palbumid, const 
 			ret = sqlite3_bind_int(st_update, index, albumid);
 			SQLITE3_CHECK(ret, -1, sql);
 			index = sqlite3_bind_parameter_index(st_update, "@COVERID");
-			ret = sqlite3_bind_int(st_update, index, genreid);
+			ret = sqlite3_bind_int(st_update, index, coverid);
 			SQLITE3_CHECK(ret, -1, sql);
 			ret = sqlite3_step(st_update);
 			sqlite3_finalize(st_update);
@@ -634,6 +639,11 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int *palbumid, const 
 		if (genreid > -1)
 			genreid = opus_insert_info(ctx, "genre", genreid);
 		free(genre);
+	}
+	else
+	{
+		//default wordid is unknown
+		titleid = 2;
 	}
 
 	int opusid = -1;

@@ -622,7 +622,7 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int *palbumid, const 
 	else
 	{
 		//default wordid is unknown
-		titleid = 2;
+		artistid = 2;
 	}
 	if (cover != NULL)
 	{
@@ -665,7 +665,7 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int *palbumid, const 
 	else
 	{
 		//default wordid is unknown
-		titleid = 2;
+		genreid = 2;
 	}
 
 	int opusid = -1;
@@ -796,6 +796,8 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 	else
 		filename = path;
 	opusid = opus_insert(ctx, info, &albumid, filename);
+	if (opusid == -1)
+		err("opusid error");
 	if (path == NULL)
 		return opusid;
 #else
@@ -867,7 +869,6 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 		if (ret != SQLITE_DONE)
 		{
 			err("media sqlite: error %d on insert of %s\n\t%s", ret, path, sqlite3_errmsg(db));
-			dbg("media sqlite: %d %d %s", coverid, opusid, mime);
 			ret = -1;
 		}
 		else
@@ -1285,7 +1286,7 @@ static int _media_opendb(media_ctx_t *ctx, const char *url)
 
 	ret = stat(ctx->path, &dbstat);
 	dbg("db open %s", ctx->path);
-	if ((ret == 0)  && S_ISREG(dbstat.st_mode))
+	if ((ret == 0) && S_ISREG(dbstat.st_mode))
 	{
 		ret = sqlite3_open_v2(ctx->path, &ctx->db, SQLITE_OPEN_READWRITE, NULL);
 		if (ret == SQLITE_ERROR)

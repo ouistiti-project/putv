@@ -375,6 +375,39 @@ static int opus_parse_info(const char *info, char **ptitle, char **partist, char
 	return 0;
 }
 
+char *opus_getcover(media_ctx_t *ctx, int coverid)
+{
+	sqlite3 *db = ctx->db;
+	int ret;
+	char *cover = NULL;
+
+	char *sql = "select name from cover where id=@ID";
+	sqlite3_stmt *st_select;
+	ret = sqlite3_prepare_v2(db, sql, -1, &st_select, NULL);
+	SQLITE3_CHECK(ret, NULL, sql);
+
+	int index;
+
+	index = sqlite3_bind_parameter_index(st_select, "@ID");
+	ret = sqlite3_bind_int(st_select, index, coverid);
+	SQLITE3_CHECK(ret, NULL, sql);
+
+	ret = sqlite3_step(st_select);
+	if (ret == SQLITE_ROW)
+	{
+		int type;
+		type = sqlite3_column_type(st_select, 0);
+		if (type == SQLITE_TEXT)
+		{
+			const char *string = sqlite3_column_text(st_select, 0);
+			if (string != NULL)
+				cover = strdup(string);
+		}
+	}
+	sqlite3_finalize(st_select);
+	return cover;
+}
+
 static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 {
 	json_t *json_info = json_object();
@@ -459,7 +492,8 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 		if (type == SQLITE_INTEGER)
 		{
 			wordid = sqlite3_column_int(st_select, 2);
-			char *sql = "select name from word inner join album on word.id=album.wordid where album.id=@ID";
+			//char *sql = "select name from word inner join album on word.id=album.wordid where album.id=@ID";
+			char *sql = "select word.name, album.coverid from word inner join album on word.id=album.wordid where album.id=@ID";
 			sqlite3_stmt *st_select;
 			ret = sqlite3_prepare_v2(db, sql, -1, &st_select, NULL);
 			SQLITE3_CHECK(ret, NULL, sql);
@@ -480,6 +514,11 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 					const char *string = sqlite3_column_text(st_select, 0);
 					json_t *jstring = json_string(string);
 					json_object_set_new(json_info, str_album, jstring);
+				}
+				type = sqlite3_column_type(st_select, 1);
+				if (type == SQLITE_INTEGER)
+				{
+					coverid = sqlite3_column_int(st_select, 1);
 				}
 			}
 			sqlite3_finalize(st_select);
@@ -523,30 +562,13 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 		}
 		if(coverid != -1)
 		{
-			char *sql = "select name from cover where id=@ID";
-			sqlite3_stmt *st_select;
-			ret = sqlite3_prepare_v2(db, sql, -1, &st_select, NULL);
-			SQLITE3_CHECK(ret, NULL, sql);
-
-			int index;
-
-			index = sqlite3_bind_parameter_index(st_select, "@ID");
-			ret = sqlite3_bind_int(st_select, index, coverid);
-			SQLITE3_CHECK(ret, NULL, sql);
-
-			ret = sqlite3_step(st_select);
-			if (ret == SQLITE_ROW)
+			char *cover = opus_getcover(ctx, coverid);
+			if (cover != NULL)
 			{
-				int type;
-				type = sqlite3_column_type(st_select, 0);
-				if (type == SQLITE_TEXT)
-				{
-					const char *string = sqlite3_column_text(st_select, 0);
-					json_t *jstring = json_string(string);
-					json_object_set_new(json_info, str_cover, jstring);
-				}
+				json_t *jstring = json_string(cover);
+				json_object_set_new(json_info, str_cover, jstring);
+				free(cover);
 			}
-			sqlite3_finalize(st_select);
 		}
 	}
 	sqlite3_finalize(st_select);
@@ -988,11 +1010,8 @@ static int _media_execute(media_ctx_t *ctx, sqlite3_stmt *statement, media_parse
 		int coverid = -1;
 		index++;
 		type = sqlite3_column_type(statement, index);
-		if (type == SQLITE_TEXT)
-			coverurl = sqlite3_column_text(statement, index);
 		if (type == SQLITE_INTEGER)
 			coverid = sqlite3_column_int(statement, index);
-
 		if (id != -1)
 		{
 			info = opus_get(ctx, id, coverid);
@@ -1024,9 +1043,9 @@ static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data)
 	int ret;
 	sqlite3_stmt *statement;
 #ifndef MEDIA_SQLITE_EXT
-	char *sql = "select \"url\", \"mimeid\", \"id\", \"info\" , \"cover\" from \"media\"  where id = @ID";
+	char *sql = "select \"url\", \"mimeid\", \"id\", \"info\" from \"media\"  where id = @ID";
 #else
-	char *sql = "select \"url\", \"mimeid\", \"opusid\", \"cover.name\" from \"media\" inner join \"cover\" on cover.id=album.coverid, \"album\" on album.id=media.albumid where opusid = @ID";
+	char *sql = "select \"url\", \"mimeid\", \"opusid\", \"coverid\" from \"media\" inner join \"album\" on album.id=media.albumid where opusid = @ID";
 #endif
 	ret = sqlite3_prepare_v2(ctx->db, sql, -1, &statement, NULL);
 	SQLITE3_CHECK(ret, -1, sql);
@@ -1049,7 +1068,7 @@ static int media_list(media_ctx_t *ctx, media_parse_t cb, void *data)
 #ifndef MEDIA_SQLITE_EXT
 	char *sql = "select \"url\", \"mimeid\", \"id\", \"info\" from \"media\" inner join playlist on media.id=playlist.id";
 #else
-	char *sql = "select \"url\", \"mimeid\", \"opusid\" from \"media\" inner join playlist on media.id=playlist.id";
+	char *sql = "select \"url\", \"mimeid\", \"opusid\", \"coverid\" from \"media\" inner join playlist on media.id=playlist.id, \"album\" on album.id=media.albumid ";
 #endif
 	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
 	SQLITE3_CHECK(ret, -1, sql);
@@ -1070,6 +1089,7 @@ static int media_next(media_ctx_t *ctx)
 {
 	int ret;
 	sqlite3_stmt *statement;
+
 	char *sql[] = {
 		"select \"id\" from \"playlist\" where listid == @LISTID and id > @ID limit 1",
 		"select \"id\" from \"playlist\" where listid == @LISTID limit 1",

@@ -278,7 +278,7 @@ static char *media_regfile(char *path, const char *mime, const unsigned char *da
 	char *ext = strrchr(path, '.');
 	if (!strcmp(mime,"image/png"))
 		strcpy(ext, ".png");
-	if (!strcmp(mime,"image/jpeg"))
+	else if (!strcmp(mime,"image/jpeg"))
 		strcpy(ext, ".jpg");
 	fd = open(path, O_WRONLY | O_CREAT | O_EXCL, 0666);
 	if (fd > 0)
@@ -434,12 +434,21 @@ int media_parseid3tag(const char *path, json_t *object)
 						name++;
 					else
 						name = coverpath;
-#if 0
 					if (tinfo[3] != NULL)
+#if 0
 						strcpy(name, tinfo[3]);
 					else
+#else
+					{
+						if (strstr(tinfo[3], ".jpg") != NULL)
+							strcpy(name, "cover.jpg");
+						else
+							strcpy(name, "cover.png");
+					}
+					else
 #endif
-						strcpy(name, "cover.");
+						strcpy(name, "cover.png");
+					dbg("fill cover %s", info[1]);
 					value = json_string(media_regfile(coverpath, info[1], data, length));
 				}
 				break;
@@ -534,7 +543,7 @@ int media_parseoggmetadata(const char *path, json_t *object)
 			name++;
 		else
 			name = coverpath;
-		strcpy(name, "cover.");
+		strcpy(name, "cover.png");
 
 		json_t *value;
 		value = json_string(media_regfile(coverpath, picture->mime_type, picture->data, picture->data_length));

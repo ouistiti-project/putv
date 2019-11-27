@@ -49,6 +49,7 @@ struct media_ctx_s
 	int mediaid;
 	unsigned int options;
 	int listid;
+	int fill;
 };
 
 #define OPTION_LOOP 0x0001
@@ -1269,7 +1270,8 @@ static int _media_changelist(media_ctx_t *ctx, char *playlist)
 			listid = sqlite3_last_insert_rowid(db);
 			int tempolist = ctx->listid;
 			ctx->listid = listid;
-			media_list(ctx, _media_setlist, ctx);
+			if (ctx->fill == 1)
+				media_list(ctx, _media_setlist, ctx);
 			ctx->listid = tempolist;
 		}
 #endif
@@ -1299,11 +1301,22 @@ static int _media_opendb(media_ctx_t *ctx, const char *url)
 		ret = sqlite3_open_v2(ctx->path, &ctx->db, SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE, NULL);
 		ret = SQLITE_CORRUPT;
 	}
-	ctx->playlist = strstr(ctx->query, "playlist=");
-	if (ctx->playlist != NULL)
+	if (ctx->query != NULL)
 	{
-		ctx->playlist[8] = '\0';
-		ctx->playlist += 9;
+		char *fill = strstr(ctx->query, "fill=true");
+		ctx->playlist = strstr(ctx->query, "playlist=");
+		if (ctx->playlist != NULL)
+		{
+			ctx->playlist[8] = '\0';
+			ctx->playlist += 9;
+			char *end = strchr(ctx->playlist, ',');
+			if (end != NULL)
+				*end = '\0';
+		}
+		if (fill != NULL)
+		{
+			ctx->fill = 1;
+		}
 	}
 	return ret;
 }

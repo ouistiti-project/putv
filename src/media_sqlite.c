@@ -347,6 +347,67 @@ static int opus_insert_info(media_ctx_t *ctx, const char *table, int wordid)
 	return id;
 }
 
+static int opus_insertalbum(media_ctx_t *ctx, int albumid, int artistid, int coverid, int genreid)
+{
+	sqlite3 *db = ctx->db;
+	albumid = opus_insert_info(ctx, "album", albumid);
+	if (coverid != -1)
+	{
+		int ret;
+		char *sql = "update \"album\" set \"coverid\"=@COVERID where id=@ALBUMID";
+		sqlite3_stmt *st_update;
+		ret = sqlite3_prepare_v2(db, sql, -1, &st_update, NULL);
+		SQLITE3_CHECK(ret, -1, sql);
+
+		int index;
+		index = sqlite3_bind_parameter_index(st_update, "@ALBUMID");
+		ret = sqlite3_bind_int(st_update, index, albumid);
+		SQLITE3_CHECK(ret, -1, sql);
+		index = sqlite3_bind_parameter_index(st_update, "@COVERID");
+		ret = sqlite3_bind_int(st_update, index, coverid);
+		SQLITE3_CHECK(ret, -1, sql);
+		ret = sqlite3_step(st_update);
+		sqlite3_finalize(st_update);
+	}
+	if (artistid != -1)
+	{
+		int ret;
+		char *sql = "update \"album\" set \"artistid\"=@ARTISTID where id=@ALBUMID";
+		sqlite3_stmt *st_update;
+		ret = sqlite3_prepare_v2(db, sql, -1, &st_update, NULL);
+		SQLITE3_CHECK(ret, -1, sql);
+
+		int index;
+		index = sqlite3_bind_parameter_index(st_update, "@ALBUMID");
+		ret = sqlite3_bind_int(st_update, index, albumid);
+		SQLITE3_CHECK(ret, -1, sql);
+		index = sqlite3_bind_parameter_index(st_update, "@ARTISTID");
+		ret = sqlite3_bind_int(st_update, index, coverid);
+		SQLITE3_CHECK(ret, -1, sql);
+		ret = sqlite3_step(st_update);
+		sqlite3_finalize(st_update);
+	}
+	if (genreid != -1)
+	{
+		int ret;
+		char *sql = "update \"album\" set \"genreid\"=@GENREID where id=@ALBUMID";
+		sqlite3_stmt *st_update;
+		ret = sqlite3_prepare_v2(db, sql, -1, &st_update, NULL);
+		SQLITE3_CHECK(ret, -1, sql);
+
+		int index;
+		index = sqlite3_bind_parameter_index(st_update, "@ALBUMID");
+		ret = sqlite3_bind_int(st_update, index, albumid);
+		SQLITE3_CHECK(ret, -1, sql);
+		index = sqlite3_bind_parameter_index(st_update, "@GENREID");
+		ret = sqlite3_bind_int(st_update, index, coverid);
+		SQLITE3_CHECK(ret, -1, sql);
+		ret = sqlite3_step(st_update);
+		sqlite3_finalize(st_update);
+	}
+	return albumid;
+}
+
 #include <jansson.h>
 
 static int opus_parse_info(const char *info, char **ptitle, char **partist, char **palbum, char **pgenre, char **pcover)
@@ -633,29 +694,14 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int *palbumid, const 
 	if (album != NULL)
 	{
 		albumid = table_insert_word(ctx, "word", album, &exist);
-		if (albumid > -1)
-			albumid = opus_insert_info(ctx, "album", albumid);
-		*palbumid = albumid;
-		if (coverid != -1)
-		{
-			int ret;
-			char *sql = "update \"album\" set \"coverid\"=@COVERID where id=@ALBUMID";
-			sqlite3_stmt *st_update;
-			ret = sqlite3_prepare_v2(db, sql, -1, &st_update, NULL);
-			SQLITE3_CHECK(ret, -1, sql);
-
-			int index;
-			index = sqlite3_bind_parameter_index(st_update, "@ALBUMID");
-			ret = sqlite3_bind_int(st_update, index, albumid);
-			SQLITE3_CHECK(ret, -1, sql);
-			index = sqlite3_bind_parameter_index(st_update, "@COVERID");
-			ret = sqlite3_bind_int(st_update, index, coverid);
-			SQLITE3_CHECK(ret, -1, sql);
-			ret = sqlite3_step(st_update);
-			sqlite3_finalize(st_update);
-		}
 		free(album);
 	}
+	else
+	{
+		albumid = 2;
+	}
+	*palbumid = opus_insertalbum(ctx, albumid, artistid, coverid, genreid);
+
 	if (genre != NULL)
 	{
 		genreid = table_insert_word(ctx, "word", genre, NULL);
@@ -703,7 +749,7 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int *palbumid, const 
 		ret = sqlite3_bind_int(st_insert, index, artistid);
 		SQLITE3_CHECK(ret, -1, sql);
 		index = sqlite3_bind_parameter_index(st_insert, "@ALBUMID");
-		ret = sqlite3_bind_int(st_insert, index, albumid);
+		ret = sqlite3_bind_int(st_insert, index, *palbumid);
 		SQLITE3_CHECK(ret, -1, sql);
 		index = sqlite3_bind_parameter_index(st_insert, "@GENREID");
 		ret = sqlite3_bind_int(st_insert, index, genreid);

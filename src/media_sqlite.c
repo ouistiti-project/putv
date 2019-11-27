@@ -1330,10 +1330,14 @@ static int _media_opendb(media_ctx_t *ctx, const char *url)
 {
 	int ret;
 	struct stat dbstat;
+	/**
+	 * store path to keep query all the time
+	 */
 	ctx->path = utils_getpath(url, "db://", &ctx->query);
 
+	if (ctx->path == NULL)
+		return -1;
 	ret = stat(ctx->path, &dbstat);
-	dbg("db open %s", ctx->path);
 	if ((ret == 0) && S_ISREG(dbstat.st_mode))
 	{
 		ret = sqlite3_open_v2(ctx->path, &ctx->db, SQLITE_OPEN_READWRITE, NULL);
@@ -1380,6 +1384,8 @@ static int _media_initdb(sqlite3 *db, const char *query[])
 			err("media prepare error %d query[%d]", ret, i);
 			break;
 		}
+		media_dbg("query %d",i);
+		media_dbg("query %s", query[i]);
 		ret = sqlite3_exec(db, query[i], NULL, NULL, &error);
 		i++;
 	}

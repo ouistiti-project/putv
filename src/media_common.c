@@ -144,8 +144,20 @@ char *utils_getpath(const char *url, const char *proto, char **query)
 	}
 	else
 	{
-		newpath = malloc(length + 1);
-		strncpy(newpath, path, length + 2);
+		/*
+		 * TO CHECK
+		 * on Buildroot:
+		 * if the calloc allocate (length + 1) as necessary,
+		 * for an absolute path the next call to calloc will crash.
+		 * for a relative path, the application runs fine.
+		 * if the calloc allocate (length + 2)
+		 * the application runs fine in any cases.
+		 * For the HOME with an absolute path (see under),
+		 * the application runs fine in any cases.
+		 */
+		newpath = calloc(1, length + 2);
+		strncpy(newpath, path, length + 1);
+		newpath[length] = '\0';
 	}
 #ifndef SQLITE3_OPENQUERY
 	*query = strchr(newpath, '?');
@@ -448,7 +460,6 @@ int media_parseid3tag(const char *path, json_t *object)
 					else
 #endif
 						strcpy(name, "cover.png");
-					dbg("fill cover %s", info[1]);
 					value = json_string(media_regfile(coverpath, info[1], data, length));
 				}
 				break;

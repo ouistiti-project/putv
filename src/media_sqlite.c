@@ -735,7 +735,7 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int *palbumid, const 
 	ret = sqlite3_step(st_select);
 	if (ret != SQLITE_ROW)
 	{
-		char *sql = "insert into \"opus\" (\"titleid\",\"artistid\",\"albumid\",\"genreid\",\"coverid\") values (@TITLEID,@ARTISTID,@ALBUMID,@GENREID,@COVERID)";
+		char *sql = "insert into \"opus\" (\"titleid\",\"artistid\",\"albumid\",\"genreid\",\"coverid\",\"like\") values (@TITLEID,@ARTISTID,@ALBUMID,@GENREID,@COVERID, 5)";
 		sqlite3_stmt *st_insert;
 		ret = sqlite3_prepare_v2(db, sql, -1, &st_insert, NULL);
 		SQLITE3_CHECK(ret, -1, sql);
@@ -1436,7 +1436,7 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url, ...)
 	"FOREIGN KEY (albumid) REFERENCES album(id) ON UPDATE SET NULL);",
 "create table opus (id INTEGER PRIMARY KEY,  titleid INTEGER UNIQUE NOT NULL, " \
 	"artistid INTEGER, otherid INTEGER, albumid INTEGER, " \
-	"genreid INTEGER, coverid INTEGER, comment BLOB, " \
+	"genreid INTEGER, coverid INTEGER, like INTEGER, comment BLOB, " \
 	"FOREIGN KEY (titleid) REFERENCES word(id), " \
 	"FOREIGN KEY (artistid) REFERENCES artist(id) ON UPDATE SET NULL," \
 	"FOREIGN KEY (albumid) REFERENCES album(id) ON UPDATE SET NULL," \

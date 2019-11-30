@@ -330,6 +330,7 @@ static int method_play(json_t *json_params, json_t **result, void *userdata)
 	case STATE_STOP:
 		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{ss}", "state", str_stop));
 	return -1;
+	case STATE_CHANGE:
 	case STATE_PLAY:
 		*result = json_pack("{ss}", "state", str_play);
 	return 0;
@@ -929,7 +930,6 @@ static int _cmds_send(const char *buff, size_t size, void *userctx)
 	cmds_ctx_t *ctx = info->userctx;
 	int sock = info->sock;
 	int ret = size;
-
 	if (ctx->buff_snd.length + size + 1 > sizeof(ctx->buff_snd.data))
 	{
 		ret = send(sock, ctx->buff_snd.data, ctx->buff_snd.length, MSG_DONTWAIT | MSG_NOSIGNAL);

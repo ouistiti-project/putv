@@ -29,6 +29,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <errno.h>
+#include <unistd.h>
 
 #include <pthread.h>
 #include <jansson.h>
@@ -952,11 +953,15 @@ static void jsonrpc_onchange(void * userctx, player_ctx_t *player, state_t state
 	json_t *notification = jsonrpc_jrequest("onchange", method_table, (void *)ctx, NULL);
 	if (notification)
 	{
-		json_dump_callback(notification, _cmds_send, info, JSONRPC_DEBUG_FORMAT);
 		int sock = info->sock;
-		int ret = send(sock, ctx->buff_snd.data, ctx->buff_snd.length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
-		cmds_dbg("send %d/%d: %s", ret, ctx->buff_snd.length + 1, ctx->buff_snd.data);
+		json_dump_callback(notification, _cmds_send, info, JSONRPC_DEBUG_FORMAT);
+		if (ctx->buff_snd.length > 0)
+		{
+			int ret = send(sock, ctx->buff_snd.data, ctx->buff_snd.length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
+			cmds_dbg("send %d/%d: %s", ret, ctx->buff_snd.length + 1, ctx->buff_snd.data);
+		}
 		ctx->buff_snd.length = 0;
+		fsync(sock);
 		json_decref(notification);
 	}
 #else
@@ -970,6 +975,8 @@ static void jsonrpc_onchange(void * userctx, player_ctx_t *player, state_t state
 			err("cmd: json event error on send");
 			//TODO remove notification from player
 		}
+		fsync(sock);
+		json_decref(notification);
 	}
 #endif
 	pthread_mutex_unlock(&ctx->mutex);
@@ -1030,6 +1037,7 @@ static int jsonrpc_command(thread_info_t *info)
 						ret = send(sock, buff, strlen(buff), MSG_NOSIGNAL);
 						ret = send(sock, "", 1, MSG_DONTWAIT | MSG_NOSIGNAL);
 #endif
+						fsync(sock);
 						json_decref(response);
 					}
 					json_decref(request);

@@ -47,6 +47,8 @@
 #define dbg(...)
 #endif
 
+#define client_dbg(...)
+
 struct client_event_s
 {
 	const char *event;
@@ -275,6 +277,7 @@ int client_cmd(client_data_t *data, char * cmd)
 		return -1;
 	int pid = data->pid;
 	ret = send(data->sock, buffer, strlen(buffer) + 1, MSG_NOSIGNAL);
+	client_dbg("send %s", buffer);
 	if (data->options & OPTION_ASYNC)
 		return 0;
 	return pid;
@@ -321,13 +324,12 @@ int client_pause(client_data_t *data, client_event_prototype_t proto, void *prot
 {
 	if (data->pid != 0)
 		return -1;
-
 	pthread_mutex_lock(&data->mutex);
 	data->proto = proto;
 	data->data = protodata;
 	int pid = client_cmd(data, "pause");
-	pthread_mutex_unlock(&data->mutex);
 	client_wait(data, pid);
+	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
 
@@ -339,8 +341,8 @@ int client_stop(client_data_t *data, client_event_prototype_t proto, void *proto
 	data->proto = proto;
 	data->data = protodata;
 	int pid = client_cmd(data, "stop");
-	pthread_mutex_unlock(&data->mutex);
 	client_wait(data, pid);
+	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
 
@@ -352,8 +354,8 @@ int client_status(client_data_t *data, client_event_prototype_t proto, void *pro
 	data->proto = proto;
 	data->data = protodata;
 	int pid = client_cmd(data, "status");
-	pthread_mutex_unlock(&data->mutex);
 	client_wait(data, pid);
+	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
 
@@ -366,8 +368,8 @@ int client_volume(client_data_t *data, client_event_prototype_t proto, void *pro
 	data->data = protodata;
 	data->params = step;
 	int pid = client_cmd(data, "volume");
-	pthread_mutex_unlock(&data->mutex);
 	client_wait(data, pid);
+	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
 
@@ -390,7 +392,8 @@ int media_change(client_data_t *data, client_event_prototype_t proto, void *prot
 	data->proto = proto;
 	data->data = protodata;
 	data->params = media;
-	client_cmd(data, "change");
+	int pid = client_cmd(data, "change");
+	client_wait(data, pid);
 	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
@@ -403,7 +406,8 @@ int media_insert(client_data_t *data, client_event_prototype_t proto, void *prot
 	data->proto = proto;
 	data->data = protodata;
 	data->params = media;
-	client_cmd(data, "append");
+	int pid = client_cmd(data, "append");
+	client_wait(data, pid);
 	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
@@ -416,7 +420,8 @@ int media_remove(client_data_t *data, client_event_prototype_t proto, void *prot
 	data->proto = proto;
 	data->data = protodata;
 	data->params = media;
-	client_cmd(data, "remove");
+	int pid = client_cmd(data, "remove");
+	client_wait(data, pid);
 	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
@@ -429,7 +434,8 @@ int media_list(client_data_t *data, client_event_prototype_t proto, void *protod
 	data->proto = proto;
 	data->data = protodata;
 	data->list = list;
-	client_cmd(data, "list");
+	int pid = client_cmd(data, "list");
+	client_wait(data, pid);
 	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
@@ -439,6 +445,18 @@ static size_t recv_cb(void *buffer, size_t len, void *arg)
 {
 	client_data_t *data = (client_data_t *)arg;
 	int ret = recv(data->sock, buffer, len, MSG_NOSIGNAL);
+	if ((strlen(buffer) + 1) < ret)
+	{
+		err("two messages in ONE");
+		/**
+		 * disable the last command, the response may be lost
+		 * TODO
+		 * store the second message and call again the json parser.
+		 */
+		data->pid = 0;
+		client_dbg("recv %ld/%d" , strlen(buffer), ret);
+	}
+	client_dbg("recv %s", (char *)buffer);
 	if (ret > 0)
 		((char*)buffer)[ret] = 0;
 	else

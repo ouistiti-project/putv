@@ -44,7 +44,7 @@ struct src_ctx_s
 {
 	const src_ops_t *ops;
 	int fd;
-	player_ctx_t *ctx;
+	player_ctx_t *player;
 	const char *mime;
 	jitter_t *out;
 	decoder_t *estream;
@@ -69,7 +69,7 @@ struct src_ctx_s
 static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 {
 	int ret = 0;
-	if (player_waiton(ctx->ctx, STATE_PAUSE) < 0)
+	if (player_waiton(ctx->player, STATE_PAUSE) < 0)
 	{
 		return 0;
 	}
@@ -94,11 +94,12 @@ static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 	{
 		ctx->out->ops->flush(ctx->out->ctx);
 		dbg("src: end of file");
+		player_next(ctx->player);
 	}
 	return ret;
 }
 
-static src_ctx_t *src_init(player_ctx_t *ctx, const char *url, const char *mime)
+static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mime)
 {
 	int fd = -1;
 	char *path = NULL;
@@ -138,7 +139,7 @@ static src_ctx_t *src_init(player_ctx_t *ctx, const char *url, const char *mime)
 		src_ctx_t *src = calloc(1, sizeof(*src));
 		src->ops = src_file;
 		src->fd = fd;
-		src->ctx = ctx;
+		src->player = player;
 		src->mime = mime;
 		return src;
 	}

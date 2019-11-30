@@ -508,7 +508,7 @@ static void *_check_dir(void *arg)
 					if (count > 0)
 					{
 						//media_next(ctx);
-						player_state(ctx->player, STATE_PLAY);
+						player_state(ctx->player, STATE_CHANGE);
 					}
 				}
 				else if (event->mask & IN_DELETE)

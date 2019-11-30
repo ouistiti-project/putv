@@ -143,6 +143,7 @@ static void *src_thread(void *arg)
 	{
 		dbg("src curl error %d on %p", ret, ctx->curl);
 	}
+	player_next(ctx->player);
 	return 0;
 }
 

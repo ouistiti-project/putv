@@ -197,6 +197,7 @@ static int src_run(src_ctx_t *ctx)
 		listener = listener->next;
 	}
 	pthread_create(&ctx->thread, NULL, src_thread, ctx);
+	player_next(ctx->player);
 	return 0;
 }
 

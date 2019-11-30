@@ -187,7 +187,9 @@ state_t player_state(player_ctx_t *ctx, state_t state)
 {
 	if ((state != STATE_UNKNOWN) && ctx->state != state)
 	{
+		pthread_mutex_lock(&ctx->mutex);
 		ctx->state = state;
+		pthread_mutex_unlock(&ctx->mutex);
 		pthread_cond_broadcast(&ctx->cond);
 		player_event_t *it = ctx->events;
 		while (it != NULL)
@@ -196,8 +198,8 @@ state_t player_state(player_ctx_t *ctx, state_t state)
 			it = it->next;
 		}
 	}
-
-	return ctx->state;
+	state = ctx->state;
+	return state;
 }
 
 int player_mediaid(player_ctx_t *ctx)
@@ -311,8 +313,116 @@ int player_run(player_ctx_t *ctx)
 
 	ctx->filter = filter_build(ctx->filtername, ctx->audioout->format);
 
-	while (ctx->state != STATE_ERROR)
+	int last_state = STATE_STOP;
+	pthread_mutex_lock(&ctx->mutex);
+	last_state = ctx->state;
+	pthread_mutex_unlock(&ctx->mutex);
+	while (last_state != STATE_ERROR)
 	{
+#if 1
+		pthread_mutex_lock(&ctx->mutex);
+		while (last_state == ctx->state)
+			pthread_cond_wait(&ctx->cond, &ctx->mutex);
+		last_state = ctx->state;
+		pthread_mutex_unlock(&ctx->mutex);
+		switch (ctx->state)
+		{
+			case STATE_STOP:
+				dbg("player: stop");
+				if (ctx->current != NULL)
+				{
+					ctx->current->src->ops->destroy(ctx->current->src->ctx);
+					free(ctx->current);
+					ctx->current = NULL;
+				}
+				if (player.dec != NULL)
+				{
+					player.dec->src->ops->destroy(player.dec->src->ctx);
+					free(player.dec);
+					player.dec = NULL;
+				}
+
+				ctx->audioout->ops->reset(ctx->audioout->ctx);
+				ctx->media->ops->end(ctx->media->ctx);
+			break;
+			case STATE_CHANGE:
+				if (ctx->current != NULL)
+				{
+					dbg("player: wait");
+					ctx->current->src->ops->destroy(ctx->current->src->ctx);
+					free(ctx->current);
+					ctx->current = NULL;
+				}
+				ctx->current = player.dec;
+				player.dec = NULL;
+
+				if (ctx->current != NULL)
+				{
+					dbg("player: play");
+					/**
+					 * the src needs to be ready before the decoder
+					 * to set a producer if it's needed
+					 */
+					const src_t *src = ctx->current->src;
+					src->ops->run(src->ctx);
+					player_state(ctx, STATE_PLAY);
+				}
+				else
+				{
+					player_state(ctx, STATE_STOP);
+				}
+			break;
+			case STATE_PLAY:
+				/**
+				 * first check if a new media is requested
+				 */
+				if (ctx->media != ctx->nextmedia)
+				{
+					if (ctx->media)
+					{
+						ctx->media->ops->destroy(ctx->media->ctx);
+						free(ctx->media);
+					}
+					ctx->media = ctx->nextmedia;
+				}
+				if (ctx->media == NULL)
+				{
+					err("media not available");
+					player_state(ctx, STATE_STOP);
+					break;
+				}
+
+				if (ctx->media->ops->next)
+				{
+					ctx->media->ops->next(ctx->media->ctx);
+				}
+				else if (ctx->media->ops->end)
+					ctx->media->ops->end(ctx->media->ctx);
+
+				if (player.dec != NULL)
+				{
+					player.dec->src->ops->destroy(player.dec->src->ctx);
+					free(player.dec);
+					player.dec = NULL;
+				}
+				ctx->media->ops->play(ctx->media->ctx, _player_play, &player);
+				if (ctx->current == NULL)
+					player_state(ctx, STATE_CHANGE);
+			break;
+			case STATE_PAUSE:
+			break;
+		}
+		/******************
+		 * event manager  *
+		 ******************/
+		player_event_t *it = ctx->events;
+		while (it != NULL)
+		{
+			it->cb(it->ctx, ctx, ctx->state);
+			it = it->next;
+		}
+#else
+		last_state = ctx->state;
 		pthread_mutex_lock(&ctx->mutex);
 		while (ctx->state == STATE_STOP)
 		{
@@ -381,6 +491,9 @@ int player_run(player_ctx_t *ctx)
 				}
 				player_state(ctx, STATE_STOP);
 			}
+			/******************
+			 * event manager  *
+			 ******************/
 			player_event_t *it = ctx->events;
 			while (it != NULL)
 			{
@@ -389,6 +502,7 @@ int player_run(player_ctx_t *ctx)
 			}
 		} while (ctx->state != STATE_STOP);
 		ctx->media->ops->end(ctx->media->ctx);
+#endif
 	}
 	if (ctx->filter)
 	{

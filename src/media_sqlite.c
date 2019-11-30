@@ -1453,14 +1453,14 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url, ...)
 "create table genre (id INTEGER PRIMARY KEY, wordid INTEGER, " \
 	"FOREIGN KEY (wordid) REFERENCES word(id));",
 "create table cover (id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL);",
-"create table listname (id INTEGER PRIMARY KEY, wordid INTEGER, " \
-	"FOREIGN KEY (wordid) REFERENCES word(id));",
 "create table playlist (id INTEGER, listid INTEGER, " \
 	"FOREIGN KEY (id) REFERENCES media(id) ON UPDATE SET NULL, " \
 	"FOREIGN KEY (listid) REFERENCES listname(id) ON UPDATE SET NULL);",
 "create table word (id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL);",
 "insert into word (id, name) values (1, \"default\");",
 "insert into word (id, name) values (2, \"unknown\");",
+"create table listname (id INTEGER PRIMARY KEY, wordid INTEGER, " \
+	"FOREIGN KEY (wordid) REFERENCES word(id));",
 "insert into listname (id, wordid) values (1, 1);",
 				NULL,
 			};

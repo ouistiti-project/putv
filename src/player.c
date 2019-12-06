@@ -314,12 +314,8 @@ int player_run(player_ctx_t *ctx)
 	ctx->filter = filter_build(ctx->filtername, ctx->audioout->format);
 
 	int last_state = STATE_STOP;
-	pthread_mutex_lock(&ctx->mutex);
-	last_state = ctx->state;
-	pthread_mutex_unlock(&ctx->mutex);
 	while (last_state != STATE_ERROR)
 	{
-#if 1
 		pthread_mutex_lock(&ctx->mutex);
 		while (last_state == ctx->state)
 			pthread_cond_wait(&ctx->cond, &ctx->mutex);
@@ -421,88 +417,6 @@ int player_run(player_ctx_t *ctx)
 			it->cb(it->ctx, ctx, ctx->state);
 			it = it->next;
 		}
-#else
-		last_state = ctx->state;
-		pthread_mutex_lock(&ctx->mutex);
-		while (ctx->state == STATE_STOP)
-		{
-			if (ctx->media != ctx->nextmedia)
-			{
-				if (ctx->media)
-				{
-					ctx->media->ops->destroy(ctx->media->ctx);
-					free(ctx->media);
-				}
-				ctx->media = ctx->nextmedia;
-				ctx->state = STATE_CHANGE;
-			}
-			else
-			{
-				dbg("player: stop");
-				ctx->audioout->ops->reset(ctx->audioout->ctx);
-				pthread_cond_wait(&ctx->cond, &ctx->mutex);
-			}
-		}
-		if (ctx->media == NULL)
-			break;
-		pthread_mutex_unlock(&ctx->mutex);
-		if (ctx->media->ops->next)
-		{
-			ctx->media->ops->next(ctx->media->ctx);
-		}
-
-		do
-		{
-			player.dec = NULL;
-			ctx->media->ops->play(ctx->media->ctx, _player_play, &player);
-			if (ctx->current != NULL)
-			{
-				dbg("player: wait");
-				ctx->current->src->ops->destroy(ctx->current->src->ctx);
-				free(ctx->current);
-				ctx->current = NULL;
-			}
-			if (ctx->state != STATE_STOP && player.dec != NULL)
-			{
-				ctx->current = player.dec;
-				dbg("player: play");
-				ctx->state = STATE_PLAY;
-				/**
-				 * the src needs to be ready before the decoder
-				 * to set a producer if it's needed
-				 */
-				const src_t *src = ctx->current->src;
-				src->ops->run(src->ctx);
-				if (ctx->media->ops->next)
-				{
-					ctx->media->ops->next(ctx->media->ctx);
-				}
-				else if (ctx->media->ops->end)
-					ctx->media->ops->end(ctx->media->ctx);
-			}
-			else
-			{
-				if (player.dec != NULL)
-				{
-					ctx->current = player.dec;
-					ctx->current->src->ops->destroy(ctx->current->src->ctx);
-					free(ctx->current);
-					ctx->current = NULL;
-				}
-				player_state(ctx, STATE_STOP);
-			}
-			/******************
-			 * event manager  *
-			 ******************/
-			player_event_t *it = ctx->events;
-			while (it != NULL)
-			{
-				it->cb(it->ctx, ctx, ctx->state);
-				it = it->next;
-			}
-		} while (ctx->state != STATE_STOP);
-		ctx->media->ops->end(ctx->media->ctx);
-#endif
 	}
 	if (ctx->filter)
 	{

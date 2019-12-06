@@ -34,7 +34,6 @@
 #include <string.h>
 #include <errno.h>
 
-#include "../config.h"
 #include "player.h"
 typedef struct sink_s sink_t;
 typedef struct sink_ctx_s sink_ctx_t;
@@ -130,15 +129,3 @@ const sink_ops_t *sink_file = &(sink_ops_t)
 	.run = sink_run,
 	.destroy = sink_destroy,
 };
-
-static sink_t _sink = {0};
-sink_t *sink_build(player_ctx_t *player, const char *arg)
-{
-	const sink_ops_t *sinkops = NULL;
-	sinkops = sink_file;
-	_sink.ctx = sinkops->init(player, arg);
-	if (_sink.ctx == NULL)
-		return NULL;
-	_sink.ops = sinkops;
-	return &_sink;
-}

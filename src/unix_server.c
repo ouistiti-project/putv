@@ -36,7 +36,6 @@
 #include <errno.h>
 #include <libgen.h>
 
-#include "../config.h"
 #include "player.h"
 #include "unix_server.h"
 

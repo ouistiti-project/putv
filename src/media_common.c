@@ -37,8 +37,6 @@
 #include <sched.h>
 #include <limits.h>
 
-#include "../config.h"
-
 #ifdef USE_ID3TAG
 #include <id3tag.h>
 #include <jansson.h>
@@ -113,8 +111,9 @@ const char *utils_getmime(const char *path)
 	return mime_octetstream;
 }
 
-const char *utils_getpath(const char *url, const char *proto)
+char *utils_getpath(const char *url, const char *proto, char **query)
 {
+	char *newpath = NULL;
 	const char *path = strstr(url, proto);
 	if (path == NULL)
 	{
@@ -126,7 +125,50 @@ const char *utils_getpath(const char *url, const char *proto)
 	}
 	else
 		path += strlen(proto);
-	return path;
+	if (!strncmp(path,"://", 3))
+		path+=3;
+	int length = strlen(path);
+	char *search = strchr(path, '?');
+	if (search != NULL)
+		length -= strlen(search);
+	if (path[0] == '~')
+	{
+		path++;
+		if (path[0] == '/')
+			path++;
+
+		char *home = getenv("HOME");
+		length += strlen(home);
+		newpath = malloc(length + 2);
+		snprintf(newpath, length + 2, "%s/%s", home, path);
+	}
+	else
+	{
+		/*
+		 * TO CHECK
+		 * on Buildroot:
+		 * if the calloc allocate (length + 1) as necessary,
+		 * for an absolute path the next call to calloc will crash.
+		 * for a relative path, the application runs fine.
+		 * if the calloc allocate (length + 2)
+		 * the application runs fine in any cases.
+		 * For the HOME with an absolute path (see under),
+		 * the application runs fine in any cases.
+		 */
+		newpath = calloc(1, length + 2);
+		strncpy(newpath, path, length + 1);
+		newpath[length] = '\0';
+	}
+#ifndef SQLITE3_OPENQUERY
+	*query = strchr(newpath, '?');
+	if (*query != NULL)
+	{
+		*query[0] = '\0';
+		*query += 1;
+	}
+#endif
+	newpath[length + 1] = 0;
+	return newpath;
 }
 
 char *utils_parseurl(const char *url, char **protocol, char **host, char **port, char **path, char **search)
@@ -168,6 +210,8 @@ char *utils_parseurl(const char *url, char **protocol, char **host, char **port,
 			str_port += 1;
 		}
 	}
+	if (!strncmp(str_protocol, "file", 4))
+		str_path = str_host;
 	if (str_path != NULL)
 	{
 		if (str_search && str_search < str_path)
@@ -246,7 +290,7 @@ static char *media_regfile(char *path, const char *mime, const unsigned char *da
 	char *ext = strrchr(path, '.');
 	if (!strcmp(mime,"image/png"))
 		strcpy(ext, ".png");
-	if (!strcmp(mime,"image/jpeg"))
+	else if (!strcmp(mime,"image/jpeg"))
 		strcpy(ext, ".jpg");
 	fd = open(path, O_WRONLY | O_CREAT | O_EXCL, 0666);
 	if (fd > 0)
@@ -402,12 +446,20 @@ int media_parseid3tag(const char *path, json_t *object)
 						name++;
 					else
 						name = coverpath;
-#if 0
 					if (tinfo[3] != NULL)
+#if 0
 						strcpy(name, tinfo[3]);
 					else
+#else
+					{
+						if (strstr(tinfo[3], ".jpg") != NULL)
+							strcpy(name, "cover.jpg");
+						else
+							strcpy(name, "cover.png");
+					}
+					else
 #endif
-						strcpy(name, "cover.");
+						strcpy(name, "cover.png");
 					value = json_string(media_regfile(coverpath, info[1], data, length));
 				}
 				break;
@@ -502,7 +554,7 @@ int media_parseoggmetadata(const char *path, json_t *object)
 			name++;
 		else
 			name = coverpath;
-		strcpy(name, "cover.");
+		strcpy(name, "cover.png");
 
 		json_t *value;
 		value = json_string(media_regfile(coverpath, picture->mime_type, picture->data, picture->data_length));

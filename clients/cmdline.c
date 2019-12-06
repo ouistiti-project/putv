@@ -59,14 +59,14 @@
 
 typedef void *(*__start_routine_t) (void *);
 
-typedef struct input_ctx_s input_ctx_t;
-struct input_ctx_s
+typedef struct cmdline_ctx_s cmdline_ctx_t;
+struct cmdline_ctx_s
 {
 	int inotifyfd;
 	int dirfd;
 	const char *root;
 	const char *name;
-	const char *input_path;
+	const char *cmdline_path;
 	json_t *media;
 	int media_id;
 	int inputfd;
@@ -82,6 +82,8 @@ struct input_ctx_s
 	} state;
 };
 
+typedef int (*method_t)(cmdline_ctx_t *ctx, char *arg);
+
 #ifdef USE_LIBINPUT
 static int open_restricted(const char *path, int flags, void *user_data)
 {
@@ -92,15 +94,15 @@ static void close_restricted(int fd, void *user_data)
 {
         close(fd);
 }
-const static struct libinput_interface interface = {
+const static struct libcmdline_interface interface = {
         .open_restricted = open_restricted,
         .close_restricted = close_restricted,
 };
 #endif
 
-int input_checkstate(void *data, json_t *params)
+int cmdline_checkstate(void *data, json_t *params)
 {
-	input_ctx_t *ctx = (input_ctx_t *)data;
+	cmdline_ctx_t *ctx = (cmdline_ctx_t *)data;
 	const char *state;
 	json_unpack(params, "{ss}", "state", &state);
 	if (!strcmp(state, "play"))
@@ -114,89 +116,67 @@ int input_checkstate(void *data, json_t *params)
 	return 0;
 }
 
-int input_parseevent(input_ctx_t *ctx, const struct input_event *event)
+static int method_next(cmdline_ctx_t *ctx, char *arg)
 {
-	if (event->type != EV_KEY)
-	{
-		return -1;
-	}
-	if (event->value != 0) // check only keyrelease event
-		return 0;
+	return client_next(ctx->client, cmdline_checkstate, ctx);
+}
 
-	switch (event->code)
+static int method_play(cmdline_ctx_t *ctx, char *arg)
+{
+	return client_play(ctx->client, cmdline_checkstate, ctx);
+}
+
+static int method_pause(cmdline_ctx_t *ctx, char *arg)
+{
+	return client_pause(ctx->client, cmdline_checkstate, ctx);
+}
+
+static int method_stop(cmdline_ctx_t *ctx, char *arg)
+{
+	return client_stop(ctx->client, cmdline_checkstate, ctx);
+}
+
+static int method_volume(cmdline_ctx_t *ctx, char *arg)
+{
+	int ret = -1;
+	unsigned int volume = atoi(arg);
+	if (volume != -1)
 	{
-	case KEY_PLAYPAUSE:
-		dbg("key KEY_PLAYPAUSE");
-		if (ctx->state == STATE_PLAY)
-			client_pause(ctx->client, input_checkstate, ctx);
-		else
-			client_play(ctx->client, input_checkstate, ctx);
-	break;
-	case KEY_PLAYCD:
-	case KEY_PLAY:
-		dbg("key KEY_PLAY");
-		client_play(ctx->client, input_checkstate, ctx);
-	break;
-	case KEY_PAUSECD:
-	case KEY_PAUSE:
-		dbg("key KEY_PAUSE");
-		client_pause(ctx->client, input_checkstate, ctx);
-	break;
-	case KEY_STOPCD:
-	case KEY_STOP:
-		dbg("key KEY_STOP");
-		client_stop(ctx->client, input_checkstate, ctx);
-	break;
-	case KEY_NEXTSONG:
-	case KEY_NEXT:
-		dbg("key KEY_NEXT");
-		client_next(ctx->client, input_checkstate, ctx);
-	break;
-	case KEY_VOLUMEDOWN:
-		dbg("key KEY_VOLUMEDOWN");
-		client_volume(ctx->client, NULL, ctx, json_integer(-5));
-	break;
-	case KEY_VOLUMEUP:
-		dbg("key KEY_VOLUMEUP");
-		client_volume(ctx->client, NULL, ctx, json_integer(+5));
-	break;
-	case KEY_PROG1:
-		dbg("key KEY_PROG1");
-		if (ctx->media)
-		{
-			int i = ctx->media_id + 1;
-			if (i == json_array_size(ctx->media))
-				i = 0;
-			json_t *media = json_array_get(ctx->media, i);
-			if (json_is_object(media))
-			{
-				media_change(ctx->client, NULL, ctx, media);
-			}
-		}
-	break;
-	case KEY_PROG2:
-		dbg("key KEY_PROG2");
-		if (ctx->media)
-		{
-			int i = ctx->media_id - 1;
-			if (i == -1)
-				i = json_array_size(ctx->media) - 1;
-			json_t *media = json_array_get(ctx->media, i);
-			if (json_is_object(media))
-			{
-				media_change(ctx->client, NULL, ctx, media);
-			}
-		}
-	break;
-	default:
-		dbg("key %d", event->code);
+		ret = client_volume(ctx->client, NULL, ctx, json_integer(volume));
 	}
+	return ret;
+}
+
+static int method_media(cmdline_ctx_t *ctx, char *arg)
+{
+	int ret = -1;
+	json_error_t error;
+	json_t *media = json_loads(arg, 0, &error);
+	ret = media_change(ctx->client, NULL, ctx, media);
+	return ret;
+}
+
+static int method_loop(cmdline_ctx_t *ctx, char *arg)
+{
+	int ret = -1;
+	return ret;
+}
+
+static int method_random(cmdline_ctx_t *ctx, char *arg)
+{
+	int ret = -1;
+	return ret;
+}
+
+static int method_quit(cmdline_ctx_t *ctx, char *arg)
+{
+	ctx->run = 0;
 	return 0;
 }
 
 int run_client(void *arg)
 {
-	input_ctx_t *ctx = (input_ctx_t *)arg;
+	cmdline_ctx_t *ctx = (cmdline_ctx_t *)arg;
 
 	client_data_t data = {0};
 	client_unix(ctx->socketpath, &data);
@@ -206,54 +186,119 @@ int run_client(void *arg)
 	pthread_t thread;
 	pthread_create(&thread, NULL, (__start_routine_t)client_loop, (void *)&data);
 
-#ifdef USE_LIBINPUT
-	struct libinput *li;
-	struct libinput_event *ievent;
-	struct udev *udev = udev_new();
+	int fd = 0;
+	while (ctx->run)
+	{
+		int ret;
+		fd_set rfds;
+		struct timeval timeout = {1, 0};
 
-	li = libinput_udev_create_context(&interface, NULL, udev);
-	libinput_udev_assign_seat(li, "seat0");
-	libinput_dispatch(li);
-	while ((ievent = libinput_get_event(li)) != NULL) {
-		// handle the event here
-		if (libinput_event_get_type(ievent) == LIBINPUT_EVENT_KEYBOARD_KEY)
+		FD_ZERO(&rfds);
+		FD_SET(fd, &rfds);
+		int maxfd = fd;
+		ret = select(maxfd + 1, &rfds, NULL, NULL, &timeout);
+		if (ret > 0 && FD_ISSET(fd, &rfds))
 		{
-			struct libinput_event_keyboard *event_kb = libinput_event_get_keyboard_event(ievent);
-			if (event_kb)
+			int length;
+			ret = ioctl(fd, FIONREAD, &length);
+			char *buffer = malloc(length + 1);
+			ret = read(fd, buffer, length);
+			int i;
+			method_t method = NULL;
+			char *arg = NULL;
+			for (i = 0; i < length; i++)
 			{
-				warn("event %p", event_kb);
-				struct input_event event;
-				event.type = EV_KEY;
-				event.code = libinput_event_keyboard_get_key(event_kb);
-				event.value = libinput_event_keyboard_get_key_state(event_kb);
-
-				input_parseevent(ctx, &event);
+				if (buffer[i] == ' ' || buffer[i] == '\t')
+					continue;
+				if (buffer[i] == '\n')
+					break;
+				if (method != NULL)
+				{
+					arg = buffer + i;
+					break;
+				}
+				if (!strncmp(buffer + i, "play",4))
+				{
+					method = method_play;
+					i += 4;
+				}
+				if (!strncmp(buffer + i, "pause",5))
+				{
+					method = method_pause;
+					i += 5;
+				}
+				if (!strncmp(buffer + i, "stop",4))
+				{
+					method = method_stop;
+					i += 4;
+				}
+				if (!strncmp(buffer + i, "next",4))
+				{
+					method = method_next;
+					i += 4;
+				}
+				if (!strncmp(buffer + i, "volume",6))
+				{
+					method = method_volume;
+					i += 6;
+				}
+				if (!strncmp(buffer + i, "loop",4))
+				{
+					method = method_loop;
+					i += 4;
+				}
+				if (!strncmp(buffer + i, "random",6))
+				{
+					method = method_random;
+					i += 6;
+				}
+				if (!strncmp(buffer + i, "quit",4))
+				{
+					method = method_quit;
+					ctx->run = 0;
+				}
+				if (!strncmp(buffer + i, "append", 6))
+				{
+					i += 6;
+				}
+				if (!strncmp(buffer + i, "remove", 6))
+				{
+					i += 6;
+				}
+				if (!strncmp(buffer + i, "list",4))
+				{
+					i += 4;
+				}
+				if (!strncmp(buffer + i, "media",5))
+				{
+					method = method_media;
+					i += 5;
+				}
+				if (!strncmp(buffer + i, "import",6))
+				{
+					i += 6;
+				}
+				if (!strncmp(buffer + i, "search",6))
+				{
+					i += 6;
+				}
+				if (!strncmp(buffer + i, "info",4))
+				{
+					i += 4;
+				}
+			}
+			if (method)
+			{
+				char *end = NULL;
+				if (arg)
+					end = strchr(arg, '\n');
+				if (end != NULL)
+					*end = '\0';
+				method(ctx, arg);
 			}
 		}
-		libinput_event_destroy(ievent);
-		libinput_dispatch(li);
 	}
-	libinput_unref(li);
-#else
-	ctx->inputfd = open(ctx->input_path, O_RDONLY);
-	while ((ctx->inputfd > 0 && ctx->run))
-	{
-		fd_set rfds;
-		FD_ZERO(&rfds);
-		FD_SET(ctx->inputfd, &rfds);
-		int maxfd = ctx->inputfd;
-		int ret = select(maxfd + 1, &rfds, NULL, NULL, NULL);
-		if (ret > 0 && FD_ISSET(ctx->inputfd, &rfds))
-		{
-			struct input_event event;
-			ret = read(ctx->inputfd, &event, sizeof(event));
-			input_parseevent(ctx, &event);
-		}
-		if (ret < 0)
-			break;
-	}
-	close(ctx->inputfd);
-#endif
+
 	pthread_join(thread, NULL);
 	return 0;
 }
@@ -264,7 +309,7 @@ int run_client(void *arg)
 
 static void *_check_socket(void *arg)
 {
-	input_ctx_t *ctx = (input_ctx_t *)arg;
+	cmdline_ctx_t *ctx = (cmdline_ctx_t *)arg;
 	ctx->socketpath = malloc(strlen(ctx->root) + 1 + strlen(ctx->name) + 1);
 	sprintf(ctx->socketpath, "%s/%s", ctx->root, ctx->name);
 	if (!access(ctx->socketpath, R_OK | W_OK))
@@ -316,10 +361,9 @@ static void *_check_socket(void *arg)
 int main(int argc, char **argv)
 {
 	int mode = 0;
-	input_ctx_t input_data = {
+	cmdline_ctx_t cmdline_data = {
 		.root = "/tmp",
-		.name = basename(argv[0]),
-		.input_path = "/dev/input/event0",
+		.name = "putv",
 	};
 	const char *media_path;
 
@@ -330,13 +374,13 @@ int main(int argc, char **argv)
 		switch (opt)
 		{
 			case 'R':
-				input_data.root = optarg;
+				cmdline_data.root = optarg;
 			break;
 			case 'n':
-				input_data.name = optarg;
+				cmdline_data.name = optarg;
 			break;
 			case 'i':
-				input_data.input_path = optarg;
+				cmdline_data.cmdline_path = optarg;
 			break;
 			case 'm':
 				media_path = optarg;
@@ -368,25 +412,25 @@ int main(int argc, char **argv)
 	{
 		media = json_object_get(media, "media");
 	}
-	if (! json_is_array(input_data.media))
+	if (! json_is_array(cmdline_data.media))
 	{
-		json_decref(input_data.media);
-		input_data.media = NULL;
+		json_decref(cmdline_data.media);
+		cmdline_data.media = NULL;
 	}
-	input_data.media = media;
+	cmdline_data.media = media;
 #ifdef USE_INOTIFY
-	input_data.inotifyfd = inotify_init();
-	int dirfd = inotify_add_watch(input_data.inotifyfd, input_data.root,
+	cmdline_data.inotifyfd = inotify_init();
+	int dirfd = inotify_add_watch(cmdline_data.inotifyfd, cmdline_data.root,
 					IN_MODIFY | IN_CREATE | IN_DELETE);
-	input_data.run = 1;
-	_check_socket((void *)&input_data);
+	cmdline_data.run = 1;
+	_check_socket((void *)&cmdline_data);
 #else
-	input_data.socketpath = malloc(strlen(input_data.root) + 1 + strlen(input_data.name) + 1);
-	sprintf(input_data.socketpath, "%s/%s", input_data.root, input_data.name);
+	cmdline_data.socketpath = malloc(strlen(cmdline_data.root) + 1 + strlen(cmdline_data.name) + 1);
+	sprintf(cmdline_data.socketpath, "%s/%s", cmdline_data.root, cmdline_data.name);
 
-	run_client((void *)&input_data);
-	free(input_data.socketpath);
+	run_client((void *)&cmdline_data);
+	free(cmdline_data.socketpath);
 #endif
-	json_decref(input_data.media);
+	json_decref(cmdline_data.media);
 	return 0;
 }

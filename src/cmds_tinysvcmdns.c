@@ -46,7 +46,6 @@
 
 #include <pthread.h>
 
-#include "../config.h"
 #include "mdns.h"
 #include "mdnsd.h"
 
@@ -55,7 +54,6 @@ typedef struct cmds_ctx_s cmds_ctx_t;
 struct cmds_ctx_s
 {
 	player_ctx_t *player;
-	sink_t *sink;
 	const char *hostname;
 	int run;
 	struct mdnsd *svr;
@@ -75,7 +73,7 @@ struct cmds_ctx_s
 #define dbg(...)
 #endif
 
-static cmds_ctx_t *cmds_tinysvcmdns_init(player_ctx_t *player, sink_t *sink, void *arg)
+static cmds_ctx_t *cmds_tinysvcmdns_init(player_ctx_t *player, void *arg)
 {
 	const char *nif = NULL;
 	const char **txt = arg;
@@ -194,7 +192,6 @@ static cmds_ctx_t *cmds_tinysvcmdns_init(player_ctx_t *player, sink_t *sink, voi
 	cmds_ctx_t *ctx = NULL;
 	ctx = calloc(1, sizeof(*ctx));
 	ctx->player = player;
-	ctx->sink = sink;
 	ctx->hostname = (const char *)arg;
 	ctx->svr = svr;
 	ctx->svc = svc;
@@ -202,7 +199,7 @@ static cmds_ctx_t *cmds_tinysvcmdns_init(player_ctx_t *player, sink_t *sink, voi
 	return ctx;
 }
 
-static int cmds_tinysvcmdns_run(cmds_ctx_t *ctx)
+static int cmds_tinysvcmdns_run(cmds_ctx_t *ctx, sink_t *sink)
 {
 	return 0;
 }

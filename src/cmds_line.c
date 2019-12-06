@@ -35,7 +35,6 @@
 
 #include <pthread.h>
 
-#include "../config.h"
 #include "player.h"
 typedef struct cmds_ctx_s cmds_ctx_t;
 struct cmds_ctx_s
@@ -121,7 +120,7 @@ static int method_search(cmds_ctx_t *ctx, char *arg)
 
 static int method_media(cmds_ctx_t *ctx, char *arg)
 {
-	return player_change(ctx->player, arg, 0, 0);
+	return player_change(ctx->player, arg, 0, 0, 1);
 }
 
 static int _import_entry(void *arg, int id, const char *url,
@@ -135,16 +134,13 @@ static int _import_entry(void *arg, int id, const char *url,
 
 static int method_import(cmds_ctx_t *ctx, char *arg)
 {
-	struct stat _stat;
-
-	stat(arg, &_stat);
 	media_t *media = player_media(ctx->player);
 	if (media->ops->insert == NULL)
 		return -1;
 #ifdef MEDIA_IMPORT
-	if (S_ISDIR(_stat.st_mode))
+	media_ctx_t *media_ctx = media_dir->init(ctx->player, arg);
+	if (media_ctx)
 	{
-		media_ctx_t *media_ctx = media_dir->init(ctx->player, arg);
 		media_dir->list(media_ctx, _import_entry, (void *)ctx);
 		media_dir->destroy(media_ctx);
 	}
@@ -248,11 +244,10 @@ void cmds_line_onchange(void *arg, player_ctx_t *player, state_t state)
 	media->ops->find(media->ctx, id, _display, ctx);
 }
 
-static cmds_ctx_t *cmds_line_init(player_ctx_t *player, sink_t *sink, void *arg)
+static cmds_ctx_t *cmds_line_init(player_ctx_t *player, void *arg)
 {
 	cmds_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->player = player;
-	ctx->sink = sink;
 	return ctx;
 }
 
@@ -390,8 +385,9 @@ static void *_cmds_line_pthread(void *arg)
 	return (void*)(intptr_t)ret;
 }
 
-static int cmds_line_run(cmds_ctx_t *ctx)
+static int cmds_line_run(cmds_ctx_t *ctx, sink_t *sink)
 {
+	ctx->sink = sink;
 	pthread_create(&ctx->thread, NULL, _cmds_line_pthread, (void *)ctx);
 
 	return 0;

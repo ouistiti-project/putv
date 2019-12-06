@@ -34,8 +34,6 @@
 
 #include <pthread.h>
 
-#include "../config.h"
-
 #ifdef USE_INOTIFY
 #include <sys/inotify.h>
 #endif

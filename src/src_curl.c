@@ -36,7 +36,6 @@
 
 #include <curl/curl.h>
 
-#include "../config.h"
 #include "player.h"
 #include "event.h"
 typedef struct src_ops_s src_ops_t;
@@ -144,6 +143,7 @@ static void *src_thread(void *arg)
 	{
 		dbg("src curl error %d on %p", ret, ctx->curl);
 	}
+	player_next(ctx->player);
 	return 0;
 }
 

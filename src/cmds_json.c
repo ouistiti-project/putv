@@ -29,11 +29,11 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <errno.h>
+#include <unistd.h>
 
 #include <pthread.h>
 #include <jansson.h>
 
-#include "../config.h"
 #include "unix_server.h"
 #include "player.h"
 #include "jsonrpc.h"
@@ -330,6 +330,7 @@ static int method_play(json_t *json_params, json_t **result, void *userdata)
 	case STATE_STOP:
 		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{ss}", "state", str_stop));
 	return -1;
+	case STATE_CHANGE:
 	case STATE_PLAY:
 		*result = json_pack("{ss}", "state", str_play);
 	return 0;
@@ -472,6 +473,33 @@ static int method_change(json_t *json_params, json_t **result, void *userdata)
 	json_t *value;
 	if (json_is_object(json_params))
 	{
+		int now = 1;
+		int loop = 0;
+		int random = 0;
+		value = json_object_get(json_params, "loop");
+		if (json_is_boolean(value))
+		{
+			loop = json_boolean_value(value);
+		}
+		value = json_object_get(json_params, "random");
+		if (json_is_boolean(value))
+		{
+			random = json_boolean_value(value);
+		}
+		value = json_object_get(json_params, "next");
+		if (json_is_boolean(value))
+		{
+			now = ! json_boolean_value(value);
+		}
+		value = json_object_get(json_params, "media");
+		if (json_is_string(value))
+		{
+			const char *media = json_string_value(value);
+			if (player_change(ctx->player, media, random, loop, now) == 0)
+			{
+				*result = json_pack("{s:s,s:s}", "media", "changed", "state", str_stop);
+			}
+		}
 		value = json_object_get(json_params, "id");
 		if (json_is_integer(value))
 		{
@@ -479,15 +507,6 @@ static int method_change(json_t *json_params, json_t **result, void *userdata)
 			if (media->ops->find(media->ctx, id, _display, &display) == 1)
 			{
 				*result = display.result;
-			}
-		}
-		value = json_object_get(json_params, "media");
-		if (json_is_string(value))
-		{
-			const char *media = json_string_value(value);
-			if (player_change(ctx->player, media, 0, 0) == 0)
-			{
-				*result = json_pack("{s:s,s:s}", "media", "changed", "state", str_stop);
 			}
 		}
 	}
@@ -538,7 +557,7 @@ static int method_onchange(json_t *json_params, json_t **result, void *userdata)
 		json_array_append(options, json_string("random"));
 	json_object_set(*result, "options", options);
 
-	if (ctx->sink->ops->getvolume != NULL)
+	if (ctx->sink && ctx->sink->ops->getvolume != NULL)
 	{
 		unsigned int volume = ctx->sink->ops->getvolume(ctx->sink->ctx);
 		json_object_set(*result, "volume", json_integer(volume));
@@ -610,7 +629,7 @@ static int method_volume(json_t *json_params, json_t **result, void *userdata)
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 	int ret = -1;
 
-	if (ctx->sink->ops->getvolume == NULL)
+	if (ctx->sink == NULL || ctx->sink->ops->getvolume == NULL)
 	{
 		*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
 		return -1;
@@ -619,7 +638,7 @@ static int method_volume(json_t *json_params, json_t **result, void *userdata)
 	if (json_is_object(json_params))
 	{
 		value = json_object_get(json_params, "level");
-		if (json_is_integer(value))
+		if (value && json_is_integer(value))
 		{
 			if (ctx->sink->ops->setvolume == NULL)
 			{
@@ -635,7 +654,7 @@ static int method_volume(json_t *json_params, json_t **result, void *userdata)
 		}
 		int volume = ctx->sink->ops->getvolume(ctx->sink->ctx);
 		value = json_object_get(json_params, "step");
-		if (json_is_integer(value))
+		if (value && json_is_integer(value))
 		{
 			if (ctx->sink->ops->setvolume == NULL)
 			{
@@ -794,7 +813,7 @@ static int method_capabilities(json_t *json_params, json_t **result, void *userd
 		json_object_set(action, "params", params);
 		json_array_append(actions, action);
 	}
-	if (ctx->sink->ops->getvolume != NULL)
+	if (ctx->sink && ctx->sink->ops->getvolume != NULL)
 	{
 		action = json_object();
 		value = json_string("volume");
@@ -911,7 +930,6 @@ static int _cmds_send(const char *buff, size_t size, void *userctx)
 	cmds_ctx_t *ctx = info->userctx;
 	int sock = info->sock;
 	int ret = size;
-
 	if (ctx->buff_snd.length + size + 1 > sizeof(ctx->buff_snd.data))
 	{
 		ret = send(sock, ctx->buff_snd.data, ctx->buff_snd.length, MSG_DONTWAIT | MSG_NOSIGNAL);
@@ -935,11 +953,15 @@ static void jsonrpc_onchange(void * userctx, player_ctx_t *player, state_t state
 	json_t *notification = jsonrpc_jrequest("onchange", method_table, (void *)ctx, NULL);
 	if (notification)
 	{
-		json_dump_callback(notification, _cmds_send, info, JSONRPC_DEBUG_FORMAT);
 		int sock = info->sock;
-		int ret = send(sock, ctx->buff_snd.data, ctx->buff_snd.length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
-		cmds_dbg("send %d/%d: %s", ret, ctx->buff_snd.length + 1, ctx->buff_snd.data);
+		json_dump_callback(notification, _cmds_send, info, JSONRPC_DEBUG_FORMAT);
+		if (ctx->buff_snd.length > 0)
+		{
+			int ret = send(sock, ctx->buff_snd.data, ctx->buff_snd.length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
+			cmds_dbg("send %d/%d: %s", ret, ctx->buff_snd.length + 1, ctx->buff_snd.data);
+		}
 		ctx->buff_snd.length = 0;
+		fsync(sock);
 		json_decref(notification);
 	}
 #else
@@ -953,6 +975,8 @@ static void jsonrpc_onchange(void * userctx, player_ctx_t *player, state_t state
 			err("cmd: json event error on send");
 			//TODO remove notification from player
 		}
+		fsync(sock);
+		json_decref(notification);
 	}
 #endif
 	pthread_mutex_unlock(&ctx->mutex);
@@ -1013,6 +1037,7 @@ static int jsonrpc_command(thread_info_t *info)
 						ret = send(sock, buff, strlen(buff), MSG_NOSIGNAL);
 						ret = send(sock, "", 1, MSG_DONTWAIT | MSG_NOSIGNAL);
 #endif
+						fsync(sock);
 						json_decref(response);
 					}
 					json_decref(request);
@@ -1039,12 +1064,11 @@ static int jsonrpc_command(thread_info_t *info)
 	return ret;
 }
 
-static cmds_ctx_t *cmds_json_init(player_ctx_t *player, sink_t *sink, void *arg)
+static cmds_ctx_t *cmds_json_init(player_ctx_t *player, void *arg)
 {
 	cmds_ctx_t *ctx = NULL;
 	ctx = calloc(1, sizeof(*ctx));
 	ctx->player = player;
-	ctx->sink = sink;
 	ctx->socketpath = (const char *)arg;
 	pthread_mutex_init(&ctx->mutex, NULL);
 	return ctx;
@@ -1059,8 +1083,9 @@ static void *_cmds_json_pthread(void *arg)
 	return NULL;
 }
 
-static int cmds_json_run(cmds_ctx_t *ctx)
+static int cmds_json_run(cmds_ctx_t *ctx, sink_t *sink)
 {
+	ctx->sink = sink;
 	pthread_create(&ctx->thread, NULL, _cmds_json_pthread, (void *)ctx);
 	return 0;
 }

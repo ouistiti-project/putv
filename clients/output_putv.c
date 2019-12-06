@@ -36,8 +36,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#include "../config.h"
-
 #ifdef USE_INOTIFY
 #include <sys/inotify.h>
 #endif
@@ -56,6 +54,9 @@
 #define dbg(...)
 #endif
 
+#ifndef SOCKETNAME
+#define SOCKETNAME   PACKAGE_NAME
+#endif
 #ifndef ROOTDIR
 #define ROOTDIR "/var/run/ouistiti"
 #endif
@@ -74,6 +75,7 @@ struct gmrenderer_ctx_s
 	const char *root;
 	const char *name;
 	char *socketpath;
+	int volume;
 	int current_id;
 	client_data_t *client;
 	json_t *media;
@@ -91,7 +93,7 @@ struct gmrenderer_ctx_s
 
 static int gmrenderer_checkstate(void *data, json_t *params)
 {
-	fprintf(stderr,"putv check params %s\n", json_dumps(params, 0));
+	dbg("putv check params %s", json_dumps(params, 0));
 	gmrenderer_ctx_t *ctx = (gmrenderer_ctx_t *)data;
 	if (json_is_object(params))
 	{
@@ -113,9 +115,7 @@ static int gmrenderer_checkstate(void *data, json_t *params)
 				ctx->state = state;
 				if (ctx->state == STATE_STOP && ctx->transition_cb)
 				{
-	fprintf(stderr,"putv check transition stop 1\n");
 					ctx->transition_cb(PLAY_STOPPED);
-	fprintf(stderr,"putv check transition stop 2\n");
 				}
 			}
 		}
@@ -136,9 +136,7 @@ static int gmrenderer_checkstate(void *data, json_t *params)
 						media_change(ctx->client, NULL, ctx, ctx->media);
 						json_decref(ctx->media);
 						ctx->media = NULL;
-	fprintf(stderr,"putv check transition next 1\n");
 						ctx->transition_cb(PLAY_STARTED_NEXT_STREAM);
-	fprintf(stderr,"putv check transition next 2\n");
 					}
 				}
 			}
@@ -163,7 +161,24 @@ static int gmrenderer_checkstate(void *data, json_t *params)
 			//	ctx->meta_cb(&ctx->metadata);
 		}
 	}
-	fprintf(stderr,"putv check end\n");
+	dbg("putv check end");
+
+	return 0;
+}
+
+static int gmrenderer_checkvolume(void *data, json_t *params)
+{
+	dbg("putv check params %s", json_dumps(params, 0));
+	gmrenderer_ctx_t *ctx = (gmrenderer_ctx_t *)data;
+	if (json_is_object(params))
+	{
+		json_t *jlevel = json_object_get(params, "level");
+		if (json_is_integer(jlevel))
+		{
+			ctx->volume =  json_integer_value(jlevel);
+		}
+	}
+	dbg("putv check end");
 
 	return 0;
 }
@@ -171,20 +186,83 @@ static int gmrenderer_checkstate(void *data, json_t *params)
 static gmrenderer_ctx_t *gmrenderer_ctx = &(gmrenderer_ctx_t)
 {
  	.root = ROOTDIR,
-	.name = PACKAGE_NAME,
+	.name = SOCKETNAME,
 };
+
+#ifdef USE_INOTIFY
+#define EVENT_SIZE  (sizeof(struct inotify_event))
+#define BUF_LEN     (1024 * (EVENT_SIZE + 16))
+
+int inotifyfd;
+
+static void *_check_socket(void *arg)
+{
+	gmrenderer_ctx_t *ctx = (gmrenderer_ctx_t *)arg;
+	char *socketpath;
+	socketpath = malloc(strlen(ctx->root) + 1 + strlen(ctx->name) + 1);
+	sprintf(socketpath, "%s/%s", ctx->root, ctx->name);
+	if (!access(socketpath, R_OK | W_OK))
+	{
+		return NULL;
+	}
+	while (1)
+	{
+		char buffer[BUF_LEN];
+		int i = 0;
+		int length = read(inotifyfd, buffer, BUF_LEN);
+
+		if (length < 0)
+		{
+			err("read");
+		}
+
+		while (i < length)
+		{
+			struct inotify_event *event =
+				(struct inotify_event *) &buffer[i];
+			if (event->len)
+			{
+				if (event->mask & IN_CREATE)
+				{
+					if (!access(socketpath, R_OK | W_OK))
+					{
+						return NULL;
+					}
+				}
+#if 0
+				else if (event->mask & IN_DELETE)
+				{
+				}
+				else if (event->mask & IN_MODIFY)
+				{
+					dbg("The file %s was modified.", event->name);
+				}
+#endif
+			}
+			i += EVENT_SIZE + event->len;
+		}
+	}
+	free(socketpath);
+}
+#endif
 
 static int
 output_putv_init(void)
 {
 
+#ifdef USE_INOTIFY
+	inotifyfd = inotify_init();
+	int dirfd = inotify_add_watch(inotifyfd, gmrenderer_ctx->root,
+					IN_MODIFY | IN_CREATE | IN_DELETE);
+	_check_socket((void *)gmrenderer_ctx);
+#else
 	int len = strlen(gmrenderer_ctx->root) + 1;
 	len += strlen(gmrenderer_ctx->name) + 1;
 	gmrenderer_ctx->socketpath = malloc(len);
 	sprintf(gmrenderer_ctx->socketpath, "%s/%s", gmrenderer_ctx->root, gmrenderer_ctx->name);
-fprintf(stderr,"upnprender putv %s\n", gmrenderer_ctx->socketpath);
-		if (access(gmrenderer_ctx->socketpath, R_OK | W_OK))
+	if (access(gmrenderer_ctx->socketpath, R_OK | W_OK))
 		return -1;
+#endif
 	gmrenderer_ctx->current_id = -1;
 	return 0;
 }
@@ -192,9 +270,9 @@ fprintf(stderr,"upnprender putv %s\n", gmrenderer_ctx->socketpath);
 static int
 output_putv_loop()
 {
-	fprintf(stderr,"putv loop\n");
 	client_data_t data = {0};
 	client_unix(gmrenderer_ctx->socketpath, &data);
+	client_async(&data, 1);
 
 	client_eventlistener(&data, "onchange", gmrenderer_checkstate, gmrenderer_ctx);
 	gmrenderer_ctx->client = &data;
@@ -202,7 +280,6 @@ output_putv_loop()
 	client_loop(&data);
 
 	free(gmrenderer_ctx->socketpath);
-	fprintf(stderr,"putv loop end\n");
 	return 0;
 }
 
@@ -247,9 +324,7 @@ output_putv_stop(void)
 static int
 output_putv_pause(void)
 {
-	fprintf(stderr,"putv pause start\n");
 	client_pause(gmrenderer_ctx->client, gmrenderer_checkstate, gmrenderer_ctx);
-	fprintf(stderr,"putv pause end\n");
 	return 0;
 }
 
@@ -270,7 +345,8 @@ output_putv_get_position(int64_t *track_duration,
 static int
 output_putv_getvolume(float *value)
 {
-	return 0;
+	client_volume(gmrenderer_ctx->client, gmrenderer_checkvolume, gmrenderer_ctx, json_null());
+	return gmrenderer_ctx->volume;
 }
 static int
 output_putv_setvolume(float value)

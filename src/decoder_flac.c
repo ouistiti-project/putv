@@ -34,7 +34,6 @@
 
 #include <FLAC/stream_decoder.h>
 
-#include "../config.h"
 #include "player.h"
 #include "filter.h"
 typedef struct decoder_s decoder_t;
@@ -86,7 +85,11 @@ static decoder_ctx_t *decoder_init(player_ctx_t *player, const filter_t *filter)
 
 	ctx->decoder = FLAC__stream_decoder_new();
 	if (ctx->decoder == NULL)
+	{
 		err("flac decoder: open error");
+		free(ctx);
+		ctx = NULL;
+	}
 
 	return ctx;
 }

@@ -1,14 +1,17 @@
 #ifndef __CMDS_H__
 #define __CMDS_H__
 
+typedef struct player_ctx_s player_ctx_t;
+typedef struct sink_s sink_t;
+
 #ifndef CMDS_CTX
 typedef void cmds_ctx_t;
 #endif
 typedef struct cmds_ops_s cmds_ops_t;
 struct cmds_ops_s
 {
-	cmds_ctx_t *(*init)(player_ctx_t *, sink_t *sink, void *arg);
-	int (*run)(cmds_ctx_t *);
+	cmds_ctx_t *(*init)(player_ctx_t *, void *);
+	int (*run)(cmds_ctx_t *, sink_t *);
 	void (*destroy)(cmds_ctx_t *);
 };
 

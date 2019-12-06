@@ -953,7 +953,7 @@ static int pause_stream(struct action_event *event)
 			       "Transition to PAUSE not allowed; allowed=%s",
 			       get_var(TRANSPORT_VAR_CUR_TRANSPORT_ACTIONS));
 		rc = -1;
-        }
+	}
 	service_unlock();
 
 	return rc;

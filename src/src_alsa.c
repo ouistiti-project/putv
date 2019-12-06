@@ -32,7 +32,6 @@
 #include <stdlib.h>
 #include <alsa/asoundlib.h>
 
-#include "../config.h"
 #include "player.h"
 #include "jitter.h"
 #include "filter.h"
@@ -311,6 +310,7 @@ static void *src_thread(void *arg)
 		free(buff2);
 	}
 	dbg("src: thread end");
+	player_next(ctx->player);
 	return NULL;
 }
 

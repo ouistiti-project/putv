@@ -34,7 +34,6 @@
 #include <errno.h>
 #include <sys/types.h>
 
-#include "../config.h"
 #include "jitter.h"
 typedef struct heartbeat_ctx_s heartbeat_ctx_t;
 struct heartbeat_ctx_s

@@ -40,7 +40,6 @@
 #include <fcntl.h>
 #include <pwd.h>
 
-#include "../config.h"
 #include "player.h"
 #include "jitter.h"
 #include "demux.h"
@@ -349,6 +348,7 @@ static void *src_thread(void *arg)
 		}
 	}
 	dbg("src: thread end");
+	player_next(ctx->player);
 	return NULL;
 }
 #endif

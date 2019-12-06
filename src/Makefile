@@ -21,6 +21,7 @@ $(PUTV)_CFLAGS-$(SAMPLERATE_48000)+=-DDEFAULT_SAMPLERATE=48000
 $(PUTV)_SOURCES+=media_common.c
 $(PUTV)_SOURCES+=src_common.c
 $(PUTV)_SOURCES+=decoder_common.c
+$(PUTV)_SOURCES+=sink_common.c
 
 $(PUTV)_SOURCES+=filter_pcm.c
 

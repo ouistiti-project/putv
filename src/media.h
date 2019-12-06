@@ -24,7 +24,7 @@ extern const char const *str_cover;
 
 void utils_srandom();
 const char *utils_getmime(const char *path);
-const char *utils_getpath(const char *url, const char *proto);
+char *utils_getpath(const char *url, const char *proto, char **query);
 char *utils_parseurl(const char *url,
 								char **protocol,
 								char **host,

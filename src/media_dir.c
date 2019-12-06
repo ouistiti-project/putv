@@ -32,12 +32,11 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include <fcntl.h>
+#include <errno.h>
 #include <sys/stat.h>
 
 #define __USE_GNU
 #include <pthread.h>
-
-#include "../config.h"
 
 #ifdef USE_INOTIFY
 #include <sys/inotify.h>
@@ -54,7 +53,7 @@ typedef struct media_dirlist_s media_dirlist_t;
 struct media_ctx_s
 {
 	const char *url;
-	const char *root;
+	char *root;
 	player_ctx_t *player;
 	int mediaid;
 	int firstmediaid;
@@ -509,7 +508,7 @@ static void *_check_dir(void *arg)
 					if (count > 0)
 					{
 						//media_next(ctx);
-						player_state(ctx->player, STATE_PLAY);
+						player_state(ctx->player, STATE_CHANGE);
 					}
 				}
 				else if (event->mask & IN_DELETE)
@@ -541,17 +540,24 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url,...)
 	{
 		int ret;
 		struct stat pathstat;
-		const char *path = utils_getpath(url, "file://");
+		char *query = NULL;
+		char *path = utils_getpath(url, "file://", &query);
 		if (path == NULL)
-			return NULL;
-		if (path[0] == '~')
 		{
-			path += 2;
-			chdir(getenv("HOME"));
+			err("media dir: error on path %s", url);
+			return NULL;
 		}
 		ret = stat(path, &pathstat);
-		if ((ret != 0)  || ! S_ISDIR(pathstat.st_mode))
+		if (ret != 0)
+		{
+			err("media dir: error %s %s", path, strerror(errno));
 			return NULL;
+		}
+		if (! S_ISDIR(pathstat.st_mode))
+		{
+			err("media dir: error %s in not a directory", path);
+			return NULL;
+		}
 
 		ctx = calloc(1, sizeof(*ctx));
 		ctx->player = player;
@@ -563,12 +569,14 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url,...)
 
 #ifdef USE_INOTIFY
 		ctx->inotifyfd = inotify_init();
-		ctx->dirfd = inotify_add_watch(ctx->inotifyfd, utils_getpath(ctx->url, "file://"),
+		ctx->dirfd = inotify_add_watch(ctx->inotifyfd, path,
 						IN_MODIFY | IN_CREATE | IN_DELETE);
 		pthread_create(&ctx->thread, NULL, _check_dir, (void *)ctx);
 		ctx->options |= OPTION_INOTIFY;
 #endif
 	}
+	else
+			err("media dir: error on url");
 	return ctx;
 }
 
@@ -581,6 +589,8 @@ static void media_destroy(media_ctx_t *ctx)
 	inotify_rm_watch(ctx->inotifyfd, ctx->dirfd);
 	close(ctx->inotifyfd);
 #endif
+	if (ctx->root != NULL)
+		free(ctx->root);
 	free(ctx);
 }
 

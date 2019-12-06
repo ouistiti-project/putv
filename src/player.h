@@ -35,7 +35,7 @@ typedef struct player_ctx_s player_ctx_t;
 typedef void (*player_event_cb_t)(void *ctx, player_ctx_t *, state_t);
 
 player_ctx_t *player_init();
-int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop);
+int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop, int now);
 media_t *player_media(player_ctx_t *ctx);
 int player_subscribe(player_ctx_t *userdata, estream_t type, jitter_t *encoder_jitter);
 int player_run(player_ctx_t *userdata);

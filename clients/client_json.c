@@ -38,7 +38,6 @@
 
 #include "jsonrpc.h"
 #include "client_json.h"
-#include "../version.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -47,6 +46,8 @@
 #else
 #define dbg(...)
 #endif
+
+#define client_dbg(...)
 
 struct client_event_s
 {
@@ -62,23 +63,6 @@ static int method_subscribe(json_t *json_params, json_t **result, void *userdata
 	return 0;
 }
 
-static int answer_subscribe(json_t *json_params, json_t **result, void *userdata)
-{
-	int state = -1;
-	json_unpack(json_params, "{sb}", "subscribed", &state);
-	client_data_t *data = userdata;
-	pthread_mutex_lock(&data->mutex);
-	data->pid = 0;
-	if (data->proto)
-		data->proto(data->data, json_params);
-	data->proto = NULL;
-	data->data = NULL;
-	pthread_mutex_unlock(&data->mutex);
-	if ((data->options & OPTION_ASYNC) == 0)
-		pthread_cond_signal(&data->cond);
-	return !state;
-}
-
 static int answer_proto(client_data_t * data, json_t *json_params)
 {
 	pthread_mutex_lock(&data->mutex);
@@ -88,8 +72,19 @@ static int answer_proto(client_data_t * data, json_t *json_params)
 	data->proto = NULL;
 	data->data = NULL;
 	pthread_mutex_unlock(&data->mutex);
-	pthread_cond_signal(&data->cond);
+	pthread_cond_broadcast(&data->cond);
 	return 0;
+}
+
+static int answer_subscribe(json_t *json_params, json_t **result, void *userdata)
+{
+	int state = -1;
+	json_unpack(json_params, "{sb}", "subscribed", &state);
+	client_data_t *data = userdata;
+
+	answer_proto(data, json_params);
+
+	return !state;
 }
 
 static int method_next(json_t *json_params, json_t **result, void *userdata)
@@ -108,6 +103,7 @@ static int method_state(json_t *json_params, json_t **result, void *userdata)
 static int answer_state(json_t *json_params, json_t **result, void *userdata)
 {
 	client_data_t *data = userdata;
+
 	answer_proto(data, json_params);
 	return 0;
 }
@@ -281,6 +277,7 @@ int client_cmd(client_data_t *data, char * cmd)
 		return -1;
 	int pid = data->pid;
 	ret = send(data->sock, buffer, strlen(buffer) + 1, MSG_NOSIGNAL);
+	client_dbg("send %s", buffer);
 	if (data->options & OPTION_ASYNC)
 		return 0;
 	return pid;
@@ -288,6 +285,8 @@ int client_cmd(client_data_t *data, char * cmd)
 
 int client_wait(client_data_t *data, int pid)
 {
+	if ((data->options & OPTION_ASYNC) == OPTION_ASYNC)
+		return 0;
 	while (pid > 0 && data->pid == pid)
 	{
 		pthread_cond_wait(&data->cond, &data->mutex);
@@ -303,8 +302,8 @@ int client_next(client_data_t *data, client_event_prototype_t proto, void *proto
 	data->proto = proto;
 	data->data = protodata;
 	int pid = client_cmd(data, "next");
-	pthread_mutex_unlock(&data->mutex);
 	client_wait(data, pid);
+	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
 
@@ -316,8 +315,8 @@ int client_play(client_data_t *data, client_event_prototype_t proto, void *proto
 	data->proto = proto;
 	data->data = protodata;
 	int pid = client_cmd(data, "play");
-	pthread_mutex_unlock(&data->mutex);
 	client_wait(data, pid);
+	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
 
@@ -329,8 +328,8 @@ int client_pause(client_data_t *data, client_event_prototype_t proto, void *prot
 	data->proto = proto;
 	data->data = protodata;
 	int pid = client_cmd(data, "pause");
-	pthread_mutex_unlock(&data->mutex);
 	client_wait(data, pid);
+	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
 
@@ -342,8 +341,8 @@ int client_stop(client_data_t *data, client_event_prototype_t proto, void *proto
 	data->proto = proto;
 	data->data = protodata;
 	int pid = client_cmd(data, "stop");
-	pthread_mutex_unlock(&data->mutex);
 	client_wait(data, pid);
+	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
 
@@ -355,8 +354,8 @@ int client_status(client_data_t *data, client_event_prototype_t proto, void *pro
 	data->proto = proto;
 	data->data = protodata;
 	int pid = client_cmd(data, "status");
-	pthread_mutex_unlock(&data->mutex);
 	client_wait(data, pid);
+	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
 
@@ -369,8 +368,8 @@ int client_volume(client_data_t *data, client_event_prototype_t proto, void *pro
 	data->data = protodata;
 	data->params = step;
 	int pid = client_cmd(data, "volume");
-	pthread_mutex_unlock(&data->mutex);
 	client_wait(data, pid);
+	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
 
@@ -393,7 +392,8 @@ int media_change(client_data_t *data, client_event_prototype_t proto, void *prot
 	data->proto = proto;
 	data->data = protodata;
 	data->params = media;
-	client_cmd(data, "change");
+	int pid = client_cmd(data, "change");
+	client_wait(data, pid);
 	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
@@ -406,7 +406,8 @@ int media_insert(client_data_t *data, client_event_prototype_t proto, void *prot
 	data->proto = proto;
 	data->data = protodata;
 	data->params = media;
-	client_cmd(data, "append");
+	int pid = client_cmd(data, "append");
+	client_wait(data, pid);
 	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
@@ -419,7 +420,8 @@ int media_remove(client_data_t *data, client_event_prototype_t proto, void *prot
 	data->proto = proto;
 	data->data = protodata;
 	data->params = media;
-	client_cmd(data, "remove");
+	int pid = client_cmd(data, "remove");
+	client_wait(data, pid);
 	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
@@ -432,7 +434,8 @@ int media_list(client_data_t *data, client_event_prototype_t proto, void *protod
 	data->proto = proto;
 	data->data = protodata;
 	data->list = list;
-	client_cmd(data, "list");
+	int pid = client_cmd(data, "list");
+	client_wait(data, pid);
 	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
@@ -442,6 +445,18 @@ static size_t recv_cb(void *buffer, size_t len, void *arg)
 {
 	client_data_t *data = (client_data_t *)arg;
 	int ret = recv(data->sock, buffer, len, MSG_NOSIGNAL);
+	if ((strlen(buffer) + 1) < ret)
+	{
+		err("two messages in ONE");
+		/**
+		 * disable the last command, the response may be lost
+		 * TODO
+		 * store the second message and call again the json parser.
+		 */
+		data->pid = 0;
+		client_dbg("recv %ld/%d" , strlen(buffer), ret);
+	}
+	client_dbg("recv %s", (char *)buffer);
 	if (ret > 0)
 		((char*)buffer)[ret] = 0;
 	else

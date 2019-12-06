@@ -31,7 +31,6 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#include "../config.h"
 #include "player.h"
 #include "media.h"
 

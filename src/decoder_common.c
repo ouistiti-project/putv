@@ -32,7 +32,6 @@
 #include <errno.h>
 #include <stdlib.h>
 
-#include "../config.h"
 #include "player.h"
 #include "decoder.h"
 #include "filter.h"

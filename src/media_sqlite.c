@@ -1437,8 +1437,9 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url, ...)
 	"FOREIGN KEY (albumid) REFERENCES album(id) ON UPDATE SET NULL);",
 "create table opus (id INTEGER PRIMARY KEY,  titleid INTEGER UNIQUE NOT NULL, " \
 	"artistid INTEGER, otherid INTEGER, albumid INTEGER, " \
-	"genreid INTEGER, coverid INTEGER, like INTEGER, comment BLOB, " \
+	"genreid INTEGER, coverid INTEGER, like INTEGER, introid INTEGER, comment BLOB, " \
 	"FOREIGN KEY (titleid) REFERENCES word(id), " \
+	"FOREIGN KEY (introid) REFERENCES opus(id), " \
 	"FOREIGN KEY (artistid) REFERENCES artist(id) ON UPDATE SET NULL," \
 	"FOREIGN KEY (albumid) REFERENCES album(id) ON UPDATE SET NULL," \
 	"FOREIGN KEY (genreid) REFERENCES word(id) ON UPDATE SET NULL," \

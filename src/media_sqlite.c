@@ -1314,6 +1314,7 @@ static int _media_changelist(media_ctx_t *ctx, char *playlist)
 		else
 		{
 			listid = sqlite3_last_insert_rowid(db);
+			dbg("new playlist %s %d", playlist, listid);
 			int tempolist = ctx->listid;
 			ctx->listid = listid;
 			if (ctx->fill == 1)

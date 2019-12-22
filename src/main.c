@@ -109,6 +109,13 @@ static int run_player(player_ctx_t *player, sink_t *sink)
 	return ret;
 }
 
+void help(const char *name)
+{
+	fprintf(stderr, "%s [-R <websocketdir>][-m <media>][-o <output>][-p <pidfile>]\n", name);
+	fprintf(stderr, "\t...[-f <filtername>][-x][-D][-a][-r][-l][-L <logfile>]\n");
+	fprintf(stderr, "\t...[-d <directory>]\n");
+}
+
 #define DAEMONIZE 0x01
 #define SRC_STDIN 0x02
 #define AUTOSTART 0x04
@@ -153,6 +160,7 @@ int main(int argc, char **argv)
 				filtername = optarg;
 			break;
 			case 'h':
+				help(name);
 				return -1;
 			break;
 			case 'x':

@@ -191,12 +191,6 @@ state_t player_state(player_ctx_t *ctx, state_t state)
 		ctx->state = state;
 		pthread_mutex_unlock(&ctx->mutex);
 		pthread_cond_broadcast(&ctx->cond);
-		player_event_t *it = ctx->events;
-		while (it != NULL)
-		{
-			it->cb(it->ctx, ctx, ctx->state);
-			it = it->next;
-		}
 	}
 	state = ctx->state;
 	return state;

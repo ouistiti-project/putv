@@ -106,14 +106,14 @@ int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop
 
 		if (ctx->media == NULL)
 			ctx->media = media;
-	}
-	if (media->ops->loop && loop)
-	{
-		media->ops->loop(media->ctx, OPTION_ENABLE);
-	}
-	if (media->ops->random && random)
-	{
-		media->ops->random(media->ctx, OPTION_ENABLE);
+		if (media->ops->loop && loop)
+		{
+			media->ops->loop(media->ctx, OPTION_ENABLE);
+		}
+		if (media->ops->random && random)
+		{
+			media->ops->random(media->ctx, OPTION_ENABLE);
+		}
 	}
 	return 0;
 }

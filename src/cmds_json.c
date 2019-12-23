@@ -990,7 +990,7 @@ static int jsonrpc_command(thread_info_t *info)
 	ctx->info = info;
 
 	warn("json socket connection");
-	int onchangeid = player_onchange(ctx->player, jsonrpc_onchange, (void *)info);
+	int onchangeid = player_onchange(ctx->player, jsonrpc_onchange, (void *)info, "jsonrpc");
 	jsonrpc_onchange(info, ctx->player, player_state(ctx->player, STATE_UNKNOWN));
 
 	while (sock > 0)

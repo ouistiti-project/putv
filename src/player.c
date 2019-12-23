@@ -168,7 +168,7 @@ void player_removeevent(player_ctx_t *ctx, int id)
 	}
 }
 
-int player_onchange(player_ctx_t *ctx, player_event_cb_t callback, void *cbctx)
+int player_onchange(player_ctx_t *ctx, player_event_cb_t callback, void *cbctx, char *name)
 {
 	player_event_t *event = calloc(1, sizeof(*event));
 	if (ctx->events != NULL)
@@ -318,9 +318,12 @@ int player_run(player_ctx_t *ctx)
 	{
 		pthread_mutex_lock(&ctx->mutex);
 		while (last_state == ctx->state)
+		{
 			pthread_cond_wait(&ctx->cond, &ctx->mutex);
+		}
 		last_state = ctx->state;
 		pthread_mutex_unlock(&ctx->mutex);
+
 		switch (ctx->state)
 		{
 			case STATE_STOP:

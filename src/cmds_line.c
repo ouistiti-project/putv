@@ -256,7 +256,7 @@ static int cmds_line_cmd(cmds_ctx_t *ctx)
 	int fd = 0;
 	ctx->run = 1;
 
-	player_onchange(ctx->player, cmds_line_onchange, ctx);
+	player_onchange(ctx->player, cmds_line_onchange, ctx, "cmd line");
 	while (ctx->run)
 	{
 		int ret;

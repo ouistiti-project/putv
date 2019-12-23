@@ -318,7 +318,9 @@ static int method_play(json_t *json_params, json_t **result, void *userdata)
 	media_t *media = player_media(ctx->player);
 
 	if (media->ops->count(media->ctx) > 0)
+	{
 		player_state(ctx->player, STATE_PLAY);
+	}
 	else
 	{
 		player_state(ctx->player, STATE_STOP);
@@ -1011,9 +1013,12 @@ static int jsonrpc_command(thread_info_t *info)
 			ret = recv(sock, buffer, 1500, MSG_NOSIGNAL);
 			if (ret > 0)
 			{
+				buffer[ret] = '\0';
 				cmds_dbg("recv %d: %s", ret, buffer);
 				json_error_t error;
-				json_t *request = json_loads(buffer, 0, &error);
+				//int flags = JSON_DISABLE_EOF_CHECK;
+				int flags = 0;
+				json_t *request = json_loads(buffer, flags, &error);
 				if (request != NULL)
 				{
 					json_t *response = jsonrpc_jresponse(request, method_table, ctx);
@@ -1043,6 +1048,8 @@ static int jsonrpc_command(thread_info_t *info)
 					json_decref(request);
 					pthread_mutex_unlock(&ctx->mutex);
 				}
+				else
+					err("cmd: json error %s", error.text);
 			}
 			if (ret == 0)
 			{

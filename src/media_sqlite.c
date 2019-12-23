@@ -45,7 +45,6 @@ struct media_ctx_s
 	sqlite3 *db;
 	char *path;
 	char *query;
-	char *playlist;
 	int mediaid;
 	unsigned int options;
 	int listid;
@@ -71,7 +70,7 @@ struct media_ctx_s
 #ifdef DEBUG
 #define SQLITE3_CHECK(ret, value, sql) \
 		if (ret != SQLITE_OK) {\
-			err("%s(%d) %s", __FUNCTION__, __LINE__, sql); \
+			err("%s(%d) => %d %s", __FUNCTION__, __LINE__, ret, sql); \
 			return value; \
 		}
 #else
@@ -1113,6 +1112,7 @@ static int media_list(media_ctx_t *ctx, media_parse_t cb, void *data)
 	sqlite3 *db = ctx->db;
 	int count = 0;
 	sqlite3_stmt *statement;
+
 #ifndef MEDIA_SQLITE_EXT
 	char *sql = "select \"url\", \"mimeid\", \"id\", \"info\" from \"media\" inner join playlist on media.id=playlist.id";
 #else
@@ -1352,17 +1352,20 @@ static int _media_opendb(media_ctx_t *ctx, const char *url)
 		ret = sqlite3_open_v2(ctx->path, &ctx->db, SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE, NULL);
 		ret = SQLITE_CORRUPT;
 	}
+	ctx->listid = 1;
 	if (ctx->query != NULL)
 	{
 		char *fill = strstr(ctx->query, "fill=true");
-		ctx->playlist = strstr(ctx->query, "playlist=");
-		if (ctx->playlist != NULL)
+		char *playlist = strstr(ctx->query, "playlist=");
+		if (playlist != NULL)
 		{
-			ctx->playlist[8] = '\0';
-			ctx->playlist += 9;
-			char *end = strchr(ctx->playlist, ',');
+			playlist += 9;
+			char tempo[64];
+			strncpy(tempo, playlist, sizeof(tempo));
+			char *end = strchr(tempo, ',');
 			if (end != NULL)
 				*end = '\0';
+			ctx->listid = _media_changelist(ctx, tempo);
 		}
 		if (fill != NULL)
 		{
@@ -1472,10 +1475,6 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url, ...)
 		if (ret == SQLITE_OK)
 		{
 			dbg("open db %s", url);
-			if (ctx->playlist != NULL)
-				ctx->listid = _media_changelist(ctx, ctx->playlist);
-			else
-				ctx->listid = 1;
 		}
 		else
 		{

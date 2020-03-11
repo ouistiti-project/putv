@@ -77,11 +77,7 @@ struct sink_ctx_s
 #endif
 
 #ifndef ALSA_MIXER
-#ifdef SINK_ALSA_MIXER_CH
-#define ALSA_MIXER SINK_ALSA_MIXER_CH
-#else
 #define ALSA_MIXER "Master"
-#endif
 #endif
 
 const sink_ops_t *sink_alsa;
@@ -327,7 +323,8 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 	}
 
 #ifdef SINK_ALSA_MIXER
-	if (strncasecmp(ctx->mixerch, "disable", 7))
+	if (strncasecmp(ctx->mixerch, "disable", 7) &&
+		strncasecmp(ctx->mixerch, "none", 4))
 	{
 		snd_mixer_selem_id_t *sid;
 

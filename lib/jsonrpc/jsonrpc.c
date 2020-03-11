@@ -8,6 +8,14 @@
 #include <jansson.h>
 #include "jsonrpc.h"
 
+#define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
+#define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
+#ifdef DEBUG
+#define dbg(format, ...) fprintf(stderr, "\x1B[32m"format"\x1B[0m\n",  ##__VA_ARGS__)
+#else
+#define dbg(...)
+#endif
+
 #define TYPE_RECEIVE_RESPONSE 'a'
 #define TYPE_SEND_RESPONSE 'r'
 #define TYPE_RECEIVE_REQUEST 'r'
@@ -275,7 +283,7 @@ json_t *jsonrpc_handle_request_single(json_t *json_request,
 		goto done;
 	}
 
-	if (entry == NULL) {
+	if (entry == NULL || entry->name == NULL) {
 		json_response = jsonrpc_error_response(json_id,
 				jsonrpc_error_object_predefined(JSONRPC_METHOD_NOT_FOUND, NULL));
 		goto done;

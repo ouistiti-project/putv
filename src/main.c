@@ -315,9 +315,10 @@ int main(int argc, char **argv)
 	nbcmds++;
 #endif
 #ifdef TINYSVCMDNS
+#define MDNS_PATH "path="INDEX_HTML
 	const char *txt[] =
 	{
-		"path="INDEX_HTML,
+		MDNS_PATH,
 #ifdef NETIF
 		"if="NETIF,
 #endif

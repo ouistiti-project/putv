@@ -78,6 +78,7 @@ $(PUTV)_CFLAGS+=-I ../lib/jsonrpc
 $(PUTV)_LDFLAGS+=-L ../lib/jsonrpc
 $(PUTV)_SOURCES-$(TINYSVCMDNS)+=cmds_tinysvcmdns.c
 $(PUTV)_LIBRARY-$(TINYSVCMDNS)+=tinysvcmdns
+$(PUTV)_CFLAGS-$(TINYSVCMDNS)+=-DINDEX_HTML="\"/ouiradio.html\""
 $(PUTV)_CFLAGS-$(TINYSVCMDNS)+=-I ../lib/tinysvcmdns
 $(PUTV)_LDFLAGS-$(TINYSVCMDNS)+=-L ../lib/tinysvcmdns
 $(PUTV)_LIBRARY-$(USE_ID3TAG)+=id3tag

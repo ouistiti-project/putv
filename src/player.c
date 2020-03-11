@@ -401,8 +401,6 @@ int player_run(player_ctx_t *ctx)
 				ctx->media->ops->play(ctx->media->ctx, _player_play, &player);
 				if (ctx->current == NULL)
 					player_state(ctx, STATE_CHANGE);
-				else
-					player_state(ctx, STATE_STOP);
 			break;
 			case STATE_PAUSE:
 			break;

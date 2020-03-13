@@ -137,7 +137,8 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 		ret = inet_pton(AF_INET6, host, &in6addr);
 	}
 
-	int sock = socket(af, SOCK_DGRAM, IPPROTO_IP);
+	int sock = socket(af, SOCK_DGRAM, IPPROTO_UDP);
+	//TODO: try IPPROTO_UDPLITE
 	if (sock == 0)
 	{
 		err("src: udp socket error");

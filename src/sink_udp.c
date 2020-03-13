@@ -148,7 +148,8 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 	int sock;
 	int mtu;
 
-	sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP);
+	sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
+	//TODO: try IPPROTO_UDPLITE
 
 	struct sockaddr_in saddr;
 	memset(&saddr, 0, sizeof(struct in_addr));
@@ -340,6 +341,7 @@ static void *sink_thread(void *arg)
 			{
 				ret = sendto(ctx->sock, buff, len, MSG_NOSIGNAL| MSG_DONTWAIT,
 						(struct sockaddr *)&ctx->saddr, sizeof(ctx->saddr));
+				sink_dbg("udp: send %d", ret);
 			}
 			if (ret < 0)
 			{

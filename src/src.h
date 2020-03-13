@@ -16,6 +16,7 @@ typedef void src_ctx_t;
 typedef struct src_ops_s src_ops_t;
 struct src_ops_s
 {
+	const char *name;
 	const char *protocol;
 	src_ctx_t *(*init)(player_ctx_t *, const char *path, const char *mime);
 	int (*run)(src_ctx_t *);

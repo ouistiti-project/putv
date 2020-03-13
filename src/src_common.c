@@ -89,6 +89,7 @@ src_t *src_build(player_ctx_t *player, const char *url, const char *mime)
 	src_ctx_t *src_ctx = NULL;
 	while (src_list[i] != NULL)
 	{
+		src_dbg("src: check %s", src_list[i]->name);
 		const char *protocol = src_list[i]->protocol;
 		int len = strlen(protocol);
 		while (protocol != NULL)

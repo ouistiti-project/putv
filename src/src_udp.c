@@ -242,6 +242,7 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 #ifdef UDP_DUMP
 		ctx->dumpfd = open("udp_dump.stream", O_RDWR | O_CREAT, 0644);
 #endif
+		dbg("src: %s", src_udp->name);
 	}
 	if (ctx == NULL)
 	{
@@ -497,6 +498,7 @@ static void src_destroy(src_ctx_t *ctx)
 
 const src_ops_t *src_udp = &(src_ops_t)
 {
+	.name = "udp",
 	.protocol = "udp://|rtp://",
 	.init = src_init,
 	.run = src_run,

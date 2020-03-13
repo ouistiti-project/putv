@@ -131,6 +131,7 @@ static src_ctx_t *src_init(player_ctx_t *player, const char * arg, const char *m
 #ifdef CURL_DUMP
 		ctx->dumpfd = open("curl_dump.mp3", O_RDWR | O_CREAT, 0644);
 #endif
+		dbg("src: %s", src_curl->name);
 	}
 	return ctx;
 }
@@ -239,6 +240,7 @@ static void src_destroy(src_ctx_t *ctx)
 
 const src_ops_t *src_curl = &(src_ops_t)
 {
+	.name = "curl",
 	.protocol = "http://|https://|file://",
 	.init = src_init,
 	.run = src_run,

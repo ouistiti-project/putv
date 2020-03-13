@@ -141,6 +141,7 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 		src->fd = fd;
 		src->player = player;
 		src->mime = mime;
+		dbg("src: %s", src_file->name);
 		return src;
 	}
 	if (path != NULL)
@@ -215,6 +216,7 @@ static void src_destroy(src_ctx_t *ctx)
 
 const src_ops_t *src_file = &(src_ops_t)
 {
+	.name = "file",
 	.protocol = "file://",
 	.init = src_init,
 	.run = src_run,

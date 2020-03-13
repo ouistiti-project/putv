@@ -192,6 +192,7 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 		ctx->soundcard = soundcard;
 		ctx->player = player;
 		ctx->handle = handle;
+		dbg("src: %s", src_alsa->name);
 	}
 	return ctx;
 }
@@ -386,6 +387,7 @@ static void src_destroy(src_ctx_t *ctx)
 
 const src_ops_t *src_alsa = &(src_ops_t)
 {
+	.name = "alsa",
 	.protocol = "pcm://",
 	.init = src_init,
 	.run = src_run,

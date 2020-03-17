@@ -179,7 +179,7 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 		err("src: bind error %s", strerror(errno));
 	}
 
-	if ((ret == 0) && (af == AF_INET) && IN_MULTICAST(inaddr))
+	if ((ret == 0) && (af == AF_INET) && IN_MULTICAST(htonl(inaddr)))
 	{
 		struct ip_mreq imreq;
 		memset(&imreq, 0, sizeof(struct ip_mreq));

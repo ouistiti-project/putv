@@ -391,28 +391,19 @@ static int media_next(media_ctx_t *ctx)
 		ctx->mediaid = (random() % (ctx->count - 1));
 		_find_mediaid_t data = {ctx->mediaid, NULL, NULL};
 		ret = _find(ctx, 0, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
-		if (ctx->mediaid >= ctx->count)
+		if (ctx->mediaid > ctx->count)
 			ctx->mediaid = 0;
+		if (ctx->mediaid == 0)
+			ctx->mediaid = ctx->count;
 		ctx->mediaid--;
-		ctx->firstmediaid = -1;
 	}
 	else
 	{
 		_find_mediaid_t data = {ctx->mediaid + 1, NULL, NULL};
 		ret = _find(ctx, 0, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
 	}
-	if ((ctx->firstmediaid - 1) == ctx->mediaid)
-	{
-		if (!(ctx->options & OPTION_LOOP))
-		{
-			ctx->mediaid = -1;
-			if (ctx->current)
-			{
-				ctx->current = _free_medialist(ctx->current, 0);
-			}
-			ctx->current = NULL;
-		}
-	}
+	if (ctx->firstmediaid == -1)
+		ctx->firstmediaid = ctx->mediaid;
 	if (ret != 0)
 	{
 		if (ctx->count < ctx->mediaid)
@@ -424,7 +415,7 @@ static int media_next(media_ctx_t *ctx)
 		}
 		ctx->current = NULL;
 		if (ctx->count > 0 &&
-			(	(ctx->firstmediaid != ctx->mediaid) ||
+			((ctx->firstmediaid != ctx->mediaid) ||
 				(ctx->options & OPTION_LOOP)))
 		{
 			media_next(ctx);

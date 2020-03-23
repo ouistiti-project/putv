@@ -1,0 +1,54 @@
+#!/bin/sh
+#
+# Starts putv.
+#
+
+SYSCONFDIR=/etc/putv
+RUNDIR=/var/run
+SBINDIR=/usr/sbin
+BINDIR=/usr/bin
+LIBDIR=/usr/lib
+WEBSOCKETDIR=${RUNDIR}/websocket
+
+MAINDAEMONNAME=upnprender
+MAINDAEMON=${BINDIR}/${MAINDAEMONNAME}
+OPTIONS="-o putv"
+
+start() {
+	printf "Starting UPnP renderer support: "
+	start-stop-daemon -b -S -q -p ${RUNDIR}/upnprender.pid --exec ${MAINDAEMON} -- -d ${OPTIONS}
+	if [ $? -eq 0 ]; then
+		echo "OK"
+	else
+		echo "KO"
+	fi
+}
+stop() {
+	printf "Stopping ouiradio: "
+	if [ -e ${RUNDIR}/gmrender.pid ]; then
+		start-stop-daemon -K -q -p ${RUNDIR}/gmrender.pid
+	fi
+	echo "OK"
+}
+restart() {
+	stop
+	start
+}
+
+case "$1" in
+  start)
+	start
+	;;
+  stop)
+	stop
+	;;
+  restart|reload)
+	restart
+	;;
+  *)
+	echo "Usage: $0 {start|stop|restart}"
+	exit 1
+esac
+
+exit $?
+

@@ -260,14 +260,18 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 
 	snd_pcm_hw_params_get_buffer_size(hw_params, &buffersize);
 	snd_pcm_hw_params_get_period_size(hw_params, &periodsize, 0);
+	unsigned int periodtime = 0;
+	snd_pcm_hw_params_get_period_time(hw_params, &periodtime, 0);
 	dbg("sink alsa config :\n" \
 		"\tbuffer size %lu\n" \
 		"\tperiod size %lu\n" \
+		"\tperiod time %fms\n" \
 		"\tsample rate %d\n" \
 		"\tsample size %d\n" \
 		"\tnchannels %u",
 		buffersize,
 		periodsize,
+		((double)periodtime) / 1000,
 		rate,
 		ctx->samplesize,
 		ctx->nchannels);

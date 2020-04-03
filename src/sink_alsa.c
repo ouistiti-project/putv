@@ -53,6 +53,9 @@ struct sink_ctx_s
 	int buffersize;
 	char samplesize;
 	char nchannels;
+
+	unsigned char *noise;
+	unsigned int noisecnt;
 };
 #define SINK_CTX
 #include "sink.h"
@@ -394,8 +397,13 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 #endif
 	jitter->ctx->thredhold = 2;
 	jitter->format = ctx->format;
-
 	ctx->in = jitter;
+	ctx->noise = malloc(ctx->buffersize);
+	int i = 0;
+	for (i = 0; i < ctx->buffersize; i++)
+	{
+		ctx->noise[i] = (char)random();
+	}
 
 	ctx->player = player;
 
@@ -415,6 +423,13 @@ static int _alsa_checksamplerate(sink_ctx_t *ctx)
 		_pcm_close(ctx);
 		int size = ctx->buffersize;
 		_pcm_open(ctx, ctx->in->format, ctx->in->ctx->frequence, &size);
+		free(ctx->noise);
+		ctx->noise = malloc(ctx->buffersize);
+		int i = 0;
+		for (i = 0; i < ctx->buffersize; i++)
+		{
+			ctx->noise[i] = (char)random();
+		}
 	}
 #ifdef SAMPLERATE_AUTO
 	ctx->in->ctx->frequence = 0;
@@ -445,29 +460,59 @@ static void *sink_thread(void *arg)
 			}
 		}
 
-		unsigned char *buff = ctx->in->ops->peer(ctx->in->ctx, NULL);
-		if (buff != NULL)
+		unsigned char *buff = NULL;
+		int length = 0;
+		ret = snd_pcm_wait(ctx->playback_handle, 1000);
+		if (ret <= 0)
+			break;
+		if (!ctx->in->ops->empty(ctx->in->ctx))
 		{
-			int length = ctx->in->ops->length(ctx->in->ctx);
+			buff = ctx->in->ops->peer(ctx->in->ctx, NULL);
+			length = ctx->in->ops->length(ctx->in->ctx);
 			_alsa_checksamplerate(ctx);
-			//snd_pcm_mmap_begin
-			ret = snd_pcm_writei(ctx->playback_handle, buff, length / divider);
-			sink_dbg("sink  alsa : write %d/%d %d/%d %d", ret * divider, length, ret, length / divider, divider);
-			if (ret == -EPIPE)
+		}
+		else
+		{
+			snd_pcm_sframes_t samples;
+			snd_pcm_delay(ctx->playback_handle, &samples);
+			if (samples * ctx->samplesize * ctx->nchannels > ctx->buffersize * 2)
 			{
-				warn("pcm recover");
-				ret = snd_pcm_recover(ctx->playback_handle, ret, 0);
+				sched_yield();
+				usleep(LATENCE_MS * 1000);
+				continue;
 			}
+			length = ctx->buffersize;
+			buff = ctx->noise;
+			ctx->noisecnt ++;
+		}
+		//snd_pcm_mmap_begin
+		ret = snd_pcm_writei(ctx->playback_handle, buff, length / divider);
+		sink_dbg("sink  alsa : write %d/%d %d/%d %d", ret * divider, length, ret, length / divider, divider);
+		if (ret == -EPIPE)
+		{
+			warn("pcm recover");
+			ret = snd_pcm_recover(ctx->playback_handle, ret, 0);
+		}
+		if (buff != ctx->noise)
 			ctx->in->ops->pop(ctx->in->ctx, ret * divider);
-			if (ret < 0)
+		else
+		{
+			int i = 0;
+			char *tmp;
+			for (i = 0; i < ctx->buffersize; i++)
 			{
-				ctx->state = STATE_ERROR;
-				err("sink: error write pcm %d", ret);
+				tmp = &ctx->noise[i];
+				*tmp = (char)random();
 			}
-			else
-			{
-				sink_dbg("sink: play %d", ret);
-			}
+		}
+		if (ret < 0)
+		{
+			ctx->state = STATE_ERROR;
+			err("sink: error write pcm %d", ret);
+		}
+		else
+		{
+			sink_dbg("sink: play %d", ret);
 		}
 	}
 	dbg("sink: thread end");
@@ -529,6 +574,7 @@ static void alsa_destroy(sink_ctx_t *ctx)
 		snd_mixer_close(ctx->mixer);
 #endif
 
+	free(ctx->noise);
 	jitter_scattergather_destroy(ctx->in);
 	free(ctx->soundcard);
 	free(ctx);

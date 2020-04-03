@@ -67,8 +67,8 @@ struct sink_ctx_s
 
 #define sink_dbg(...)
 
-#define LATENCE_MS 50
-#define NB_BUFFER 3
+#define LATENCE_MS 5
+#define NB_BUFFER 16
 
 #ifdef USE_REALTIME
 // REALTIME_SCHED is set from the Makefile to SCHED_RR
@@ -233,9 +233,18 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 	snd_pcm_uframes_t buffersize = 0;
 	if (*size > 0)
 	{
+		unsigned int periods = NB_BUFFER - 1;
 		int dir = 0;
-		buffersize = *size;
-		periodsize = (*size / NB_BUFFER);
+		buffersize = *size * periods;
+		periodsize = *size;
+		dbg("set %ld %ld", buffersize, periodsize);
+		ret = snd_pcm_hw_params_set_periods(ctx->playback_handle, hw_params, periods, dir);
+		if (ret < 0)
+		{
+			err("sink: periods %s", snd_strerror(ret));
+			goto error;
+		}
+
 		ret = snd_pcm_hw_params_set_buffer_size_near(ctx->playback_handle, hw_params, &buffersize);
 		if (ret < 0)
 		{
@@ -418,27 +427,12 @@ static int _alsa_checksamplerate(sink_ctx_t *ctx)
 static void *sink_thread(void *arg)
 {
 	int ret;
-	int divider = 2;
 	sink_ctx_t *ctx = (sink_ctx_t *)arg;
-	switch (ctx->in->format)
-	{
-		case PCM_32bits_LE_stereo:
-			divider = 8;
-		break;
-		case PCM_24bits4_LE_stereo:
-			divider = 8;
-		break;
-		case PCM_24bits3_LE_stereo:
-			divider = 6;
-		break;
-		case PCM_16bits_LE_stereo:
-			divider = 4;
-		break;
-		case PCM_16bits_LE_mono:
-			divider = 2;
-		break;
-	}
+	int divider = ctx->samplesize * ctx->nchannels;
+
 	/* start decoding */
+	while (ctx->in->ops->empty(ctx->in->ctx))
+		usleep(LATENCE_MS * 1000);
 	while (ctx->state != STATE_ERROR)
 	{
 		if (player_waiton(ctx->player, STATE_PAUSE) < 0)

@@ -113,41 +113,64 @@ unsigned int _mixer_getvolume(sink_ctx_t *ctx)
 # define _mixer_getvolume NULL
 #endif
 
+typedef struct pcm_config_s
+{
+	int samplesize;
+	int nchannels;
+	snd_pcm_format_t pcm_format;
+} pcm_config_t;
+
+static int _pcm_config(jitter_format_t format, pcm_config_t *config)
+{
+	jitter_format_t downformat = format;
+	switch (format)
+	{
+		case PCM_32bits_LE_stereo:
+			config->pcm_format = SND_PCM_FORMAT_S32_LE;
+			downformat = PCM_24bits4_LE_stereo;
+			config->samplesize = 4;
+			config->nchannels = 2;
+		break;
+		case PCM_24bits4_LE_stereo:
+			config->pcm_format = SND_PCM_FORMAT_S24_LE;
+			downformat = PCM_16bits_LE_stereo;
+			config->samplesize = 4;
+			config->nchannels = 2;
+		break;
+		case PCM_24bits3_LE_stereo:
+			config->pcm_format = SND_PCM_FORMAT_S24_3LE;
+			downformat = PCM_16bits_LE_stereo;
+			config->samplesize = 3;
+			config->nchannels = 2;
+		break;
+		case PCM_16bits_LE_stereo:
+			config->pcm_format = SND_PCM_FORMAT_S16_LE;
+			config->samplesize = 2;
+			config->nchannels = 2;
+		break;
+		case PCM_16bits_LE_mono:
+			config->pcm_format = SND_PCM_FORMAT_S16_LE;
+			config->samplesize = 2;
+			config->nchannels = 1;
+		break;
+		case PCM_8bits_mono:
+			config->pcm_format = SND_PCM_FORMAT_S8;
+			downformat = PCM_16bits_LE_mono;
+			config->samplesize = 2;
+			config->nchannels = 1;
+		break;
+	}
+	return downformat;
+}
+
 static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate, unsigned int *size)
 {
 	int ret;
 
 	ret = snd_pcm_open(&ctx->playback_handle, ctx->soundcard, SND_PCM_STREAM_PLAYBACK, 0);
 
-	snd_pcm_format_t pcm_format;
-	switch (format)
-	{
-		case PCM_32bits_LE_stereo:
-			pcm_format = SND_PCM_FORMAT_S32_LE;
-			ctx->samplesize = 4;
-			ctx->nchannels = 2;
-		break;
-		case PCM_24bits4_LE_stereo:
-			pcm_format = SND_PCM_FORMAT_S24_LE;
-			ctx->samplesize = 4;
-			ctx->nchannels = 2;
-		break;
-		case PCM_24bits3_LE_stereo:
-			pcm_format = SND_PCM_FORMAT_S24_3LE;
-			ctx->samplesize = 3;
-			ctx->nchannels = 2;
-		break;
-		case PCM_16bits_LE_stereo:
-			pcm_format = SND_PCM_FORMAT_S16_LE;
-			ctx->samplesize = 2;
-			ctx->nchannels = 2;
-		break;
-		case PCM_16bits_LE_mono:
-			pcm_format = SND_PCM_FORMAT_S16_LE;
-			ctx->samplesize = 2;
-			ctx->nchannels = 1;
-		break;
-	}
+	pcm_config_t config = {0};
+	jitter_format_t downformat = _pcm_config(format, &config);
 
 	snd_pcm_hw_params_t *hw_params;
 	ret = snd_pcm_hw_params_malloc(&hw_params);
@@ -172,14 +195,12 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 		goto error;
 	}
 
-	ret = snd_pcm_hw_params_set_format(ctx->playback_handle, hw_params, pcm_format);
+	ret = snd_pcm_hw_params_set_format(ctx->playback_handle, hw_params, config.pcm_format);
 	if (ret < 0)
 	{
-		pcm_format = SND_PCM_FORMAT_S24_LE;
-		ctx->samplesize = 4;
-		ctx->nchannels = 2;
-		format = PCM_32bits_LE_stereo;
-		ret = snd_pcm_hw_params_set_format(ctx->playback_handle, hw_params, pcm_format);
+		format = downformat;
+		_pcm_config(format, &config);
+		ret = snd_pcm_hw_params_set_format(ctx->playback_handle, hw_params, config.pcm_format);
 		if (ret < 0)
 		{
 			err("sink: format");
@@ -188,6 +209,8 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 		warn("sink: alsa downgrade to 24bits over 32bits");
 	}
 	ctx->format = format;
+	ctx->nchannels = config.nchannels;
+	ctx->samplesize = config.samplesize;
 
 	unsigned int trate = rate;
 	if (rate == 0)
@@ -291,6 +314,8 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 		if (!strncmp(setting, "format=", 7))
 		{
 			setting += 7;
+			if (!strncmp(setting, "8", 4))
+				format = PCM_8bits_mono;
 			if (!strncmp(setting, "16le", 4))
 				format = PCM_16bits_LE_stereo;
 			if (!strncmp(setting, "24le", 4))

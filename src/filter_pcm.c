@@ -108,6 +108,11 @@ int filter_set(filter_ctx_t *ctx, sampled_t sampled, jitter_format_t format, uns
 	unsigned char nchannels = 2;
 	switch (format)
 	{
+	case PCM_8bits_mono:
+		samplesize = 2;
+		shift = 8;
+		nchannels = 1;
+	break;
 	case PCM_16bits_LE_mono:
 		samplesize = 2;
 		shift = 16;

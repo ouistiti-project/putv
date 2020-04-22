@@ -62,10 +62,6 @@ struct filter_ctx_s
 # define FRACBITS		28
 # define ONE		((sample_t)(0x10000000L))
 
-#ifndef FILTER_SCALING_GAIN
-#define FILTER_SCALING_GAIN 0
-#endif
-
 filter_ctx_t *filter_init(sampled_t sampled, jitter_format_t format,...)
 {
 	filter_ctx_t *ctx = calloc(1, sizeof(*ctx));
@@ -223,10 +219,10 @@ static int filter_interleave(filter_ctx_t *ctx, filter_audio_t *audio, unsigned 
 				sample = audio->samples[(j % audio->nchannels)][i];
 			else
 				sample = audio->samples[0][i];
-			if (audio->regain)
-			{
-				sample = sample << audio->regain;
-			}
+			if (audio->regain > 0)
+					sample = sample << audio->regain;
+			else if (audio->regain < 0)
+				sample = sample >> -audio->regain;
 			int len = ctx->sampled(ctx, sample, audio->bitspersample,
 						buffer + bufferlen);
 			bufferlen += len;

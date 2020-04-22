@@ -164,7 +164,7 @@ enum mad_flow output(void *data,
 	audio.nchannels = pcm->channels;
 	audio.nsamples = pcm->length;
 	audio.bitspersample = 24;
-	audio.regain = FILTER_SCALING_GAIN;
+	audio.regain = 0;
 	int i;
 	for (i = 0; i < audio.nchannels && i < MAXCHANNELS; i++)
 	{

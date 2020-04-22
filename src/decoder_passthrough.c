@@ -55,7 +55,7 @@ struct decoder_ctx_s
 #define dbg(...)
 #endif
 
-static decoder_ctx_t *decoder_init(player_ctx_t *player, const filter_t *filter)
+static decoder_ctx_t *decoder_init(player_ctx_t *player)
 {
 	decoder_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->ops = decoder_passthrough;

@@ -51,7 +51,7 @@ struct decoder_ctx_s
 	jitter_t *out;
 	unsigned char *outbuffer;
 	size_t outbufferlen;
-	const filter_t *filter;
+	filter_t *filter;
 };
 #define DECODER_CTX
 #include "decoder.h"
@@ -74,14 +74,14 @@ struct decoder_ctx_s
 #define NBUFFER 3
 
 static const char *jitter_name = "flac decoder";
-static decoder_ctx_t *decoder_init(player_ctx_t *player, const filter_t *filter)
+static decoder_ctx_t *decoder_init(player_ctx_t *player)
 {
 	decoder_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->ops = decoder_flac;
 	ctx->nchannels = 2;
 	ctx->samplerate = DEFAULT_SAMPLERATE;
 
-	ctx->filter = filter;
+	ctx->filter = filter_build(player_filtername(player), PCM_24bits4_LE_stereo, sampled_change);
 
 	ctx->decoder = FLAC__stream_decoder_new();
 	if (ctx->decoder == NULL)
@@ -246,7 +246,7 @@ static int decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 	 * Because we need the jitter out.
 	 */
 	if (ctx->filter)
-		ctx->filter->ops->set(ctx->filter->ctx, NULL, jitter->ctx->frequence);
+		ctx->filter->ops->set(ctx->filter->ctx, NULL, jitter->format, jitter->ctx->frequence);
 	pthread_create(&ctx->thread, NULL, decoder_thread, ctx);
 	return 0;
 }
@@ -263,6 +263,11 @@ static void decoder_destroy(decoder_ctx_t *ctx)
 	/* release the decoder */
 	FLAC__stream_decoder_delete(ctx->decoder);
 	jitter_ringbuffer_destroy(ctx->in);
+	if (ctx->filter)
+	{
+		ctx->filter->ops->destroy(ctx->filter->ctx);
+		free(ctx->filter);
+	}
 	free(ctx);
 }
 

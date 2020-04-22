@@ -57,7 +57,7 @@ struct decoder_ctx_s
 	unsigned char *outbuffer;
 	size_t outbufferlen;
 
-	const filter_t *filter;
+	filter_t *filter;
 
 	heartbeat_t heartbeat;
 	beat_samples_t beat;
@@ -164,14 +164,11 @@ enum mad_flow output(void *data,
 	audio.nchannels = pcm->channels;
 	audio.nsamples = pcm->length;
 	audio.bitspersample = 24;
-	audio.regain = 0;
+	audio.regain = FILTER_SCALING_GAIN;
 	int i;
 	for (i = 0; i < audio.nchannels && i < MAXCHANNELS; i++)
 	{
 		audio.samples[i] = pcm->samples[i];
-#ifdef FILTER_SCALING
-		ctx->filter->ops->scaling(ctx->filter->ctx, audio.samples[i], audio.nsamples);
-#endif
 	}
 	decoder_dbg("decoder mad: audio frame %d Hz, %d channels, %d samples", audio.samplerate, audio.nchannels, audio.nsamples);
 
@@ -290,12 +287,12 @@ static void _decoder_listener(void *arg, event_t event, void *eventarg)
 	}
 }
 
-static decoder_ctx_t *mad_init(player_ctx_t *player, const filter_t *filter)
+static decoder_ctx_t *mad_init(player_ctx_t *player)
 {
 	decoder_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->ops = decoder_mad;
 
-	ctx->filter = filter;
+	ctx->filter = filter_build(player_filtername(player), PCM_24bits4_LE_stereo, sampled_scaling);
 	mad_decoder_init(&ctx->decoder, ctx,
 			input, header /* header */, 0 /* filter */, output,
 			error, 0 /* message */);
@@ -366,7 +363,7 @@ static void *mad_thread(void *arg)
 static int mad_run(decoder_ctx_t *ctx, jitter_t *jitter)
 {
 	ctx->out = jitter;
-	ctx->filter->ops->set(ctx->filter->ctx, NULL, jitter->ctx->frequence);
+	ctx->filter->ops->set(ctx->filter->ctx, NULL, jitter->format, jitter->ctx->frequence);
 #ifdef DECODER_HEARTBEAT
 	if (heartbeat_samples)
 	{
@@ -408,6 +405,11 @@ static void mad_destroy(decoder_ctx_t *ctx)
 #ifdef DECODER_HEARTBEAT
 	ctx->heartbeat.ops->destroy(ctx->heartbeat.ctx);
 #endif
+	if (ctx->filter)
+	{
+		ctx->filter->ops->destroy(ctx->filter->ctx);
+		free(ctx->filter);
+	}
 	JITTER_destroy(ctx->in);
 	free(ctx);
 }

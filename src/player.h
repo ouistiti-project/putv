@@ -46,7 +46,7 @@ void player_next(player_ctx_t *ctx);
 void player_removeevent(player_ctx_t *ctx, int id);
 int player_onchange(player_ctx_t *ctx, player_event_cb_t callback, void *cbctx, char *name);
 int player_mediaid(player_ctx_t *ctx);
-const filter_t *player_filter(player_ctx_t *ctx);
+const char *player_filtername(player_ctx_t *ctx);
 const src_t *player_source(player_ctx_t *ctx);
 
 #endif

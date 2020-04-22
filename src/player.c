@@ -240,7 +240,7 @@ static void _player_listener(void *arg, event_t event, void *eventarg)
 		const src_t *src = player_source(player);
 		decoder_t *decoder = NULL;
 
-		decoder = decoder_build(player, event_data->mime, player_filter(player));
+		decoder = decoder_build(player, event_data->mime);
 		if (decoder != NULL)
 		{
 			src->ops->attach(src->ctx, event_data->pid, decoder);
@@ -304,8 +304,6 @@ int player_run(player_ctx_t *ctx)
 		.ctx = ctx,
 		.dec = NULL,
 	};
-
-	ctx->filter = filter_build(ctx->filtername, ctx->audioout->format);
 
 	int last_state = STATE_STOP;
 	while (last_state != STATE_ERROR)
@@ -415,18 +413,12 @@ int player_run(player_ctx_t *ctx)
 			it = it->next;
 		}
 	}
-	if (ctx->filter)
-	{
-		ctx->filter->ops->destroy(ctx->filter->ctx);
-		free(ctx->filter);
-		ctx->filter = NULL;
-	}
 	return 0;
 }
 
-const filter_t *player_filter(player_ctx_t *ctx)
+const char *player_filtername(player_ctx_t *ctx)
 {
-	return ctx->filter;
+	return ctx->filtername;
 }
 
 const src_t *player_source(player_ctx_t *ctx)

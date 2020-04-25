@@ -78,12 +78,16 @@ define PUTV_INSTALL_TARGET_CMDS
 	ln -s /home/ouiradio.json $(TARGET_DIR)$(PUTV_DATADIR)/htdocs/apps/ouiradio.json
 	$(INSTALL) -D -m 644 $(PUTV_PKGDIR)/radio.db \
 		$(TARGET_DIR)/home/radio.db
+	sed "s/\%PUTV\%/$(PUTV)/g" $(PUTV_PKGDIR)/putv.in > $(TARGET_DIR)/etc/setting.d/putv.in
+	$(INSTALL) -D -m 755 $(PUTV_PKGDIR)/putv.sh \
+		$(TARGET_DIR)/etc/setting.d/putv.sh
 endef
 
 define PUTV_INSTALL_INIT_SYSV
-	sed "s/\%PUTV\%/$(PUTV)/g" $(PUTV_PKGDIR)/S50putv.in > $(PUTV_PKGDIR)/S50putv
 	$(INSTALL) -D -m 755 $(PUTV_PKGDIR)/S50putv \
 		$(TARGET_DIR)/etc/init.d/S50putv
+	$(INSTALL) -D -m 755 $(PUTV_PKGDIR)/S51gmrender \
+		$(TARGET_DIR)/etc/init.d/S51gmrender
 endef
 
 $(eval $(kconfig-package))

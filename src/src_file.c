@@ -69,10 +69,6 @@ struct src_ctx_s
 static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 {
 	int ret = 0;
-	if (player_waiton(ctx->player, STATE_PAUSE) < 0)
-	{
-		return 0;
-	}
 	fd_set rfds;
 	int maxfd = ctx->fd;
 	FD_ZERO(&rfds);
@@ -87,7 +83,7 @@ static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 	{
 		warn("src: timeout");
 	}
-	src_dbg("src: read %d", ret);
+	src_dbg("src: read %d %d", ret, ctx->fd);
 	if (ret < 0)
 		err("src file %d error: %s", ctx->fd, strerror(errno));
 	if (ret == 0)
@@ -102,7 +98,6 @@ static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mime)
 {
 	int fd = -1;
-	char *path = NULL;
 	if (!strcmp(url, "-"))
 		fd = 0;
 	else
@@ -141,13 +136,10 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 		src->fd = fd;
 		src->player = player;
 		src->mime = mime;
-		dbg("src: %s", src_file->name);
+		dbg("src: %s %s", src_file->name, url);
 		return src;
 	}
-	if (path != NULL)
-		err("src file %s error: %s", path, strerror(errno));
-	else
-		err("src file %s error: %s", url, strerror(errno));
+	err("src file %s error: %s", url, strerror(errno));
 	return NULL;
 }
 

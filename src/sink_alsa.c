@@ -232,11 +232,11 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 		goto error;
 	}
 
+	unsigned int periods = NB_BUFFER/2;
 	snd_pcm_uframes_t periodsize = 0;
 	snd_pcm_uframes_t buffersize = 0;
 	if (*size > 0)
 	{
-		unsigned int periods = NB_BUFFER - 1;
 		int dir = 0;
 		buffersize = *size * periods;
 		periodsize = *size;
@@ -272,17 +272,20 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 
 	snd_pcm_hw_params_get_buffer_size(hw_params, &buffersize);
 	snd_pcm_hw_params_get_period_size(hw_params, &periodsize, 0);
+	snd_pcm_hw_params_get_periods(hw_params, &periods, 0);
 	unsigned int periodtime = 0;
 	snd_pcm_hw_params_get_period_time(hw_params, &periodtime, 0);
 	dbg("sink alsa config :\n" \
 		"\tbuffer size %lu\n" \
 		"\tperiod size %lu\n" \
+		"\tnb periods %d\n" \
 		"\tperiod time %fms\n" \
 		"\tsample rate %d\n" \
 		"\tsample size %d\n" \
 		"\tnchannels %u",
 		buffersize,
 		periodsize,
+		periods,
 		((double)periodtime) / 1000,
 		rate,
 		ctx->samplesize,
@@ -395,7 +398,7 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 #else
 	jitter->ctx->frequence = DEFAULT_SAMPLERATE;
 #endif
-	jitter->ctx->thredhold = 2;
+	jitter->ctx->thredhold = NB_BUFFER/2;
 	jitter->format = ctx->format;
 	ctx->in = jitter;
 	ctx->noise = malloc(ctx->buffersize);
@@ -463,8 +466,17 @@ static void *sink_thread(void *arg)
 		unsigned char *buff = NULL;
 		int length = 0;
 		ret = snd_pcm_wait(ctx->playback_handle, 1000);
-		if (ret <= 0)
+		if (ret == -EPIPE)
+		{
+			warn("pcm recover");
+			ret = snd_pcm_recover(ctx->playback_handle, ret, 0);
+			/**
+			* This must never occure, the udp src needs to know
+			* how many PCM missing.
+			*/
+			err("alsa: pcm wait error %s", snd_strerror(ret));
 			break;
+		}
 		if (!ctx->in->ops->empty(ctx->in->ctx))
 		{
 			buff = ctx->in->ops->peer(ctx->in->ctx, NULL);
@@ -475,7 +487,10 @@ static void *sink_thread(void *arg)
 		{
 			snd_pcm_sframes_t samples;
 			snd_pcm_delay(ctx->playback_handle, &samples);
-			if (samples * ctx->samplesize * ctx->nchannels > ctx->buffersize * 2)
+			/**
+			 * alsa needs at least 3 periods to run correctly
+			 */
+			if (samples * ctx->samplesize * ctx->nchannels > ctx->buffersize * 3)
 			{
 				sched_yield();
 				usleep(LATENCE_MS * 1000);
@@ -508,7 +523,7 @@ static void *sink_thread(void *arg)
 		if (ret < 0)
 		{
 			ctx->state = STATE_ERROR;
-			err("sink: error write pcm %d", ret);
+			err("sink: error write pcm %s", snd_strerror(ret));
 		}
 		else
 		{

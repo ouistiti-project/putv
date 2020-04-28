@@ -191,7 +191,7 @@ output(const FLAC__StreamDecoder *decoder,
 static void
 metadata(const FLAC__StreamDecoder *decoder,
 	const FLAC__StreamMetadata *metadata,
-	void *client_data)
+	void *data)
 {
 }
 
@@ -206,16 +206,7 @@ static void *decoder_thread(void *arg)
 {
 	int result = 0;
 	decoder_ctx_t *ctx = (decoder_ctx_t *)arg;
-	result = FLAC__stream_decoder_init_stream(ctx->decoder,
-		input,
-		NULL,
-		NULL,
-		NULL,
-		NULL,
-		output,
-		metadata,
-		error,
-		ctx);
+	dbg("decoder: start running");
 	result = FLAC__stream_decoder_process_until_end_of_stream(ctx->decoder);
 	/**
 	 * push the last buffer to the encoder, otherwise the next
@@ -225,7 +216,7 @@ static void *decoder_thread(void *arg)
 	{
 		ctx->out->ops->push(ctx->out->ctx, ctx->outbufferlen, NULL);
 	}
-	ctx->out->ops->flush(ctx->out->ctx);
+//	ctx->out->ops->flush(ctx->out->ctx);
 
 	return (void *)(intptr_t)result;
 }
@@ -238,8 +229,33 @@ static int decoder_check(const char *path)
 	return -1;
 }
 
+static int decoder_prepare(decoder_ctx_t *ctx)
+{
+	int ret;
+	FLAC__stream_decoder_set_metadata_ignore(ctx->decoder, FLAC__METADATA_TYPE_PADDING);
+	FLAC__stream_decoder_set_metadata_ignore(ctx->decoder, FLAC__METADATA_TYPE_VORBIS_COMMENT);
+	FLAC__stream_decoder_set_metadata_ignore(ctx->decoder, FLAC__METADATA_TYPE_CUESHEET);
+	FLAC__stream_decoder_set_metadata_ignore(ctx->decoder, FLAC__METADATA_TYPE_PICTURE);
+	ret = FLAC__stream_decoder_init_stream(ctx->decoder,
+		input,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		output,
+		metadata,
+		error,
+		ctx);
+	if (ret == FLAC__STREAM_DECODER_INIT_STATUS_OK)
+	{
+		ret != FLAC__stream_decoder_process_until_end_of_metadata(ctx->decoder);
+	}
+	return ret;
+}
+
 static int decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 {
+	int result = 0;
 	ctx->out = jitter;
 	/**
 	 * Initialization of the filter here.
@@ -247,7 +263,8 @@ static int decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 	 */
 	if (ctx->filter)
 		ctx->filter->ops->set(ctx->filter->ctx, NULL, jitter->format, jitter->ctx->frequence);
-	pthread_create(&ctx->thread, NULL, decoder_thread, ctx);
+	if (! decoder_prepare(ctx))
+		pthread_create(&ctx->thread, NULL, decoder_thread, ctx);
 	return 0;
 }
 

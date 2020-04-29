@@ -170,7 +170,13 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 {
 	int ret;
 
+	sink_dbg("sink: open %s", ctx->soundcard);
 	ret = snd_pcm_open(&ctx->playback_handle, ctx->soundcard, SND_PCM_STREAM_PLAYBACK, 0);
+	if (ret < 0)
+	{
+		err("sink: open %s", ctx->soundcard);
+		goto error;
+	}
 
 	pcm_config_t config = {0};
 	jitter_format_t downformat = _pcm_config(format, &config);
@@ -294,7 +300,8 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 	*size = ctx->buffersize;
 
 	ret = snd_pcm_prepare(ctx->playback_handle);
-	if (ret < 0) {
+	if (ret < 0)
+	{
 		err("sink: prepare");
 		goto error;
 	}
@@ -302,6 +309,8 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 	ctx->samplerate = rate;
 
 error:
+	if (ret < 0)
+		err("alsa: pcm error %s", snd_strerror(ret));
 	snd_pcm_hw_params_free(hw_params);
 	return ret;
 }
@@ -323,16 +332,13 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 	ctx->soundcard = strdup(soundcard);
 	ctx->mixerch = ALSA_MIXER;
 #ifdef SINK_ALSA_CONFIG
-	char *setting = strchr(ctx->soundcard, ':');
+	char *setting = strchr(ctx->soundcard, '?');
 	while (setting != NULL)
 	{
-		*setting = '\0';
-		setting++;
-		if (setting == NULL)
-			break;
-		if (!strncmp(setting, "format=", 7))
+		if (!strncmp(setting + 1, "format=", 7))
 		{
-			setting += 7;
+			*setting = '\0';
+			setting += 8;
 			if (!strncmp(setting, "8", 4))
 				format = PCM_8bits_mono;
 			if (!strncmp(setting, "16le", 4))
@@ -341,20 +347,20 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 				format = PCM_24bits4_LE_stereo;
 			if (!strncmp(setting, "32le", 4))
 				format = PCM_32bits_LE_stereo;
-			setting = strchr(setting, ',');
 		}
-		if (!strncmp(setting, "samplerate=", 11))
+		if (!strncmp(setting + 1, "samplerate=", 11))
 		{
-			setting += 11;
+			*setting = '\0';
+			setting += 12;
 			samplerate = atoi(setting);
-			setting = strchr(setting, ',');
 		}
-		if (!strncmp(setting, "mixer=", 6))
+		if (!strncmp(setting + 1, "mixer=", 6))
 		{
-			setting += 6;
+			*setting = '\0';
+			setting += 7;
 			ctx->mixerch = setting;
-			setting = strchr(setting, ',');
 		}
+		setting = strchr(setting, ',');
 	}
 #endif
 

@@ -52,6 +52,7 @@ struct decoder_ctx_s
 	unsigned char *outbuffer;
 	size_t outbufferlen;
 	filter_t *filter;
+	player_ctx_t *player;
 };
 #define DECODER_CTX
 #include "decoder.h"
@@ -80,6 +81,7 @@ static decoder_ctx_t *decoder_init(player_ctx_t *player)
 	ctx->ops = decoder_flac;
 	ctx->nchannels = 2;
 	ctx->samplerate = DEFAULT_SAMPLERATE;
+	ctx->player = player;
 
 	ctx->filter = filter_build(player_filtername(player), PCM_24bits4_LE_stereo, sampled_change);
 
@@ -139,6 +141,10 @@ output(const FLAC__StreamDecoder *decoder,
 	decoder_ctx_t *ctx = (decoder_ctx_t *)data;
 	filter_audio_t audio;
 
+        if (player_waiton(ctx->player, STATE_PAUSE) < 0)
+        {
+                return FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
+        }
 	/* pcm->samplerate contains the sampling frequency */
 
 	audio.samplerate = FLAC__stream_decoder_get_sample_rate(decoder);

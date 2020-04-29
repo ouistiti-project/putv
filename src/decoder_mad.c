@@ -58,6 +58,7 @@ struct decoder_ctx_s
 	size_t outbufferlen;
 
 	filter_t *filter;
+	player_ctx_t *player;
 
 	heartbeat_t heartbeat;
 	beat_samples_t beat;
@@ -132,6 +133,11 @@ enum mad_flow output(void *data,
 {
 	decoder_ctx_t *ctx = (decoder_ctx_t *)data;
 	filter_audio_t audio;
+
+        if (player_waiton(ctx->player, STATE_PAUSE) < 0)
+        {
+                return MAD_FLOW_STOP;
+        }
 
 	/* pcm->samplerate contains the sampling frequency */
 
@@ -291,6 +297,7 @@ static decoder_ctx_t *mad_init(player_ctx_t *player)
 {
 	decoder_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->ops = decoder_mad;
+	ctx->player = player;
 
 	ctx->filter = filter_build(player_filtername(player), PCM_24bits4_LE_stereo, sampled_scaling);
 	mad_decoder_init(&ctx->decoder, ctx,

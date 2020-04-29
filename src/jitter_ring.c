@@ -166,7 +166,11 @@ static unsigned char *jitter_pull(jitter_ctx_t *jitter)
 	pthread_mutex_lock(&private->mutex);
 	if (private->state == JITTER_STOP)
 		_jitter_init(jitter);
-
+	else if (private->state == JITTER_FLUSH)
+	{
+		pthread_mutex_unlock(&private->mutex);
+		return NULL;
+	}
 	while ((private->in != NULL) &&
 		((private->level + jitter->size) > (jitter->size * jitter->count)))
 	{

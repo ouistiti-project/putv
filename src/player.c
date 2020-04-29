@@ -320,6 +320,7 @@ int player_run(player_ctx_t *ctx)
 		{
 			case STATE_STOP:
 				dbg("player: stop");
+				ctx->audioout->ops->flush(ctx->audioout->ctx);
 				if (ctx->current != NULL)
 				{
 					ctx->current->src->ops->destroy(ctx->current->src->ctx);

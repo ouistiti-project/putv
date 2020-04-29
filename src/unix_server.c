@@ -60,6 +60,20 @@ int start(client_routine_t service, thread_info_t *info)
 void unixserver_remove(thread_info_t *info)
 {
 	thread_info_t *it = &info->server->firstinfo;
+	/**
+	 * firstinfo is an empty client socket
+	 */
+	while (info != it->next) it = it->next;
+	if (it != NULL)
+		it->next = info->next;
+	close(info->sock);
+	free(info);
+}
+
+void unixserver_kill(thread_info_t *info)
+{
+	thread_server_t *server = info->server;
+	thread_info_t *it = &info->server->firstinfo;
 	while (it->next) {
 		thread_info_t *old = it->next;
 		if (old->sock == info->sock) {
@@ -71,6 +85,8 @@ void unixserver_remove(thread_info_t *info)
 		if (it == NULL)
 			break;
 	}
+	close(server->sock);
+	free(server);
 }
 
 int unixserver_run(client_routine_t routine, void *userctx, const char *socketpath)

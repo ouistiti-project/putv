@@ -14,5 +14,6 @@ struct thread_info_s
 typedef int (*client_routine_t)(thread_info_t *info);
 int unixserver_run(client_routine_t routine, void *userctx, const char *socketpath);
 void unixserver_remove(thread_info_t *info);
+void unixserver_kill(thread_info_t *info);
 
 #endif

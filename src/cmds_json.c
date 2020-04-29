@@ -1099,7 +1099,8 @@ static int cmds_json_run(cmds_ctx_t *ctx, sink_t *sink)
 
 static void cmds_json_destroy(cmds_ctx_t *ctx)
 {
-	unixserver_remove(ctx->info);
+	if (ctx->info)
+		unixserver_kill(ctx->info);
 	ctx->info = NULL;
 	pthread_join(ctx->thread, NULL);
 	pthread_mutex_destroy(&ctx->mutex);

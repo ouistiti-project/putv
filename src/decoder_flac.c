@@ -176,6 +176,11 @@ output(const FLAC__StreamDecoder *decoder,
 		if (ctx->outbuffer == NULL)
 		{
 			ctx->outbuffer = ctx->out->ops->pull(ctx->out->ctx);
+			/**
+			 * the pipe is broken. close the src and the decoder
+			 */
+			if (ctx->outbuffer == NULL)
+		                return FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
 		}
 
 		int len =

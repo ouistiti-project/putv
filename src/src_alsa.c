@@ -261,7 +261,14 @@ static void *src_thread(void *arg)
 
 		ret = 0;
 		if (buff == NULL)
+		{
 			buff = ctx->out->ops->pull(ctx->out->ctx);
+			/**
+			 * the pipe is broken. close the src and the decoder
+			 */
+			if (buff == NULL)
+				break;
+		}
 		unsigned char *buff2 = NULL;
 
 		while ((ret = snd_pcm_avail_update (ctx->handle)) < size)

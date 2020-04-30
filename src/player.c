@@ -76,7 +76,7 @@ struct player_ctx_s
 	media_t *nextmedia;
 	state_t state;
 	player_event_t *events;
-	player_decoder_t *current;
+	player_decoder_t *decoder;
 	pthread_cond_t cond;
 	pthread_mutex_t mutex;
 	jitter_t *audioout;
@@ -198,9 +198,9 @@ state_t player_state(player_ctx_t *ctx, state_t state)
 
 int player_mediaid(player_ctx_t *ctx)
 {
-	if (ctx->current != NULL)
+	if (ctx->decoder != NULL)
 	{
-		return ctx->current->mediaid;
+		return ctx->decoder->mediaid;
 	}
 	return -1;
 }
@@ -229,7 +229,7 @@ struct _player_play_s
 static void _player_new_es(player_ctx_t *ctx, void *eventarg)
 {
 	event_new_es_t *event_data = (event_new_es_t *)eventarg;
-	if (ctx->current == NULL)
+	if (ctx->decoder == NULL)
 	{
 		err("player: source is null");
 		return;
@@ -338,11 +338,11 @@ int player_run(player_ctx_t *ctx)
 			case STATE_STOP:
 				dbg("player: stop");
 				ctx->audioout->ops->flush(ctx->audioout->ctx);
-				if (ctx->current != NULL)
+				if (ctx->decoder != NULL)
 				{
-					ctx->current->src->ops->destroy(ctx->current->src->ctx);
-					free(ctx->current);
-					ctx->current = NULL;
+					ctx->decoder->src->ops->destroy(ctx->decoder->src->ctx);
+					free(ctx->decoder);
+					ctx->decoder = NULL;
 				}
 				if (player.dec != NULL)
 				{
@@ -355,24 +355,24 @@ int player_run(player_ctx_t *ctx)
 				ctx->media->ops->end(ctx->media->ctx);
 			break;
 			case STATE_CHANGE:
-				if (ctx->current != NULL)
+				if (ctx->decoder != NULL)
 				{
 					dbg("player: wait");
-					ctx->current->src->ops->destroy(ctx->current->src->ctx);
-					free(ctx->current);
-					ctx->current = NULL;
+					ctx->decoder->src->ops->destroy(ctx->decoder->src->ctx);
+					free(ctx->decoder);
+					ctx->decoder = NULL;
 				}
-				ctx->current = player.dec;
+				ctx->decoder = player.dec;
 				player.dec = NULL;
 
-				if (ctx->current != NULL)
+				if (ctx->decoder != NULL)
 				{
 					dbg("player: play");
 					/**
 					 * the src needs to be ready before the decoder
 					 * to set a producer if it's needed
 					 */
-					const src_t *src = ctx->current->src;
+					const src_t *src = ctx->decoder->src;
 					src->ops->run(src->ctx);
 					player_state(ctx, STATE_PLAY);
 				}
@@ -415,7 +415,7 @@ int player_run(player_ctx_t *ctx)
 					player.dec = NULL;
 				}
 				ctx->media->ops->play(ctx->media->ctx, _player_play, &player);
-				if (ctx->current == NULL)
+				if (ctx->decoder == NULL)
 					player_state(ctx, STATE_CHANGE);
 			break;
 			case STATE_PAUSE:
@@ -441,5 +441,5 @@ const char *player_filtername(player_ctx_t *ctx)
 
 const src_t *player_source(player_ctx_t *ctx)
 {
-	return ctx->current->src;
+	return ctx->decoder->src;
 }

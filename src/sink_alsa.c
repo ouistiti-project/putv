@@ -468,6 +468,13 @@ static void *sink_thread(void *arg)
 				continue;
 			}
 		}
+		if (player_state(ctx->player, STATE_UNKNOWN) == STATE_STOP)
+		{
+			snd_pcm_drain(ctx->playback_handle);
+			player_waiton(ctx->player, STATE_STOP);
+			dbg("sink: continue %d", player_state(ctx->player, STATE_UNKNOWN));
+			snd_pcm_prepare(ctx->playback_handle);
+		}
 
 		unsigned char *buff = NULL;
 		int length = 0;

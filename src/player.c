@@ -207,8 +207,8 @@ int player_mediaid(player_ctx_t *ctx)
 
 int player_waiton(player_ctx_t *ctx, int state)
 {
-	if (ctx->state == STATE_STOP ||
-		ctx->state == STATE_CHANGE ||
+	if (ctx->state == STATE_CHANGE ||
+//		ctx->state == STATE_STOP ||
 		ctx->state == STATE_ERROR)
 		return -1;
 	pthread_mutex_lock(&ctx->mutex);

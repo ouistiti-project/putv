@@ -226,39 +226,54 @@ struct _player_play_s
 	player_decoder_t *dec;
 };
 
+static void _player_new_es(player_ctx_t *ctx, void *eventarg)
+{
+	event_new_es_t *event_data = (event_new_es_t *)eventarg;
+	if (ctx->current == NULL)
+	{
+		err("player: source is null");
+		return;
+	}
+
+	warn("player decoder build");
+	event_data->decoder = decoder_build(ctx, event_data->mime);
+	if (event_data->decoder == NULL)
+		err("player: decoder not found for %s", event_data->mime);
+}
+
+static void _player_decode_es(player_ctx_t *ctx, void *eventarg)
+{
+	event_decode_es_t *event_data = (event_decode_es_t *)eventarg;
+	const src_t *src = player_source(ctx);
+	if (event_data->decoder != NULL && src)
+	{
+		src->ops->attach(src->ctx, event_data->pid, event_data->decoder);
+		event_data->decoder->ops->run(event_data->decoder->ctx, ctx->audioout);
+	}
+}
+
 static void _player_listener(void *arg, event_t event, void *eventarg)
 {
-	player_ctx_t *player = (player_ctx_t *)arg;
-	if (event == SRC_EVENT_NEW_ES)
+	player_ctx_t *ctx = (player_ctx_t *)arg;
+	switch (event)
 	{
-		event_new_es_t *event_data = (event_new_es_t *)eventarg;
-		if (player->current == NULL)
-		{
-			err("player: source is null");
-			return;
-		}
-		const src_t *src = player_source(player);
-		decoder_t *decoder = NULL;
-
-		decoder = decoder_build(player, event_data->mime);
-		if (decoder != NULL)
-		{
-			src->ops->attach(src->ctx, event_data->pid, decoder);
-			decoder->ops->run(decoder->ctx, player->audioout);
-		}
-		else
-			err("player: decoder not found for %s", event_data->mime);
+		case SRC_EVENT_NEW_ES:
+			_player_new_es(ctx, eventarg);
+		break;
+		case SRC_EVENT_DECODE_ES:
+			_player_decode_es(ctx, eventarg);
+		break;
 	}
 }
 
 static int _player_play(void* arg, int id, const char *url, const char *info, const char *mime)
 {
 	struct _player_play_s *data = (struct _player_play_s *)arg;
-	player_ctx_t *player = data->ctx;
+	player_ctx_t *ctx = data->ctx;
 	const src_t *src = NULL;
 
 	dbg("player: prepare %d %s %s", id, url, mime);
-	src = src_build(player, url, mime);
+	src = src_build(ctx, url, mime);
 	if (src != NULL)
 	{
 		data->dec = calloc(1, sizeof(*data->dec));
@@ -267,12 +282,14 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 
 		if (src->ops->eventlistener)
 		{
-			src->ops->eventlistener(src->ctx, _player_listener, player);
+			src->ops->eventlistener(src->ctx, _player_listener, ctx);
 		}
 		else
 		{
-			const event_new_es_t event = {.pid = 0, .mime = mime, .jitte = JITTE_LOW};
-			_player_listener(player, SRC_EVENT_NEW_ES, (void *)&event);
+			const event_new_es_t event_new = {.pid = 0, .mime = mime, .jitte = JITTE_LOW};
+			_player_listener(ctx, SRC_EVENT_NEW_ES, (void *)&event_new);
+			const event_decode_es_t event_decode = {.pid = 0, .decoder = event_new.decoder};
+			_player_listener(ctx, SRC_EVENT_DECODE_ES, (void *)&event_decode);
 		}
 
 		return 0;

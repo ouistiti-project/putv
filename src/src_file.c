@@ -145,11 +145,15 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 
 static int src_run(src_ctx_t *ctx)
 {
-	const event_new_es_t event = {.pid = 0, .mime = ctx->mime, .jitte = JITTE_LOW};
+	event_new_es_t event = {.pid = 0, .mime = ctx->mime, .jitte = JITTE_LOW};
+	event_decode_es_t event_decode = {0};
 	event_listener_t *listener = ctx->listener;
 	while (listener)
 	{
 		listener->cb(listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
+		event_decode.pid = event.pid;
+		event_decode.decoder = event.decoder;
+		listener->cb(listener->arg, SRC_EVENT_DECODE_ES, (void *)&event_decode);
 		listener = listener->next;
 	}
 	return 0;

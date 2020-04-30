@@ -375,7 +375,8 @@ static void *mad_thread(void *arg)
 static int mad_run(decoder_ctx_t *ctx, jitter_t *jitter)
 {
 	ctx->out = jitter;
-	ctx->filter->ops->set(ctx->filter->ctx, NULL, jitter->format, jitter->ctx->frequence);
+	if (ctx->filter)
+		ctx->filter->ops->set(ctx->filter->ctx, NULL, jitter->format, jitter->ctx->frequence);
 #ifdef DECODER_HEARTBEAT
 	if (heartbeat_samples)
 	{

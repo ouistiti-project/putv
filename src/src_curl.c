@@ -151,11 +151,15 @@ static void *src_thread(void *arg)
 static int src_run(src_ctx_t *ctx)
 {
 	int ret;
-	const event_new_es_t event = {.pid = 0, .mime = ctx->mime, .jitte = JITTE_MID};
+	event_new_es_t event = {.pid = 0, .mime = ctx->mime, .jitte = JITTE_MID};
+	event_decode_es_t event_decode = {0};
 	event_listener_t *listener = ctx->listener;
 	while (listener)
 	{
 		listener->cb(listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
+		event_decode.pid = event.pid;
+		event_decode.decoder = event.decoder;
+		listener->cb(listener->arg, SRC_EVENT_DECODE_ES, (void *)&event_decode);
 		listener = listener->next;
 	}
 	//ret = curl_easy_perform(ctx->curl);

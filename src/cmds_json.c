@@ -984,6 +984,37 @@ static void jsonrpc_onchange(void * userctx, player_ctx_t *player, state_t state
 	pthread_mutex_unlock(&ctx->mutex);
 }
 
+static int _jsonrpc_sendresponse(thread_info_t *info, json_t *request)
+{
+	int sock = info->sock;
+	cmds_ctx_t *ctx = info->userctx;
+	json_t *response = jsonrpc_jresponse(request, method_table, ctx);
+
+	/**
+	 * The json callback may send an event before the answer.
+	 * Use lock before jresonse may generate double lock
+	 */
+	if (response != NULL)
+	{
+#ifdef JSONRPC_LARGEPACKET
+		json_dump_callback(response, _cmds_send, info, JSONRPC_DEBUG_FORMAT);
+		if (ctx->buff_snd.length > 0)
+		{
+			int ret = send(sock, ctx->buff_snd.data, ctx->buff_snd.length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
+			cmds_dbg("send %d/%d: %s", ret, ctx->buff_snd.length + 1, ctx->buff_snd.data);
+		}
+		ctx->buff_snd.length = 0;
+#else
+		char *buff = json_dumps(response, JSONRPC_DEBUG_FORMAT );
+		ret = send(sock, buff, strlen(buff), MSG_NOSIGNAL);
+		ret = send(sock, "", 1, MSG_DONTWAIT | MSG_NOSIGNAL);
+#endif
+		fsync(sock);
+		json_decref(response);
+	}
+	json_decref(request);
+}
+
 static int jsonrpc_command(thread_info_t *info)
 {
 	int ret = 0;
@@ -1021,31 +1052,8 @@ static int jsonrpc_command(thread_info_t *info)
 				json_t *request = json_loads(buffer, flags, &error);
 				if (request != NULL)
 				{
-					json_t *response = jsonrpc_jresponse(request, method_table, ctx);
-					/**
-					 * The json callback may send an event before the answer.
-					 * Use lock before jresonse may generate double lock
-					 */
 					pthread_mutex_lock(&ctx->mutex);
-					if (response != NULL)
-					{
-#ifdef JSONRPC_LARGEPACKET
-						json_dump_callback(response, _cmds_send, info, JSONRPC_DEBUG_FORMAT);
-						if (ctx->buff_snd.length > 0)
-						{
-							int ret = send(sock, ctx->buff_snd.data, ctx->buff_snd.length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
-							cmds_dbg("send %d/%d: %s", ret, ctx->buff_snd.length + 1, ctx->buff_snd.data);
-						}
-						ctx->buff_snd.length = 0;
-#else
-						char *buff = json_dumps(response, JSONRPC_DEBUG_FORMAT );
-						ret = send(sock, buff, strlen(buff), MSG_NOSIGNAL);
-						ret = send(sock, "", 1, MSG_DONTWAIT | MSG_NOSIGNAL);
-#endif
-						fsync(sock);
-						json_decref(response);
-					}
-					json_decref(request);
+					_jsonrpc_sendresponse(info, request);
 					pthread_mutex_unlock(&ctx->mutex);
 				}
 				else

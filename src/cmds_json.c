@@ -199,6 +199,7 @@ static int method_remove(json_t *json_params, json_t **result, void *userdata)
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 	media_t *media = player_media(ctx->player);
 	int ret = -1;
+	cmds_dbg("cmds: remove");
 
 	if (media->ops->remove == NULL)
 	{
@@ -258,6 +259,7 @@ static int method_append(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 	media_t *media = player_media(ctx->player);
+	cmds_dbg("cmds: append");
 
 	if (media->ops->insert == NULL)
 	{
@@ -274,6 +276,7 @@ static int method_append(json_t *json_params, json_t **result, void *userdata)
 			if (json_is_string(value))
 			{
 				const char *str = json_string_value(value);
+				dbg("cmds: append %s", str);
 				ret = media->ops->insert(media->ctx, str, "", NULL);
 			}
 			else if (json_is_object(value))
@@ -317,18 +320,12 @@ static int method_play(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 	media_t *media = player_media(ctx->player);
+	cmds_dbg("cmds: play");
 
-	if (media->ops->count(media->ctx) > 0)
-	{
-		player_state(ctx->player, STATE_PLAY);
-	}
-	else
-	{
-		player_state(ctx->player, STATE_STOP);
-		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{ss,ss}", "state", str_stop, "message", "no item found"));
-		return -1;
-	}
-	switch (player_state(ctx->player, STATE_UNKNOWN))
+	player_state(ctx->player, STATE_PLAY);
+
+	int state = player_state(ctx->player, STATE_UNKNOWN);
+	switch (state)
 	{
 	case STATE_STOP:
 		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{ss}", "state", str_stop));
@@ -350,6 +347,7 @@ static int method_play(json_t *json_params, json_t **result, void *userdata)
 static int method_pause(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
+	cmds_dbg("cmds: pause");
 
 	switch (player_state(ctx->player, STATE_PAUSE))
 	{
@@ -372,6 +370,8 @@ static int method_pause(json_t *json_params, json_t **result, void *userdata)
 static int method_stop(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
+	cmds_dbg("cmds: stop");
+
 	switch (player_state(ctx->player, STATE_STOP))
 	{
 	case STATE_STOP:
@@ -393,6 +393,8 @@ static int method_next(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 	media_t *media = player_media(ctx->player);
+	cmds_dbg("cmds: next");
+
 	player_next(ctx->player);
 	const char *state = NULL;
 	switch (player_state(ctx->player, STATE_UNKNOWN))
@@ -474,6 +476,8 @@ static int method_change(json_t *json_params, json_t **result, void *userdata)
 		.result = json_object(),
 	};
 	json_t *value;
+	cmds_dbg("cmds: change");
+
 	if (json_is_object(json_params))
 	{
 		int now = 1;
@@ -497,8 +501,15 @@ static int method_change(json_t *json_params, json_t **result, void *userdata)
 		value = json_object_get(json_params, "media");
 		if (json_is_string(value))
 		{
-			const char *media = json_string_value(value);
-			if (player_change(ctx->player, media, random, loop, now) == 0)
+			const char *str = json_string_value(value);
+			media_t *media = player_media(ctx->player);
+			if (media->ops->insert != NULL &&
+				media->ops->insert(media->ctx, str, "", NULL) > -1)
+			{
+				player_state(ctx->player, STATE_STOP);
+				*result = json_pack("{s:s,s:s}", "media", "changed", "state", str_stop);
+			}
+			else if (player_change(ctx->player, str, random, loop, now) == 0)
 			{
 				*result = json_pack("{s:s,s:s}", "media", "changed", "state", str_stop);
 			}

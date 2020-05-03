@@ -30,6 +30,7 @@
 #include <sys/un.h>
 #include <errno.h>
 #include <unistd.h>
+#include <sys/ioctl.h>
 
 #include <pthread.h>
 #include <jansson.h>
@@ -51,7 +52,7 @@ struct cmds_ctx_s
 	{
 		char data[DATA_LENGTH];
 		int length;
-	} buff_snd;
+	} buff_snd, buff_recv;
 };
 #define CMDS_CTX
 #include "cmds.h"
@@ -945,6 +946,43 @@ static int _cmds_send(const char *buff, size_t size, void *userctx)
 }
 #endif
 
+static size_t _cmds_recv(void *buff, size_t size, void *userctx)
+{
+	thread_info_t *info = (thread_info_t *)userctx;
+	cmds_ctx_t *ctx = info->userctx;
+	int sock = info->sock;
+	size_t ret = -1;
+
+	if (ctx->buff_recv.length > 0)
+	{
+		memcpy(buff, ctx->buff_recv.data, ctx->buff_recv.length);
+		ret = ctx->buff_recv.length;
+		ctx->buff_recv.length = 0;
+	}
+	else
+	{
+		int length;
+		if (ioctl(sock, FIONREAD, &length) && length == 0)
+			return 0;
+
+		length = recv(sock,
+			buff, size, MSG_DONTWAIT | MSG_NOSIGNAL);
+
+		if (length > 0)
+		{
+			ret = strlen(buff) + 1;
+		}
+		else
+			err("cmds: json recv error %s", strerror(errno));
+		if (length > 0 && length > ret)
+		{
+			ctx->buff_recv.length = length - ret;
+			memcpy(ctx->buff_recv.data, buff + ret, ctx->buff_recv.length);
+		}
+	}
+	return ret;
+}
+
 static void jsonrpc_onchange(void * userctx, player_ctx_t *player, state_t state)
 {
 	thread_info_t *info = (thread_info_t *)userctx;
@@ -1040,25 +1078,25 @@ static int jsonrpc_command(thread_info_t *info)
 		ret = select(maxfd + 1, &rfds, NULL, NULL, &timeout);
 		if (ret > 0 && FD_ISSET(sock, &rfds))
 		{
-			char buffer[1500];
-			ret = recv(sock, buffer, 1500, MSG_NOSIGNAL);
-			if (ret > 0)
+			json_t *request = NULL;
+			do
 			{
-				buffer[ret] = '\0';
-				cmds_dbg("recv %d: %s", ret, buffer);
+				request = NULL;
 				json_error_t error;
-				//int flags = JSON_DISABLE_EOF_CHECK;
-				int flags = 0;
-				json_t *request = json_loads(buffer, flags, &error);
+				int flags = JSON_DISABLE_EOF_CHECK;
+				//int flags = 0;
+				request = json_load_callback(_cmds_recv, info, flags, &error);
 				if (request != NULL)
 				{
+					dbg("cmds: new request");
 					pthread_mutex_lock(&ctx->mutex);
 					_jsonrpc_sendresponse(info, request);
 					pthread_mutex_unlock(&ctx->mutex);
 				}
 				else
 					err("cmd: json error %s", error.text);
-			}
+			} while (request != NULL);
+
 			if (ret == 0)
 			{
 				warn("json socket closed");

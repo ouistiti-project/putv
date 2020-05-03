@@ -190,7 +190,10 @@ enum mad_flow output(void *data,
 			 * the pipe is broken. close the src and the decoder
 			 */
 			if (ctx->outbuffer == NULL)
+			{
+				ctx->outbufferlen = 0;
 				return MAD_FLOW_STOP;
+			}
 		}
 
 		ctx->outbufferlen +=

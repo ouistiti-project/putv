@@ -340,16 +340,6 @@ static int media_count(media_ctx_t *ctx)
 	return ctx->count;
 }
 
-static int media_insert(media_ctx_t *ctx, const char *path, const char *info, const char *mime)
-{
-	return -1;
-}
-
-static int media_remove(media_ctx_t *ctx, int id, const char *path)
-{
-	return -1;
-}
-
 static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *arg)
 {
 	int ret;
@@ -593,8 +583,8 @@ const media_ops_t *media_dir = &(const media_ops_t)
 	.play = media_play,
 	.list = media_list,
 	.find = media_find,
-	.remove = media_remove,
-	.insert = media_insert,
+	.remove = NULL,
+	.insert = NULL,
 	.count = media_count,
 	.end = media_end,
 	.random = media_random,

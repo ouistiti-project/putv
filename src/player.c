@@ -78,6 +78,7 @@ struct player_ctx_s
 	player_event_t *events;
 	player_decoder_t *decoder;
 	pthread_cond_t cond;
+	pthread_cond_t cond_int;
 	pthread_mutex_t mutex;
 	jitter_t *audioout;
 };
@@ -87,6 +88,7 @@ player_ctx_t *player_init(const char *filtername)
 	player_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	pthread_mutex_init(&ctx->mutex, NULL);
 	pthread_cond_init(&ctx->cond, NULL);
+	pthread_cond_init(&ctx->cond_int, NULL);
 	ctx->state = STATE_STOP;
 	ctx->filtername = filtername;
 	return ctx;
@@ -142,6 +144,7 @@ void player_destroy(player_ctx_t *ctx)
 	player_state(ctx, STATE_ERROR);
 	pthread_yield();
 	pthread_cond_destroy(&ctx->cond);
+	pthread_cond_destroy(&ctx->cond_int);
 	pthread_mutex_destroy(&ctx->mutex);
 	free(ctx);
 }
@@ -191,7 +194,7 @@ state_t player_state(player_ctx_t *ctx, state_t state)
 			return ctx->state;
 		ctx->state = state;
 		pthread_mutex_unlock(&ctx->mutex);
-		pthread_cond_broadcast(&ctx->cond);
+		pthread_cond_broadcast(&ctx->cond_int);
 	}
 	state = ctx->state;
 	return state;
@@ -329,7 +332,7 @@ int player_run(player_ctx_t *ctx)
 		pthread_mutex_lock(&ctx->mutex);
 		while (last_state == ctx->state)
 		{
-			pthread_cond_wait(&ctx->cond, &ctx->mutex);
+			pthread_cond_wait(&ctx->cond_int, &ctx->mutex);
 		}
 		last_state = ctx->state;
 

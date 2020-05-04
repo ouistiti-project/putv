@@ -136,7 +136,7 @@ jitter_t *jitter_scattergather_init(const char *name, unsigned int count, size_t
 	jitter_t *jitter = calloc(1, sizeof(*jitter));
 	jitter->ctx = ctx;
 	jitter->ops = jitter_scattergather;
-	dbg("jitter %s create scattergather (%d*%ld)", name, count, size);
+	dbg("jitter %s create scattergather (%d*%ld) %p", name, count, size, private->sg);
 	return jitter;
 }
 

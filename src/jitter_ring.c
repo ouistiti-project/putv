@@ -315,7 +315,7 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter, void **beat)
 	 */
 	while (private->state == JITTER_FILLING && private->in != NULL && jitter->produce == NULL)
 	{
-		dbg("jitter %s peer block on %p (%d/%ld)", jitter->name, private->out, private->level, jitter->size);
+		dbg("jitter %s peer block on %p (%d/%ld * %d)", jitter->name, private->out, private->level, jitter->size, jitter->count);
 		jitter_dbg("jitter %s peer block on %p %p %d", jitter->name, private->in, private->out + jitter->size, private->in <= private->out + jitter->size);
 		pthread_cond_wait(&private->condpeer, &private->mutex);
 	}

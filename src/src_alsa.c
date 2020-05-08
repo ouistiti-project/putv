@@ -318,7 +318,6 @@ static void *src_thread(void *arg)
 		free(buff2);
 	}
 	dbg("src: thread end");
-	player_next(ctx->player);
 	return NULL;
 }
 

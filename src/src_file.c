@@ -83,15 +83,9 @@ static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 	{
 		warn("src: timeout");
 	}
-	src_dbg("src: read %d %d", ret, ctx->fd);
+	src_dbg("src: read %d %d", ctx->fd, ret);
 	if (ret < 0)
 		err("src file %d error: %s", ctx->fd, strerror(errno));
-	if (ret == 0)
-	{
-		ctx->out->ops->flush(ctx->out->ctx);
-		dbg("src: end of file");
-		player_next(ctx->player);
-	}
 	return ret;
 }
 

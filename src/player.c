@@ -333,13 +333,18 @@ int player_run(player_ctx_t *ctx)
 		while (last_state == ctx->state)
 		{
 			pthread_cond_wait(&ctx->cond_int, &ctx->mutex);
+			if (last_state == STATE_PAUSE && ctx->state == STATE_PLAY)
+			{
+				last_state = ctx->state;
+				pthread_cond_broadcast(&ctx->cond);
+			}
 		}
 		last_state = ctx->state;
 
 		switch (ctx->state)
 		{
 			case STATE_STOP:
-				dbg("player: stop");
+				dbg("player: stoping");
 				ctx->audioout->ops->flush(ctx->audioout->ctx);
 				if (ctx->decoder != NULL)
 				{
@@ -354,8 +359,9 @@ int player_run(player_ctx_t *ctx)
 					player.dec = NULL;
 				}
 
-				ctx->audioout->ops->reset(ctx->audioout->ctx);
 				ctx->media->ops->end(ctx->media->ctx);
+				ctx->audioout->ops->reset(ctx->audioout->ctx);
+				dbg("player: stop");
 			break;
 			case STATE_CHANGE:
 				if (ctx->decoder != NULL)

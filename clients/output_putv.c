@@ -54,12 +54,19 @@
 #define dbg(...)
 #endif
 
-#ifndef SOCKETNAME
-#define SOCKETNAME   PACKAGE_NAME
+#define QUOTE(str) #str
+#define EXPAND_AND_QUOTE(str) QUOTE(str)
+
+#ifndef PUTV
+#define PUTV   PACKAGE_NAME
 #endif
-#ifndef ROOTDIR
-#define ROOTDIR "/var/run/ouistiti"
+#ifndef WEBSOCKETDIR
+#define WEBSOCKETDIR /var/run/websocket
 #endif
+
+#define SOCKETNAME EXPAND_AND_QUOTE(PUTV)
+#define ROOTDIR EXPAND_AND_QUOTE(WEBSOCKETDIR)
+
 
 struct SongMetaData {
 	const char *title;
@@ -185,7 +192,7 @@ static int gmrenderer_checkvolume(void *data, json_t *params)
 
 static gmrenderer_ctx_t *gmrenderer_ctx = &(gmrenderer_ctx_t)
 {
- 	.root = ROOTDIR,
+	.root = ROOTDIR,
 	.name = SOCKETNAME,
 };
 
@@ -201,6 +208,7 @@ static void *_check_socket(void *arg)
 	char *socketpath;
 	socketpath = malloc(strlen(ctx->root) + 1 + strlen(ctx->name) + 1);
 	sprintf(socketpath, "%s/%s", ctx->root, ctx->name);
+
 	if (!access(socketpath, R_OK | W_OK))
 	{
 		return NULL;
@@ -249,7 +257,12 @@ static void *_check_socket(void *arg)
 static int
 output_putv_init(void)
 {
-
+	const char *websocketdir = getenv("WEBSOCKETDIR");
+	if (websocketdir != NULL)
+		gmrenderer_ctx->root = websocketdir;
+	const char *putv = getenv("PUTV");
+	if (putv != NULL)
+		gmrenderer_ctx->name = putv;
 #ifdef USE_INOTIFY
 	inotifyfd = inotify_init();
 	int dirfd = inotify_add_watch(inotifyfd, gmrenderer_ctx->root,

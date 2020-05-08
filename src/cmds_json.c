@@ -984,7 +984,9 @@ static size_t _cmds_recv(void *buff, size_t size, void *userctx)
 			ret = strlen(buff) + 1;
 		}
 		else
+		{
 			err("cmds: json recv error %s", strerror(errno));
+		}
 		if (length > 0 && length > ret)
 		{
 			ctx->buff_recv.length = length - ret;
@@ -1105,15 +1107,12 @@ static int jsonrpc_command(thread_info_t *info)
 					pthread_mutex_unlock(&ctx->mutex);
 				}
 				else
-					err("cmd: json error %s", error.text);
+				{
+					warn("json socket closed");
+					unixserver_remove(info);
+					sock = 0;
+				}
 			} while (request != NULL);
-
-			if (ret == 0)
-			{
-				warn("json socket closed");
-				unixserver_remove(info);
-				sock = 0;
-			}
 		}
 		if (ret < 0)
 		{

@@ -63,6 +63,8 @@ struct media_url_s
 #define dbg(...)
 #endif
 
+#define media_dbg(...)
+
 static int media_count(media_ctx_t *ctx);
 static int media_insert(media_ctx_t *ctx, const char *path, const char *info, const char *mime);
 static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data);
@@ -74,7 +76,14 @@ static option_state_t media_random(media_ctx_t *ctx, option_state_t enable);
 
 static int media_count(media_ctx_t *ctx)
 {
-	return 1;
+	media_url_t *media = ctx->media;
+	int i = 0;
+	while (media != NULL)
+	{
+		media = media->next;
+		i++;
+	}
+	return i;
 }
 
 #ifdef MEDIA_FILE_LIST
@@ -166,7 +175,6 @@ static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data)
 		return -1;
 	return 1;
 }
-
 #endif
 
 static int media_next(media_ctx_t *ctx)
@@ -183,7 +191,7 @@ static int media_next(media_ctx_t *ctx)
 		if ((ctx->current == NULL) &&
 			(ctx->options & OPTION_LOOP))
 		{
-			dbg("media loop");
+			media_dbg("media loop");
 			ctx->current = ctx->media;
 		}
 	}
@@ -244,6 +252,7 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url,...)
 	media_ctx_t *ctx = NULL;
 	if (url)
 	{
+		dbg("media: %s", url);
 		ctx = calloc(1, sizeof(*ctx));
 #ifdef MEDIA_FILE_LIST
 		media_insert(ctx, url, NULL, utils_getmime(url));

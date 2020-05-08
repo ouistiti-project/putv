@@ -84,7 +84,7 @@ struct gmrenderer_ctx_s
 	char *socketpath;
 	int volume;
 	int current_id;
-	client_data_t *client;
+	client_data_t client;
 	json_t *media;
 	output_transition_cb_t transition_cb;
 	output_update_meta_cb_t meta_cb;
@@ -140,7 +140,7 @@ static int gmrenderer_checkstate(void *data, json_t *params)
 				{
 					if (ctx->media != NULL)
 					{
-						media_change(ctx->client, NULL, ctx, ctx->media);
+						media_change(&ctx->client, NULL, ctx, ctx->media);
 						json_decref(ctx->media);
 						ctx->media = NULL;
 						ctx->transition_cb(PLAY_STARTED_NEXT_STREAM);
@@ -273,24 +273,22 @@ output_putv_init(void)
 	len += strlen(gmrenderer_ctx->name) + 1;
 	gmrenderer_ctx->socketpath = malloc(len);
 	sprintf(gmrenderer_ctx->socketpath, "%s/%s", gmrenderer_ctx->root, gmrenderer_ctx->name);
+	dbg("socket path %s", gmrenderer_ctx->socketpath);
 	if (access(gmrenderer_ctx->socketpath, R_OK | W_OK))
 		return -1;
 #endif
 	gmrenderer_ctx->current_id = -1;
+	client_unix(gmrenderer_ctx->socketpath, &gmrenderer_ctx->client);
+	client_async(&gmrenderer_ctx->client, 1);
+
+	client_eventlistener(&gmrenderer_ctx->client, "onchange", gmrenderer_checkstate, gmrenderer_ctx);
 	return 0;
 }
 
 static int
 output_putv_loop()
 {
-	client_data_t data = {0};
-	client_unix(gmrenderer_ctx->socketpath, &data);
-	client_async(&data, 1);
-
-	client_eventlistener(&data, "onchange", gmrenderer_checkstate, gmrenderer_ctx);
-	gmrenderer_ctx->client = &data;
-
-	client_loop(&data);
+	client_loop(&gmrenderer_ctx->client);
 
 	free(gmrenderer_ctx->socketpath);
 	return 0;
@@ -302,7 +300,8 @@ output_putv_set_uri(const char *uri,
 {
 	json_t *media = json_object();
 	json_object_set_new(media, "media", json_string(uri));
-	media_change(gmrenderer_ctx->client, NULL, gmrenderer_ctx, media);
+	dbg("UPnP: set uri %s", uri);
+	media_change(&gmrenderer_ctx->client, NULL, gmrenderer_ctx, media);
 	json_decref(media);
 }
 
@@ -312,6 +311,7 @@ output_putv_set_next_uri(const char *uri)
 {
 	json_t *media = json_object();
 	json_object_set_new(media, "media", json_string(uri));
+	dbg("UPnP: set next uri %s", uri);
 	if (gmrenderer_ctx->media)
 		json_decref(gmrenderer_ctx->media);
 	gmrenderer_ctx->media = media;
@@ -322,14 +322,16 @@ output_putv_play(output_transition_cb_t callback)
 {
 	gmrenderer_ctx->transition_cb = callback;
 	gmrenderer_ctx->current_id = -1;
-	client_play(gmrenderer_ctx->client, gmrenderer_checkstate, gmrenderer_ctx);
+	dbg("UPnP: play");
+	client_play(&gmrenderer_ctx->client, gmrenderer_checkstate, gmrenderer_ctx);
 	return 0;
 }
 
 static int
 output_putv_stop(void)
 {
-	client_stop(gmrenderer_ctx->client, gmrenderer_checkstate, gmrenderer_ctx);
+	dbg("UPnP: stop");
+	client_stop(&gmrenderer_ctx->client, gmrenderer_checkstate, gmrenderer_ctx);
 	gmrenderer_ctx->current_id = -1;
 	return 0;
 }
@@ -337,14 +339,16 @@ output_putv_stop(void)
 static int
 output_putv_pause(void)
 {
-	client_pause(gmrenderer_ctx->client, gmrenderer_checkstate, gmrenderer_ctx);
+	dbg("UPnP: pause");
+	client_pause(&gmrenderer_ctx->client, gmrenderer_checkstate, gmrenderer_ctx);
 	return 0;
 }
 
 static int
 output_putv_seek(int64_t position_nanos)
 {
-	client_next(gmrenderer_ctx->client, gmrenderer_checkstate, gmrenderer_ctx);
+	dbg("UPnP: seek");
+	client_next(&gmrenderer_ctx->client, gmrenderer_checkstate, gmrenderer_ctx);
 	return 0;
 }
 
@@ -358,13 +362,15 @@ output_putv_get_position(int64_t *track_duration,
 static int
 output_putv_getvolume(float *value)
 {
-	client_volume(gmrenderer_ctx->client, gmrenderer_checkvolume, gmrenderer_ctx, json_null());
+	dbg("UPnP: get volume");
+	client_volume(&gmrenderer_ctx->client, gmrenderer_checkvolume, gmrenderer_ctx, json_null());
 	return gmrenderer_ctx->volume;
 }
 static int
 output_putv_setvolume(float value)
 {
-	client_volume(gmrenderer_ctx->client, NULL, gmrenderer_ctx, json_integer((int) value));
+	dbg("UPnP: set volume");
+	client_volume(&gmrenderer_ctx->client, NULL, gmrenderer_ctx, json_integer((int) value));
 	return 0;
 }
 static int
@@ -375,7 +381,7 @@ output_putv_getmute(int *value)
 static int
 output_putv_setmute(int value)
 {
-	client_volume(gmrenderer_ctx->client, NULL, gmrenderer_ctx, json_integer(0));
+	client_volume(&gmrenderer_ctx->client, NULL, gmrenderer_ctx, json_integer(0));
 	return 0;
 }
 

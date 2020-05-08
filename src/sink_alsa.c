@@ -472,6 +472,10 @@ static void *sink_thread(void *arg)
 		{
 			snd_pcm_drain(ctx->playback_handle);
 			player_waiton(ctx->player, STATE_STOP);
+			/**
+			 * alsa plays noise. but after to restart, the data are not available.
+			 * alsa must wait then before to restart really
+			 */
 			while (ctx->in->ops->empty(ctx->in->ctx))
 			{
 				sched_yield();

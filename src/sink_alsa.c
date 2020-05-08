@@ -472,6 +472,11 @@ static void *sink_thread(void *arg)
 		{
 			snd_pcm_drain(ctx->playback_handle);
 			player_waiton(ctx->player, STATE_STOP);
+			while (ctx->in->ops->empty(ctx->in->ctx))
+			{
+				sched_yield();
+				usleep(LATENCE_MS * 1000);
+			}
 			dbg("sink: continue %d", player_state(ctx->player, STATE_UNKNOWN));
 			snd_pcm_prepare(ctx->playback_handle);
 		}

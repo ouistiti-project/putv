@@ -343,6 +343,11 @@ static void *src_thread(void *arg)
 			}
 		}
 		unsigned char *buff = ctx->out->ops->pull(ctx->out->ctx);
+		if (buff == NULL)
+		{
+			ctx->state = STATE_ERROR;
+			break;
+		}
 		ret = src_read(ctx, buff, ctx->out->ctx->size);
 		if (ret > 0)
 		{

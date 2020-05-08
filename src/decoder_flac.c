@@ -141,10 +141,10 @@ output(const FLAC__StreamDecoder *decoder,
 	decoder_ctx_t *ctx = (decoder_ctx_t *)data;
 	filter_audio_t audio;
 
-        if (player_waiton(ctx->player, STATE_PAUSE) < 0)
-        {
-                return FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
-        }
+	if (player_waiton(ctx->player, STATE_PAUSE) < 0)
+	{
+		return FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
+	}
 	/* pcm->samplerate contains the sampling frequency */
 
 	audio.samplerate = FLAC__stream_decoder_get_sample_rate(decoder);
@@ -180,7 +180,13 @@ output(const FLAC__StreamDecoder *decoder,
 			 * the pipe is broken. close the src and the decoder
 			 */
 			if (ctx->outbuffer == NULL)
-		                return FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
+			{
+				/**
+				 * flush the src jitter to break the stream
+				 */
+				ctx->in->ops->flush(ctx->in->ctx);
+				return FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
+			}
 		}
 
 		int len =
@@ -227,7 +233,9 @@ static void *decoder_thread(void *arg)
 	{
 		ctx->out->ops->push(ctx->out->ctx, ctx->outbufferlen, NULL);
 	}
-//	ctx->out->ops->flush(ctx->out->ctx);
+
+	dbg("decoder: stop running");
+	player_state(ctx->player, STATE_CHANGE);
 
 	return (void *)(intptr_t)result;
 }

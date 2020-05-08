@@ -192,6 +192,10 @@ enum mad_flow output(void *data,
 			if (ctx->outbuffer == NULL)
 			{
 				ctx->outbufferlen = 0;
+				/**
+				 * flush the src jitter to break the stream
+				 */
+				ctx->in->ops->flush(ctx->in->ctx);
 				return MAD_FLOW_STOP;
 			}
 		}
@@ -362,7 +366,6 @@ static void *mad_thread(void *arg)
 	}
 	dbg("decoder: end %lu.%09lu", now.tv_sec, now.tv_nsec);
 #endif
-	dbg("decoder: stop running");
 	/**
 	 * push the last buffer to the encoder, otherwise the next
 	 * decoder will begins with a pull buffer
@@ -371,6 +374,8 @@ static void *mad_thread(void *arg)
 	{
 		ctx->out->ops->push(ctx->out->ctx, ctx->outbufferlen, NULL);
 	}
+	dbg("decoder: stop running");
+	player_state(ctx->player, STATE_CHANGE);
 
 	return (void *)(intptr_t)result;
 }

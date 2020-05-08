@@ -195,17 +195,18 @@ static unsigned char *jitter_pull(jitter_ctx_t *jitter)
 	pthread_mutex_lock(&private->mutex);
 	if (private->state == JITTER_STOP)
 		_jitter_init(jitter);
-	else if (private->state == JITTER_FLUSH)
-	{
-		pthread_mutex_unlock(&private->mutex);
-		return NULL;
-	}
 	while (private->in->state != SCATTER_FREE)
 	{
+		if (private->state == JITTER_FLUSH || private->state == JITTER_STOP)
+		{
+			pthread_mutex_unlock(&private->mutex);
+			return NULL;
+		}
 		/**
 		 * The scatter gather is full and we has to wait that the consumer
 		 * free some buffer.
 		 */
+
 		jitter_dbg("jitter %s pull block on %p %d", jitter->name, private->in, private->state);
 		pthread_cond_wait(&private->condpush, &private->mutex);
 	}
@@ -479,10 +480,13 @@ static void jitter_pop(jitter_ctx_t *jitter, size_t len)
 static void jitter_flush(jitter_ctx_t *jitter)
 {
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
+	if (private->state == JITTER_FLUSH)
+		return;
 	jitter_dbg("jitter %s flush on %p %d %d", jitter->name, private->in, private->in->state, private->out->state);
-	if (private->in->state != SCATTER_FREE)
-		private->in->state = SCATTER_FREE;
+	pthread_mutex_lock(&private->mutex);
 	private->state = JITTER_FLUSH;
+	pthread_mutex_unlock(&private->mutex);
+
 	pthread_cond_broadcast(&private->condpush);
 	pthread_cond_broadcast(&private->condpeer);
 }
@@ -502,21 +506,12 @@ static size_t jitter_length(jitter_ctx_t *jitter)
 static void jitter_reset(jitter_ctx_t *jitter)
 {
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
-	jitter_dbg("jitter %s reset", jitter->name);
 
-	if (private->out->state == SCATTER_PULL)
-	{
-		pthread_mutex_lock(&private->mutex);
-		private->out->state = SCATTER_READY;
-		pthread_mutex_unlock(&private->mutex);
-		pthread_cond_broadcast(&private->condpeer);
-		pthread_yield();
-		pthread_mutex_lock(&private->mutex);
-		while (private->out->state != SCATTER_FREE)
-			pthread_cond_wait(&private->condpush, &private->mutex);
-		pthread_mutex_unlock(&private->mutex);
-	}
+	jitter_dbg("jitter %s reset", jitter->name);
+	jitter_flush(jitter);
+
 	pthread_mutex_lock(&private->mutex);
+	private->state = JITTER_STOP;
 	int i = 0;
 	for (i = 0; i < jitter->count; i++)
 	{
@@ -525,6 +520,7 @@ static void jitter_reset(jitter_ctx_t *jitter)
 	}
 	pthread_mutex_unlock(&private->mutex);
 
+	pthread_cond_broadcast(&private->condpeer);
 	pthread_cond_broadcast(&private->condpush);
 
 	pthread_mutex_lock(&private->mutex);

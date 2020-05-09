@@ -136,13 +136,13 @@ static int gmrenderer_checkstate(void *data, json_t *params)
 			if (id != ctx->current_id)
 			{
 				ctx->current_id = id;
-				if (ctx->transition_cb)
+				if (ctx->media != NULL)
 				{
-					if (ctx->media != NULL)
+					media_change(&ctx->client, NULL, ctx, ctx->media);
+					json_decref(ctx->media);
+					ctx->media = NULL;
+					if (ctx->transition_cb)
 					{
-						media_change(&ctx->client, NULL, ctx, ctx->media);
-						json_decref(ctx->media);
-						ctx->media = NULL;
 						ctx->transition_cb(PLAY_STARTED_NEXT_STREAM);
 					}
 				}
@@ -175,7 +175,7 @@ static int gmrenderer_checkstate(void *data, json_t *params)
 
 static int gmrenderer_checkvolume(void *data, json_t *params)
 {
-	dbg("putv check params %s", json_dumps(params, 0));
+	dbg("putv check volume %s", json_dumps(params, 0));
 	gmrenderer_ctx_t *ctx = (gmrenderer_ctx_t *)data;
 	if (json_is_object(params))
 	{
@@ -185,7 +185,7 @@ static int gmrenderer_checkvolume(void *data, json_t *params)
 			ctx->volume =  json_integer_value(jlevel);
 		}
 	}
-	dbg("putv check end");
+	dbg("putv volume end");
 
 	return 0;
 }

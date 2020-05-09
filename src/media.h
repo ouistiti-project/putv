@@ -66,6 +66,10 @@ struct media_ops_s
 	 */
 	int (*insert)(media_ctx_t *ctx, const char *path, const char *info, const char *mime);
 	/**
+	 * optional
+	 */
+	int (*append)(media_ctx_t *ctx, const char *path, const char *info, const char *mime);
+	/**
 	 * mandatory
 	 */
 	int (*find)(media_ctx_t *ctx, int id,media_parse_t cb, void *data);

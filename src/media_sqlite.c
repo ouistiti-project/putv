@@ -1508,6 +1508,7 @@ const media_ops_t *media_sqlite = &(const media_ops_t)
 	.list = media_list,
 	.find = media_find,
 	.insert = media_insert,
+	.append = media_insert,
 	.remove = media_remove,
 	.count = media_count,
 	.end = media_end,

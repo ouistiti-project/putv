@@ -259,9 +259,14 @@ static int method_append(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 	media_t *media = player_media(ctx->player);
+	int (*append_cb)(media_ctx_t *ctx, const char *path, const char *info, const char *mime);
 	cmds_dbg("cmds: append");
 
-	if (media->ops->insert == NULL)
+	if (media->ops->append != NULL)
+		append_cb = media->ops->append;
+	else if (media->ops->insert != NULL)
+		append_cb = media->ops->insert;
+	else
 	{
 		*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
 		return -1;
@@ -277,7 +282,7 @@ static int method_append(json_t *json_params, json_t **result, void *userdata)
 			{
 				const char *str = json_string_value(value);
 				dbg("cmds: append %s", str);
-				ret = media->ops->insert(media->ctx, str, "", NULL);
+				ret = append_cb(media->ctx, str, "", NULL);
 			}
 			else if (json_is_object(value))
 			{
@@ -286,14 +291,14 @@ static int method_append(json_t *json_params, json_t **result, void *userdata)
 				json_t * mime = json_object_get(value, "mime");
 				if (json_is_string(info))
 				{
-					ret = media->ops->insert(media->ctx,
+					ret = append_cb(media->ctx,
 							json_string_value(path),
 							json_string_value(info),
 							json_string_value(mime));
 				}
 				else if (json_is_object(info))
 				{
-					ret = media->ops->insert(media->ctx,
+					ret = append_cb(media->ctx,
 							json_string_value(path),
 							json_dumps(info, 0),
 							json_string_value(mime));
@@ -448,6 +453,7 @@ static int _display(void *arg, int id, const char *url, const char *info, const 
 
 	switch (state)
 	{
+	case STATE_CHANGE:
 	case STATE_PLAY:
 		json_state = json_string(str_play);
 	break;
@@ -973,9 +979,6 @@ static size_t _cmds_recv(void *buff, size_t size, void *userctx)
 	else
 	{
 		int length;
-		if (ioctl(sock, FIONREAD, &length) && length == 0)
-			return 0;
-
 		length = recv(sock,
 			buff, size, MSG_DONTWAIT | MSG_NOSIGNAL);
 
@@ -1076,6 +1079,7 @@ static int jsonrpc_command(thread_info_t *info)
 	warn("json socket connection");
 	int onchangeid = player_onchange(ctx->player, jsonrpc_onchange, (void *)info, "jsonrpc");
 	jsonrpc_onchange(info, ctx->player, player_state(ctx->player, STATE_UNKNOWN));
+	errno = 0;
 
 	while (sock > 0)
 	{

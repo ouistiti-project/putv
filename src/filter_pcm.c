@@ -59,10 +59,14 @@ struct filter_ctx_s
 #define dbg(...)
 #endif
 
+static filter_ctx_t *filter_init(sampled_t sampled, jitter_format_t format,...);
+static int filter_set(filter_ctx_t *ctx, sampled_t sampled, jitter_format_t format, unsigned int samplerate);
+static void filter_destroy(filter_ctx_t *ctx);
+
 # define FRACBITS		28
 # define ONE		((sample_t)(0x10000000L))
 
-filter_ctx_t *filter_init(sampled_t sampled, jitter_format_t format,...)
+static filter_ctx_t *filter_init(sampled_t sampled, jitter_format_t format,...)
 {
 	filter_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->sampled = sampled;
@@ -94,7 +98,7 @@ static filter_ctx_t *filter_init_right(sampled_t sampled, jitter_format_t format
 }
 #endif
 
-int filter_set(filter_ctx_t *ctx, sampled_t sampled, jitter_format_t format, unsigned int samplerate)
+static int filter_set(filter_ctx_t *ctx, sampled_t sampled, jitter_format_t format, unsigned int samplerate)
 {
 	if (sampled != NULL)
 		ctx->sampled = sampled;
@@ -137,7 +141,7 @@ int filter_set(filter_ctx_t *ctx, sampled_t sampled, jitter_format_t format, uns
 	break;
 	default:
 		err("decoder out format not supported %d", format);
-		return NULL;
+		return -1;
 	}
 	ctx->samplesize = samplesize;
 	ctx->shift = shift;
@@ -146,7 +150,7 @@ int filter_set(filter_ctx_t *ctx, sampled_t sampled, jitter_format_t format, uns
 	return 0;
 }
 
-void filter_destroy(filter_ctx_t *ctx)
+static void filter_destroy(filter_ctx_t *ctx)
 {
 	free(ctx);
 }

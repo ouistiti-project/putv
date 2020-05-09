@@ -1095,6 +1095,15 @@ static int jsonrpc_command(thread_info_t *info)
 		ret = select(maxfd + 1, &rfds, NULL, NULL, &timeout);
 		if (ret > 0 && FD_ISSET(sock, &rfds))
 		{
+			char buf[1];
+			if (recv(sock, buf, 1, MSG_PEEK | MSG_NOSIGNAL) == 0)
+			{
+				warn("json socket closed %d", errno);
+				unixserver_remove(info);
+				sock = 0;
+				continue;
+			}
+
 			json_t *request = NULL;
 			do
 			{
@@ -1110,21 +1119,13 @@ static int jsonrpc_command(thread_info_t *info)
 					_jsonrpc_sendresponse(info, request);
 					pthread_mutex_unlock(&ctx->mutex);
 				}
-				else
+				else if (errno != EAGAIN)
 				{
-					warn("json socket closed");
+					warn("json socket closed %d", errno);
 					unixserver_remove(info);
 					sock = 0;
 				}
 			} while (request != NULL);
-		}
-		if (ret < 0)
-		{
-			if (errno != EAGAIN)
-			{
-				unixserver_remove(info);
-				sock = 0;
-			}
 		}
 	}
 	player_removeevent(ctx->player, onchangeid);

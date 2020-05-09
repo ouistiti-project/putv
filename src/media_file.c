@@ -41,6 +41,7 @@ struct media_ctx_s
 	media_url_t *media;
 	media_url_t *current;
 	unsigned int options;
+	unsigned int lastid;
 };
 
 struct media_url_s
@@ -48,7 +49,7 @@ struct media_url_s
 	char *url;
 	char *info;
 	const char *mime;
-	int id;
+	unsigned int id;
 	media_url_t *next;
 };
 
@@ -90,35 +91,29 @@ static int media_count(media_ctx_t *ctx)
 static media_url_t *_media_find(media_ctx_t *ctx, int id)
 {
 	media_url_t *media = ctx->media;
-	int i = 0;
-	while (i < id && media != NULL)
+	while (media != NULL)
 	{
+		if (media->id == id)
+			break;
 		media = media->next;
-		i++;
 	}
 	return media;
 }
 
 static int media_insert(media_ctx_t *ctx, const char *path, const char *info, const char *mime)
 {
-	int id = 0;
+	int id = ctx->lastid;;
 	media_url_t *media = ctx->media;
-	if (media == NULL)
-	{
-		media = calloc(1, sizeof(*media));
-		ctx->media = media;
-	}
-	else
-	{
-		while (media->next != NULL)
-		{
-			media = media->next;
-			id ++;
-		}
-		media->next = calloc(1, sizeof(*media));
-		media = media->next;
-		id++;
-	}
+
+	media = calloc(1, sizeof(*media));
+
+	if (ctx->media != NULL)
+		media->id = id + 1;
+	ctx->lastid = media->id;
+
+	media->next = ctx->media;
+	ctx->media = media;
+
 	media->url = strdup(path);
 	if (info)
 		media->info = strdup(info);
@@ -126,7 +121,38 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 		media->mime = mime;
 	else
 		media->mime = utils_getmime(path);
-	media->id = id;
+	return id;
+}
+
+static int media_append(media_ctx_t *ctx, const char *path, const char *info, const char *mime)
+{
+	int id = ctx->lastid;;
+	media_url_t *media = ctx->media;
+
+	if (media == NULL)
+	{
+		media = calloc(1, sizeof(*media));
+		ctx->media = media;
+		media->id = 0;
+	}
+	else
+	{
+		while (media->next != NULL) media = media->next;
+
+		media->next = calloc(1, sizeof(*media));
+		media = media->next;
+		media->id = id + 1;
+	}
+
+	ctx->lastid = media->id;
+
+	media->url = strdup(path);
+	if (info)
+		media->info = strdup(info);
+	if (mime)
+		media->mime = mime;
+	else
+		media->mime = utils_getmime(path);
 	return id;
 }
 
@@ -291,6 +317,7 @@ const media_ops_t *media_file = &(const media_ops_t)
 	.list = media_list,
 	.remove = media_remove,
 	.insert = media_insert,
+	.append = media_append,
 #else
 	.list = NULL,
 	.remove = NULL,

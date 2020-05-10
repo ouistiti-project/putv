@@ -72,14 +72,17 @@ struct player_ctx_s
 {
 	const char *filtername;
 	filter_t *filter;
+
 	media_t *media;
 	media_t *nextmedia;
 	state_t state;
 	player_event_t *events;
 	player_decoder_t *decoder;
+
 	pthread_cond_t cond;
 	pthread_cond_t cond_int;
 	pthread_mutex_t mutex;
+
 	jitter_t *audioout;
 };
 
@@ -230,7 +233,7 @@ struct _player_play_s
 	player_decoder_t *dec;
 };
 
-static void _player_new_es(player_ctx_t *ctx, void *eventarg)
+static void _player_new_es(player_ctx_t *ctx, const src_t *src, void *eventarg)
 {
 	event_new_es_t *event_data = (event_new_es_t *)eventarg;
 	if (ctx->decoder == NULL)
@@ -243,16 +246,15 @@ static void _player_new_es(player_ctx_t *ctx, void *eventarg)
 	event_data->decoder = decoder_build(ctx, event_data->mime);
 	if (event_data->decoder == NULL)
 		err("player: decoder not found for %s", event_data->mime);
+	else
+		src->ops->attach(src->ctx, event_data->pid, event_data->decoder);
 }
 
-static void _player_decode_es(player_ctx_t *ctx, void *eventarg)
+static void _player_decode_es(player_ctx_t *ctx, const src_t *src, void *eventarg)
 {
 	event_decode_es_t *event_data = (event_decode_es_t *)eventarg;
-	const src_t *src = player_source(ctx);
-	if (event_data->decoder != NULL && src)
+	if (event_data->decoder != NULL && ctx->noutstreams < MAX_ESTREAM)
 	{
-		src->ops->attach(src->ctx, event_data->pid, event_data->decoder);
-
 		event_data->decoder->ops->run(event_data->decoder->ctx, ctx->audioout);
 	}
 }
@@ -263,10 +265,10 @@ static void _player_listener(void *arg, const src_t *src, event_t event, void *e
 	switch (event)
 	{
 		case SRC_EVENT_NEW_ES:
-			_player_new_es(ctx, eventarg);
+			_player_new_es(ctx, src, eventarg);
 		break;
 		case SRC_EVENT_DECODE_ES:
-			_player_decode_es(ctx, eventarg);
+			_player_decode_es(ctx, src, eventarg);
 		break;
 	}
 }

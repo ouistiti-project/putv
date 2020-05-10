@@ -83,7 +83,8 @@ struct player_ctx_s
 	pthread_cond_t cond_int;
 	pthread_mutex_t mutex;
 
-	jitter_t *audioout;
+	jitter_t *outstream[MAX_ESTREAM];
+	int noutstreams;
 };
 
 player_ctx_t *player_init(const char *filtername)
@@ -255,7 +256,14 @@ static void _player_decode_es(player_ctx_t *ctx, const src_t *src, void *eventar
 	event_decode_es_t *event_data = (event_decode_es_t *)eventarg;
 	if (event_data->decoder != NULL && ctx->noutstreams < MAX_ESTREAM)
 	{
-		event_data->decoder->ops->run(event_data->decoder->ctx, ctx->audioout);
+		int i;
+		for ( i = 0; i < ctx->noutstreams; i++)
+		{
+			jitter_t *outstream = ctx->outstream[i];
+			if (event_data->decoder->ops->run(event_data->decoder->ctx, outstream) == 0)
+				break;
+		}
+
 	}
 }
 
@@ -313,14 +321,15 @@ int player_subscribe(player_ctx_t *ctx, estream_t type, jitter_t *encoder_jitter
 {
 	if (type == ES_AUDIO)
 	{
-		ctx->audioout = encoder_jitter;
+		ctx->outstream[ctx->noutstreams] = encoder_jitter;
+		ctx->noutstreams++;
 	}
 	return 0;
 }
 
 int player_run(player_ctx_t *ctx)
 {
-	if (ctx->audioout == NULL)
+	if (ctx->noutstreams == 0)
 		return -1;
 
 	struct _player_play_s player =
@@ -330,6 +339,7 @@ int player_run(player_ctx_t *ctx)
 	};
 
 	int last_state = STATE_STOP;
+	int i;
 	while (last_state != STATE_ERROR)
 	{
 		pthread_mutex_lock(&ctx->mutex);
@@ -348,7 +358,8 @@ int player_run(player_ctx_t *ctx)
 		{
 			case STATE_STOP:
 				dbg("player: stoping");
-				ctx->audioout->ops->flush(ctx->audioout->ctx);
+				for (i = 0; i < ctx->noutstreams; i++)
+					ctx->outstream[i]->ops->flush(ctx->outstream[i]->ctx);
 				if (ctx->decoder != NULL)
 				{
 					ctx->decoder->src->ops->destroy(ctx->decoder->src->ctx);
@@ -363,7 +374,8 @@ int player_run(player_ctx_t *ctx)
 				}
 
 				ctx->media->ops->end(ctx->media->ctx);
-				ctx->audioout->ops->reset(ctx->audioout->ctx);
+				for (i = 0; i < ctx->noutstreams; i++)
+					ctx->outstream[i]->ops->reset(ctx->outstream[i]->ctx);
 				dbg("player: stop");
 			break;
 			case STATE_CHANGE:

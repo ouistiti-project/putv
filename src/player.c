@@ -252,11 +252,12 @@ static void _player_decode_es(player_ctx_t *ctx, void *eventarg)
 	if (event_data->decoder != NULL && src)
 	{
 		src->ops->attach(src->ctx, event_data->pid, event_data->decoder);
+
 		event_data->decoder->ops->run(event_data->decoder->ctx, ctx->audioout);
 	}
 }
 
-static void _player_listener(void *arg, event_t event, void *eventarg)
+static void _player_listener(void *arg, const src_t *src, event_t event, void *eventarg)
 {
 	player_ctx_t *ctx = (player_ctx_t *)arg;
 	switch (event)
@@ -291,9 +292,9 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 		else
 		{
 			const event_new_es_t event_new = {.pid = 0, .mime = mime, .jitte = JITTE_LOW};
-			_player_listener(ctx, SRC_EVENT_NEW_ES, (void *)&event_new);
+			_player_listener(ctx, src, SRC_EVENT_NEW_ES, (void *)&event_new);
 			const event_decode_es_t event_decode = {.pid = 0, .decoder = event_new.decoder};
-			_player_listener(ctx, SRC_EVENT_DECODE_ES, (void *)&event_decode);
+			_player_listener(ctx, src, SRC_EVENT_DECODE_ES, (void *)&event_decode);
 		}
 
 		return 0;

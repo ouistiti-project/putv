@@ -291,7 +291,7 @@ enum mad_flow header(void *data, struct mad_header const *header)
 
 static const char *jitter_name = "mad decoder";
 
-static void _decoder_listener(void *arg, event_t event, void *eventarg)
+static void _decoder_listener(void *arg, const src_t *src, event_t event, void *eventarg)
 {
 	decoder_ctx_t *ctx = (decoder_ctx_t *)arg;
 	switch(event)

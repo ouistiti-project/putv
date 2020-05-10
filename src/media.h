@@ -72,7 +72,7 @@ struct media_ops_s
 	/**
 	 * mandatory
 	 */
-	int (*find)(media_ctx_t *ctx, int id,media_parse_t cb, void *data);
+	int (*find)(media_ctx_t *ctx, int id, media_parse_t cb, void *data);
 	/**
 	 * optional
 	 */

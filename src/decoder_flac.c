@@ -274,17 +274,17 @@ static int decoder_prepare(decoder_ctx_t *ctx)
 
 static int decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 {
-	int result = 0;
+	int ret = 0;
 	ctx->out = jitter;
 	/**
 	 * Initialization of the filter here.
 	 * Because we need the jitter out.
 	 */
 	if (ctx->filter)
-		ctx->filter->ops->set(ctx->filter->ctx, NULL, jitter->format, jitter->ctx->frequence);
-	if (! decoder_prepare(ctx))
+		ret = ctx->filter->ops->set(ctx->filter->ctx, NULL, jitter->format, jitter->ctx->frequence);
+	if (ret == 0 && (ret = decoder_prepare(ctx)) == 0)
 		pthread_create(&ctx->thread, NULL, decoder_thread, ctx);
-	return 0;
+	return ret;
 }
 
 static const char *decoder_mime(decoder_ctx_t *ctx)

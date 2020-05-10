@@ -40,6 +40,7 @@
 #include "decoder.h"
 #include "media.h"
 #include "src.h"
+#include "demux.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -51,40 +52,9 @@
 
 #define src_dbg(...)
 
-src_t *src_build(player_ctx_t *player, const char *url, const char *mime)
+static src_t *_src_build(const src_ops_t *const src_list[], const src_ops_t *src_default,
+		player_ctx_t *player, const char *url, const char *mime)
 {
-	const src_ops_t *const src_list[] = {
-	#ifdef SRC_FILE
-		src_file,
-	#endif
-	#ifdef SRC_UNIX
-		src_unix,
-	#endif
-	#ifdef SRC_CURL
-		src_curl,
-	#endif
-	#ifdef SRC_ALSA
-		src_alsa,
-	#endif
-	#ifdef SRC_UDP
-		src_udp,
-	#endif
-		NULL
-	};
-
-	const src_ops_t *src_default = NULL;
-	#if defined(SRC_FILE)
-	src_default = src_file;
-	#elif defined(SRC_UNIX)
-	src_default = src_unix;
-	#elif defined(SRC_CURL)
-	src_default = src_curl;
-	#elif defined(SRC_ALSA)
-	src_default = src_alsa;
-	#elif defined(SRC_UDP)
-	src_default = src_udp;
-	#endif
-
 	int i = 0;
 	src_ctx_t *src_ctx = NULL;
 	while (src_list[i] != NULL)
@@ -129,4 +99,65 @@ src_t *src_build(player_ctx_t *player, const char *url, const char *mime)
 	src->ctx = src_ctx;
 
 	return src;
+}
+
+src_t *src_build(player_ctx_t *player, const char *url, const char *mime)
+{
+	const src_ops_t *const src_list[] = {
+	#ifdef SRC_FILE
+		src_file,
+	#endif
+	#ifdef SRC_UNIX
+		src_unix,
+	#endif
+	#ifdef SRC_CURL
+		src_curl,
+	#endif
+	#ifdef SRC_ALSA
+		src_alsa,
+	#endif
+	#ifdef SRC_UDP
+		src_udp,
+	#endif
+	#ifdef DEMUX_PASSTHROUGH
+		demux_passthrough,
+	#endif
+	#ifdef DEMUX_RTP
+		demux_rtp,
+	#endif
+		NULL
+	};
+
+	const src_ops_t *src_default = NULL;
+	#if defined(SRC_FILE)
+	src_default = src_file;
+	#elif defined(SRC_UNIX)
+	src_default = src_unix;
+	#elif defined(SRC_CURL)
+	src_default = src_curl;
+	#elif defined(SRC_ALSA)
+	src_default = src_alsa;
+	#elif defined(SRC_UDP)
+	src_default = src_udp;
+	#endif
+
+	return _src_build(src_list, src_default, player, url, mime);
+}
+
+demux_t *demux_build(player_ctx_t *player, const char *url, const char *mime)
+{
+	const src_ops_t *const src_list[] = {
+	#ifdef DEMUX_PASSTHROUGH
+		demux_passthrough,
+	#endif
+	#ifdef DEMUX_RTP
+		demux_rtp,
+	#endif
+		NULL
+	};
+
+	const demux_ops_t *src_default = NULL;
+	src_default = demux_passthrough;
+
+	return _src_build(src_list, src_default, player, url, mime);
 }

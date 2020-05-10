@@ -22,9 +22,13 @@ struct src_ops_s
 	int (*run)(src_ctx_t *);
 	const char *(*mime)(src_ctx_t *ctx, int index);
 	void (*eventlistener)(src_ctx_t *ctx, event_listener_cb_t listener, void *arg);
-	int (*attach)(src_ctx_t *ctx, int index, decoder_t *decoder);
-	decoder_t *(*estream)(src_ctx_t *ctx, int index);
+	int (*attach)(src_ctx_t *ctx, long index, decoder_t *decoder);
+	decoder_t *(*estream)(src_ctx_t *ctx, long index);
 	void (*destroy)(src_ctx_t *);
+	/**
+	 * for demux only
+	 */
+	jitter_t *(*jitter)(src_ctx_t *ctx, jitte_t jitte);
 };
 
 typedef struct src_s src_t;

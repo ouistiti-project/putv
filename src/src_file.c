@@ -173,7 +173,7 @@ static void src_eventlistener(src_ctx_t *ctx, event_listener_cb_t cb, void *arg)
 	}
 }
 
-static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
+static int src_attach(src_ctx_t *ctx, long index, decoder_t *decoder)
 {
 	if (index > 0)
 		return -1;
@@ -184,7 +184,7 @@ static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
 	ctx->out->ctx->producter = (void *)ctx;
 }
 
-static decoder_t *src_estream(src_ctx_t *ctx, int index)
+static decoder_t *src_estream(src_ctx_t *ctx, long index)
 {
 	return ctx->estream;
 }

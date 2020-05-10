@@ -42,10 +42,10 @@
 
 #include "player.h"
 #include "jitter.h"
-#include "demux.h"
 #include "event.h"
 typedef struct src_ops_s src_ops_t;
 typedef struct src_ctx_s src_ctx_t;
+typedef struct src_s demux_t;
 struct src_ctx_s
 {
 	player_ctx_t *player;
@@ -60,7 +60,7 @@ struct src_ctx_s
 	int addrlen;
 	const char *mime;
 #ifdef DEMUX_PASSTHROUGH
-	demux_t demux;
+	demux_t *demux;
 #else
 	decoder_t *estream;
 	event_listener_t *listener;
@@ -71,6 +71,7 @@ struct src_ctx_s
 };
 #define SRC_CTX
 #include "src.h"
+#include "demux.h"
 #include "media.h"
 #include "decoder.h"
 
@@ -106,12 +107,6 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 
 	char *value = utils_parseurl(url, &protocol, &host, &port, &path, &search);
 
-	if (protocol == NULL)
-		return NULL;
-	int rtp = !strcmp(protocol, "rtp");
-	if (!rtp && strcmp(protocol, "udp"))
-		return NULL;
-
 	int iport = 4400;
 	if (port != NULL)
 		iport = atoi(port);
@@ -124,6 +119,12 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 			mime += 5;
 		}
 	}
+
+	if (protocol == NULL)
+		return NULL;
+	demux_t *demux = demux_build(player, protocol, mime);
+	if (demux == NULL)
+		return NULL;
 
 	int ret;
 	int af = AF_INET;
@@ -229,15 +230,7 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 		ctx->player = player;
 		ctx->sock = sock;
 #ifdef DEMUX_PASSTHROUGH
-#ifdef DEMUX_RTP
-		if (rtp)
-		{
-			ctx->demux.ops = demux_rtp;
-		}
-		else
-#endif
-			ctx->demux.ops = demux_passthrough;
-		ctx->demux.ctx = ctx->demux.ops->init(player, search);
+		ctx->demux = demux;
 #endif
 		ctx->mime = utils_mime2mime(mime);
 #ifdef UDP_DUMP
@@ -362,8 +355,8 @@ static void *src_thread(void *arg)
 static int src_run(src_ctx_t *ctx)
 {
 #ifdef DEMUX_PASSTHROUGH
-	ctx->out = ctx->demux.ops->jitter(ctx->demux.ctx, JITTE_HIGH);
-	ctx->demux.ops->run(ctx->demux.ctx);
+	ctx->out = ctx->demux->ops->jitter(ctx->demux->ctx, JITTE_HIGH);
+	ctx->demux->ops->run(ctx->demux->ctx);
 #else
 	event_new_es_t event = {.pid = 0, .mime = ctx->mime, .jitte = JITTE_HIGH};
 	event_decode_es_t event_decode = {0};
@@ -420,7 +413,7 @@ static int src_run(src_ctx_t *ctx)
 static const char *src_mime(src_ctx_t *ctx, int index)
 {
 #ifdef DEMUX_PASSTHROUGH
-	return ctx->demux.ops->mime(ctx->demux.ctx, index);
+	return ctx->demux->ops->mime(ctx->demux->ctx, index);
 #else
 	return mime_octetstream;
 #endif
@@ -429,7 +422,7 @@ static const char *src_mime(src_ctx_t *ctx, int index)
 static void src_eventlistener(src_ctx_t *ctx, event_listener_cb_t cb, void *arg)
 {
 #ifdef DEMUX_PASSTHROUGH
-	ctx->demux.ops->eventlistener(ctx->demux.ctx, cb, arg);
+	ctx->demux->ops->eventlistener(ctx->demux->ctx, cb, arg);
 #else
 	event_listener_t *listener = calloc(1, sizeof(*listener));
 	listener->cb = cb;
@@ -450,13 +443,13 @@ static void src_eventlistener(src_ctx_t *ctx, event_listener_cb_t cb, void *arg)
 #endif
 }
 
-static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
+static int src_attach(src_ctx_t *ctx, long index, decoder_t *decoder)
 {
 	int ret = 0;
 	dbg("src: attach");
 #ifdef DEMUX_PASSTHROUGH
-	ret = ctx->demux.ops->attach(ctx->demux.ctx, index, decoder);
-	ctx->out = ctx->demux.ops->jitter(ctx->demux.ctx, JITTE_HIGH);
+	ret = ctx->demux->ops->attach(ctx->demux->ctx, index, decoder);
+	ctx->out = ctx->demux->ops->jitter(ctx->demux->ctx, JITTE_HIGH);
 #else
 	ctx->estream = decoder;
 	ctx->out = decoder->ops->jitter(decoder->ctx, JITTE_HIGH);
@@ -469,10 +462,10 @@ static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
 	return ret;
 }
 
-static decoder_t *src_estream(src_ctx_t *ctx, int index)
+static decoder_t *src_estream(src_ctx_t *ctx, long index)
 {
 #ifdef DEMUX_PASSTHROUGH
-	return ctx->demux.ops->estream(ctx->demux.ctx, index);
+	return ctx->demux->ops->estream(ctx->demux->ctx, index);
 #else
 	return ctx->estream;
 #endif
@@ -485,7 +478,7 @@ static void src_destroy(src_ctx_t *ctx)
 		pthread_join(ctx->thread, NULL);
 #endif
 #ifdef DEMUX_PASSTHROUGH
-	ctx->demux.ops->destroy(ctx->demux.ctx);
+	ctx->demux->ops->destroy(ctx->demux->ctx);
 #else
 	if (ctx->estream != NULL)
 		ctx->estream->ops->destroy(ctx->estream->ctx);

@@ -39,8 +39,8 @@
 #include "player.h"
 #include "decoder.h"
 #include "event.h"
-typedef struct demux_s demux_t;
-typedef struct demux_ops_s demux_ops_t;
+typedef struct src_s demux_t;
+typedef struct src_ops_s demux_ops_t;
 
 #define NB_LOOPS 21
 #define NB_BUFFERS 8
@@ -68,6 +68,7 @@ struct demux_out_s
 };
 
 typedef struct demux_ctx_s demux_ctx_t;
+typedef struct demux_ctx_s src_ctx_t;
 struct demux_ctx_s
 {
 	demux_out_t *out;
@@ -80,8 +81,10 @@ struct demux_ctx_s
 	pthread_t thread;
 	event_listener_t *listener;
 };
+#define SRC_CTX
 #define DEMUX_CTX
 #include "demux.h"
+#include "src.h"
 #include "media.h"
 #include "jitter.h"
 #include "rtp.h"
@@ -101,18 +104,8 @@ struct demux_ctx_s
 
 static const char *jitter_name = "rtp demux";
 
-static demux_ctx_t *demux_init(player_ctx_t *player, const char *search)
+static demux_ctx_t *demux_init(player_ctx_t *player, const char *protocol, const char *mime)
 {
-	char *mime = NULL;
-	if (search != NULL)
-	{
-		mime = strstr(search, "mime=");
-		if (mime != NULL)
-		{
-			mime += 5;
-		}
-	}
-
 	demux_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->mime = utils_mime2mime(mime);
 	return ctx;
@@ -438,6 +431,8 @@ static void demux_destroy(demux_ctx_t *ctx)
 
 const demux_ops_t *demux_rtp = &(demux_ops_t)
 {
+	.name = "demux_rtp",
+	.protocol = "rtp",
 	.init = demux_init,
 	.jitter = demux_jitter,
 	.run = demux_run,

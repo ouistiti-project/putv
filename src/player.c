@@ -217,6 +217,8 @@ int player_waiton(player_ctx_t *ctx, int state)
 	while (ctx->state == state)
 	{
 		pthread_cond_wait(&ctx->cond, &ctx->mutex);
+		if (state == STATE_UNKNOWN)
+			break;
 	}
 	pthread_mutex_unlock(&ctx->mutex);
 	return 0;
@@ -251,7 +253,6 @@ static void _player_decode_es(player_ctx_t *ctx, const src_t *src, void *eventar
 			if (event_data->decoder->ops->run(event_data->decoder->ctx, outstream) == 0)
 				break;
 		}
-
 	}
 }
 

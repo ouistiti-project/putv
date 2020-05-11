@@ -36,6 +36,7 @@ struct src_s
 {
 	const src_ops_t *ops;
 	src_ctx_t *ctx;
+	int mediaid;
 };
 
 src_t *src_build(player_ctx_t *player, const char *url, const char *mime);

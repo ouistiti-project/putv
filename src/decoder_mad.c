@@ -316,11 +316,6 @@ static decoder_ctx_t *mad_init(player_ctx_t *player)
 			input, header /* header */, 0 /* filter */, output,
 			error, 0 /* message */);
 
-	const src_t *src = player_source(player);
-	if (src->ops->eventlistener)
-	{
-		src->ops->eventlistener(src->ctx, _decoder_listener, ctx);
-	}
 	return ctx;
 }
 

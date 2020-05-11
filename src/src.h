@@ -39,7 +39,7 @@ struct src_s
 	int mediaid;
 };
 
-src_t *src_build(player_ctx_t *player, const char *url, const char *mime);
+src_t *src_build(player_ctx_t *player, const char *url, const char *mime, int id);
 
 extern const src_ops_t *src_file;
 extern const src_ops_t *src_curl;

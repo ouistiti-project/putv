@@ -272,14 +272,13 @@ static void _player_listener(void *arg, const src_t *src, event_t event, void *e
 static int _player_play(void* arg, int id, const char *url, const char *info, const char *mime)
 {
 	player_ctx_t *ctx = (player_ctx_t *)arg;
-	const src_t *src = NULL;
+	src_t *src = NULL;
 
 	dbg("player: prepare %d %s %s", id, url, mime);
 	src = src_build(ctx, url, mime, id);
 	if (src != NULL)
 	{
 		ctx->nextsrc = src;
-		ctx->nextsrc->mediaid = id;
 
 		if (src->ops->eventlistener)
 		{

@@ -97,11 +97,12 @@ static src_t *_src_build(const src_ops_t *const src_list[], const src_ops_t *src
 	src_t *src = calloc(1, sizeof(*src));
 	src->ops = src_default;
 	src->ctx = src_ctx;
+	src->mediaid = -1;
 
 	return src;
 }
 
-src_t *src_build(player_ctx_t *player, const char *url, const char *mime)
+src_t *src_build(player_ctx_t *player, const char *url, const char *mime, int id)
 {
 	const src_ops_t *const src_list[] = {
 	#ifdef SRC_FILE
@@ -141,7 +142,9 @@ src_t *src_build(player_ctx_t *player, const char *url, const char *mime)
 	src_default = src_udp;
 	#endif
 
-	return _src_build(src_list, src_default, player, url, mime);
+	src_t *src = _src_build(src_list, src_default, player, url, mime);
+	src->mediaid = id;
+	return src;
 }
 
 demux_t *demux_build(player_ctx_t *player, const char *url, const char *mime)

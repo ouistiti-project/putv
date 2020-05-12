@@ -168,7 +168,7 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 		event_listener_t *listener = ctx->listener;
 		event_new_es_t event = {.pid = out->ssrc, .mime = out->mime, .jitte = JITTE_HIGH};
 		event_decode_es_t event_decode = {0};
-		const src_t src = { .ops = demux_passthrough, .ctx = ctx };
+		const src_t src = { .ops = demux_rtp, .ctx = ctx };
 		while (listener != NULL)
 		{
 			listener->cb(listener->arg, &src, SRC_EVENT_NEW_ES, (void *)&event);

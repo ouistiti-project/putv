@@ -49,6 +49,13 @@ struct src_ctx_s
 	unsigned char *outbuffer;
 	size_t outlen;
 	pthread_t thread;
+	pthread_mutex_t mutex;
+	pthread_cond_t cond;
+	enum
+	{
+		SRC_STOP,
+		SRC_RUN,
+	} state;
 	CURL *curl;
 	const char *mime;
 	decoder_t *estream;
@@ -71,10 +78,23 @@ struct src_ctx_s
 
 #define src_dbg(...)
 
+#ifdef DEBUG
+#define SRC_CURL_VERBOSE 1L
+#else
+#define SRC_CURL_VERBOSE 0L
+#endif
+
 static uint write_cb(char *in, uint size, uint nmemb, src_ctx_t *ctx)
 {
 	size_t writelen = 0;
 	size_t len = ctx->out->ctx->size;
+
+	pthread_mutex_lock(&ctx->mutex);
+	while (ctx->state == SRC_STOP)
+	{
+		pthread_cond_wait(&ctx->cond, &ctx->mutex);
+	}
+	pthread_mutex_unlock(&ctx->mutex);
 
 	nmemb *= size;
 	while (nmemb > 0)
@@ -116,10 +136,12 @@ static src_ctx_t *src_init(player_ctx_t *player, const char * arg, const char *m
 		ctx->curl = curl;
 		ctx->player = player;
 		ctx->mime = mime;
+		pthread_mutex_init(&ctx->mutex, NULL);
+		pthread_cond_init(&ctx->cond, NULL);
 
 		curl_easy_setopt(curl, CURLOPT_URL, arg);
 		curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
-		curl_easy_setopt(curl, CURLOPT_VERBOSE, 0L);
+		curl_easy_setopt(curl, CURLOPT_VERBOSE, SRC_CURL_VERBOSE);
 		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, ctx);
 		//curl_easy_setopt(curl, CURLOPT_USERPWD, "user:password");
@@ -136,6 +158,7 @@ static src_ctx_t *src_init(player_ctx_t *player, const char * arg, const char *m
 static void *src_thread(void *arg)
 {
 	src_ctx_t *ctx = (src_ctx_t *)arg;
+	src_dbg("src: curl running");
 	int ret = curl_easy_perform(ctx->curl);
 	if ( ret != CURLE_OK)
 	{
@@ -148,7 +171,18 @@ static void *src_thread(void *arg)
 
 static int src_prepare(src_ctx_t *ctx)
 {
-	int ret;
+	src_dbg("src: prepare");
+	/**
+	 * decoder may need data to prepare the stream.
+	 * The thread starts for the preparation and
+	 * will be waiting until the running state
+	 */
+	int ret = pthread_create(&ctx->thread, NULL, src_thread, ctx);
+	pthread_mutex_lock(&ctx->mutex);
+	ctx->state = SRC_RUN;
+	pthread_cond_broadcast(&ctx->cond);
+	pthread_mutex_unlock(&ctx->mutex);
+
 	event_new_es_t event = {.pid = ctx->pid, .mime = ctx->mime, .jitte = JITTE_HIGH};
 	event_listener_t *listener = ctx->listener;
 	const src_t src = { .ops = src_curl, .ctx = ctx};
@@ -157,12 +191,20 @@ static int src_prepare(src_ctx_t *ctx)
 		listener->cb(listener->arg, &src, SRC_EVENT_NEW_ES, (void *)&event);
 		listener = listener->next;
 	}
+	pthread_mutex_lock(&ctx->mutex);
+	ctx->state = SRC_STOP;
+	pthread_cond_broadcast(&ctx->cond);
+	pthread_mutex_unlock(&ctx->mutex);
 	return ret;
 }
 
 static int src_run(src_ctx_t *ctx)
 {
-	int ret;
+	src_dbg("src: running");
+	pthread_mutex_lock(&ctx->mutex);
+	ctx->state = SRC_RUN;
+	pthread_cond_broadcast(&ctx->cond);
+	pthread_mutex_unlock(&ctx->mutex);
 	event_decode_es_t event_decode = {.pid = ctx->pid, .decoder = ctx->estream};
 	event_listener_t *listener = ctx->listener;
 	const src_t src = { .ops = src_curl, .ctx = ctx};
@@ -171,9 +213,7 @@ static int src_run(src_ctx_t *ctx)
 		listener->cb(listener->arg, &src, SRC_EVENT_DECODE_ES, (void *)&event_decode);
 		listener = listener->next;
 	}
-	//ret = curl_easy_perform(ctx->curl);
-	ret = pthread_create(&ctx->thread, NULL, src_thread, ctx);
-	return ret;
+	return 0;
 }
 
 static const char *src_mime(src_ctx_t *ctx, int index)

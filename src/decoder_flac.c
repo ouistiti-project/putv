@@ -70,9 +70,9 @@ struct decoder_ctx_s
 
 #define decoder_dbg(...)
 
-#define BUFFERSIZE 1500
+#define BUFFERSIZE 9000
 
-#define NBUFFER 3
+#define NBUFFER 4
 
 static const char *jitter_name = "flac decoder";
 static decoder_ctx_t *decoder_init(player_ctx_t *player)
@@ -100,8 +100,11 @@ static jitter_t *decoder_jitter(decoder_ctx_t *ctx, jitte_t jitte)
 {
 	if (ctx->in == NULL)
 	{
-		jitter_t *jitter = jitter_ringbuffer_init(jitter_name, NBUFFER, BUFFERSIZE);
+		int factor = jitte;
+		int nbbuffer = NBUFFER << factor;
+		jitter_t *jitter = jitter_ringbuffer_init(jitter_name, nbbuffer, BUFFERSIZE);
 		ctx->in = jitter;
+		jitter->ctx->thredhold = nbbuffer / 2;
 		jitter->format = FLAC;
 	}
 	return ctx->in;

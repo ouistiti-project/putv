@@ -97,6 +97,11 @@ enum mad_flow input(void *data,
 		    struct mad_stream *stream)
 {
 	decoder_ctx_t *ctx = (decoder_ctx_t *)data;
+	if (ctx->in == NULL)
+	{
+		err("decoder mad: input stream error");
+		return MAD_FLOW_BREAK;
+	}
 	size_t len = ctx->in->ctx->size;
 
 	if (stream->next_frame)
@@ -134,10 +139,10 @@ enum mad_flow output(void *data,
 	decoder_ctx_t *ctx = (decoder_ctx_t *)data;
 	filter_audio_t audio;
 
-        if (player_waiton(ctx->player, STATE_PAUSE) < 0)
-        {
-                return MAD_FLOW_STOP;
-        }
+	if (player_waiton(ctx->player, STATE_PAUSE) < 0)
+	{
+		return MAD_FLOW_STOP;
+	}
 
 	/* pcm->samplerate contains the sampling frequency */
 

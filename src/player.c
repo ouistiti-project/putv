@@ -227,7 +227,7 @@ int player_waiton(player_ctx_t *ctx, int state)
 static void _player_new_es(player_ctx_t *ctx, const src_t *src, void *eventarg)
 {
 	event_new_es_t *event_data = (event_new_es_t *)eventarg;
-	if (ctx->src == NULL)
+	if (ctx->nextsrc == NULL)
 	{
 		err("player: source is null");
 		return;
@@ -237,12 +237,19 @@ static void _player_new_es(player_ctx_t *ctx, const src_t *src, void *eventarg)
 	event_data->decoder = decoder_build(ctx, event_data->mime);
 	if (event_data->decoder == NULL)
 		err("player: decoder not found for %s", event_data->mime);
-	else
+	else {
 		src->ops->attach(src->ctx, event_data->pid, event_data->decoder);
+	}
 }
 
 static void _player_decode_es(player_ctx_t *ctx, const src_t *src, void *eventarg)
 {
+	if (ctx->src == NULL)
+	{
+		err("player: source is null");
+		return;
+	}
+
 	event_decode_es_t *event_data = (event_decode_es_t *)eventarg;
 	if (event_data->decoder != NULL && ctx->noutstreams < MAX_ESTREAM)
 	{
@@ -284,6 +291,8 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 		if (src->ops->eventlistener)
 		{
 			src->ops->eventlistener(src->ctx, _player_listener, ctx);
+			if (src->ops->prepare != NULL)
+				src->ops->prepare(src->ctx);
 		}
 		else
 		{
@@ -292,7 +301,6 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 			const event_decode_es_t event_decode = {.pid = 0, .decoder = event_new.decoder};
 			_player_listener(ctx, src, SRC_EVENT_DECODE_ES, (void *)&event_decode);
 		}
-
 		return 0;
 	}
 	else

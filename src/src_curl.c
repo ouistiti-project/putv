@@ -52,6 +52,7 @@ struct src_ctx_s
 	CURL *curl;
 	const char *mime;
 	decoder_t *estream;
+	long pid;
 	event_listener_t *listener;
 };
 #define SRC_CTX
@@ -145,18 +146,28 @@ static void *src_thread(void *arg)
 	return 0;
 }
 
-static int src_run(src_ctx_t *ctx)
+static int src_prepare(src_ctx_t *ctx)
 {
 	int ret;
-	event_new_es_t event = {.pid = 0, .mime = ctx->mime, .jitte = JITTE_HIGH};
-	event_decode_es_t event_decode = {0};
+	event_new_es_t event = {.pid = ctx->pid, .mime = ctx->mime, .jitte = JITTE_HIGH};
 	event_listener_t *listener = ctx->listener;
 	const src_t src = { .ops = src_curl, .ctx = ctx};
 	while (listener)
 	{
 		listener->cb(listener->arg, &src, SRC_EVENT_NEW_ES, (void *)&event);
-		event_decode.pid = event.pid;
-		event_decode.decoder = event.decoder;
+		listener = listener->next;
+	}
+	return ret;
+}
+
+static int src_run(src_ctx_t *ctx)
+{
+	int ret;
+	event_decode_es_t event_decode = {.pid = ctx->pid, .decoder = ctx->estream};
+	event_listener_t *listener = ctx->listener;
+	const src_t src = { .ops = src_curl, .ctx = ctx};
+	while (listener)
+	{
 		listener->cb(listener->arg, &src, SRC_EVENT_DECODE_ES, (void *)&event_decode);
 		listener = listener->next;
 	}
@@ -249,6 +260,7 @@ const src_ops_t *src_curl = &(src_ops_t)
 	.name = "curl",
 	.protocol = "http://|https://|file://",
 	.init = src_init,
+	.prepare = src_prepare,
 	.run = src_run,
 	.mime = src_mime,
 	.eventlistener = src_eventlistener,

@@ -52,6 +52,7 @@ struct src_ctx_s
 	int nchannels;
 	filter_t filter;
 	decoder_t *estream;
+	long pid;
 	event_listener_t *listener;
 };
 #define SRC_CTX
@@ -144,11 +145,6 @@ static int _pcm_open(src_ctx_t *ctx, snd_pcm_format_t pcm_format, unsigned int r
 	if (size)
 		*size = periodsize;
 
-	ret = snd_pcm_prepare(ctx->handle);
-	if (ret < 0) {
-		err("src: prepare");
-		goto error;
-	}
 	ctx->samplerate = rate;
 
 error:
@@ -184,7 +180,7 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 
 	int ret;
 	snd_pcm_t *handle;
-	ret = snd_pcm_open(&handle, soundcard, SND_PCM_STREAM_CAPTURE, 0);
+	ret = snd_pcm_open(&handle, soundcard, SND_PCM_STREAM_CAPTURE, ctx->pid);
 
 	if (ret == 0)
 	{
@@ -201,48 +197,8 @@ static void *src_thread(void *arg)
 {
 	int ret;
 	src_ctx_t *ctx = (src_ctx_t *)arg;
-	snd_pcm_format_t pcm_format;
-	switch (ctx->out->format)
-	{
-		case PCM_32bits_LE_stereo:
-			pcm_format = SND_PCM_FORMAT_S32_LE;
-			ctx->samplesize = 4;
-			ctx->nchannels = 2;
-		break;
-		case PCM_24bits4_LE_stereo:
-			pcm_format = SND_PCM_FORMAT_S24_LE;
-			ctx->samplesize = 4;
-			ctx->nchannels = 2;
-		break;
-		case PCM_24bits3_LE_stereo:
-			pcm_format = SND_PCM_FORMAT_S24_LE;
-			ctx->samplesize = 3;
-			ctx->nchannels = 2;
-		break;
-		case PCM_16bits_LE_stereo:
-			pcm_format = SND_PCM_FORMAT_S16_LE;
-			ctx->samplesize = 2;
-			ctx->nchannels = 2;
-		break;
-		case PCM_16bits_LE_mono:
-			pcm_format = SND_PCM_FORMAT_S16_LE;
-			ctx->samplesize = 2;
-			ctx->nchannels = 1;
-		break;
-		default:
-			dbg("src alsa: format error %d",  ctx->out->format);
-	}
-	if (ctx->out->ctx->frequence == 0)
-		ctx->out->ctx->frequence = 48000;
-
 	int divider = ctx->samplesize * ctx->nchannels;
-
 	unsigned long size = ctx->out->ctx->size / divider;
-	if (_pcm_open(ctx, pcm_format, ctx->out->ctx->frequence, &size) < 0)
-	{
-		err("src: pcm error %s", strerror(errno));
-		return NULL;
-	}
 
 	snd_pcm_start(ctx->handle);
 	/* start decoding */
@@ -321,17 +277,69 @@ static void *src_thread(void *arg)
 	return NULL;
 }
 
-static int src_run(src_ctx_t *ctx)
+static int src_prepare(src_ctx_t *ctx)
 {
-	event_new_es_t event = {.pid = 0, .mime = mime_audiopcm, .jitte = JITTE_LOW};
-	event_decode_es_t event_decode = {0};
+	event_new_es_t event = {.pid = ctx->pid, .mime = mime_audiopcm, .jitte = JITTE_LOW};
 	event_listener_t *listener = ctx->listener;
 	const src_t src = { .ops = src_alsa, .ctx = ctx};
 	while (listener)
 	{
 		listener->cb(listener->arg, &src, SRC_EVENT_NEW_ES, (void *)&event);
-		event_decode.pid = event.pid;
-		event_decode.decoder = event.decoder;
+		listener = listener->next;
+	}
+
+	snd_pcm_format_t pcm_format;
+	switch (ctx->out->format)
+	{
+		case PCM_32bits_LE_stereo:
+			pcm_format = SND_PCM_FORMAT_S32_LE;
+			ctx->samplesize = 4;
+			ctx->nchannels = 2;
+		break;
+		case PCM_24bits4_LE_stereo:
+			pcm_format = SND_PCM_FORMAT_S24_LE;
+			ctx->samplesize = 4;
+			ctx->nchannels = 2;
+		break;
+		case PCM_24bits3_LE_stereo:
+			pcm_format = SND_PCM_FORMAT_S24_LE;
+			ctx->samplesize = 3;
+			ctx->nchannels = 2;
+		break;
+		case PCM_16bits_LE_stereo:
+			pcm_format = SND_PCM_FORMAT_S16_LE;
+			ctx->samplesize = 2;
+			ctx->nchannels = 2;
+		break;
+		case PCM_16bits_LE_mono:
+			pcm_format = SND_PCM_FORMAT_S16_LE;
+			ctx->samplesize = 2;
+			ctx->nchannels = 1;
+		break;
+		default:
+			dbg("src alsa: format error %d",  ctx->out->format);
+	}
+	if (ctx->out->ctx->frequence == 0)
+		ctx->out->ctx->frequence = 48000;
+
+	unsigned long size = ctx->out->ctx->size / (ctx->samplesize * ctx->nchannels);
+	int ret = _pcm_open(ctx, pcm_format, ctx->out->ctx->frequence, &size);
+	if (ret < 0)
+	{
+		err("src: pcm error %s", strerror(errno));
+	}
+	else
+		ret = snd_pcm_prepare(ctx->handle);
+	return ret;
+}
+
+static int src_run(src_ctx_t *ctx)
+{
+	event_decode_es_t event_decode = {.pid = ctx->pid, .decoder = ctx->estream};
+	event_listener_t *listener = ctx->listener;
+	const src_t src = { .ops = src_alsa, .ctx = ctx};
+	while (listener)
+	{
 		listener->cb(listener->arg, &src, SRC_EVENT_DECODE_ES, (void *)&event_decode);
 		listener = listener->next;
 	}

@@ -227,13 +227,7 @@ int player_waiton(player_ctx_t *ctx, int state)
 static void _player_new_es(player_ctx_t *ctx, const src_t *src, void *eventarg)
 {
 	event_new_es_t *event_data = (event_new_es_t *)eventarg;
-	if (ctx->nextsrc == NULL)
-	{
-		err("player: source is null");
-		return;
-	}
-
-	warn("player decoder build");
+	warn("player: decoder build");
 	event_data->decoder = decoder_build(ctx, event_data->mime);
 	if (event_data->decoder == NULL)
 		err("player: decoder not found for %s", event_data->mime);
@@ -246,12 +240,6 @@ static void _player_new_es(player_ctx_t *ctx, const src_t *src, void *eventarg)
 
 static void _player_decode_es(player_ctx_t *ctx, const src_t *src, void *eventarg)
 {
-	if (ctx->src == NULL)
-	{
-		err("player: source is null");
-		return;
-	}
-
 	event_decode_es_t *event_data = (event_decode_es_t *)eventarg;
 	if (event_data->decoder != NULL && ctx->noutstreams < MAX_ESTREAM)
 	{
@@ -427,7 +415,13 @@ int player_run(player_ctx_t *ctx)
 					free(ctx->nextsrc);
 					ctx->nextsrc = NULL;
 				}
+
 				ctx->media->ops->play(ctx->media->ctx, _player_play, ctx);
+				/**
+				 * there isn't any stream in the player
+				 * the new one is on nextsrc, then player pass on CHANGE
+				 * to switch nextsrc to src
+				 */
 				if (ctx->src == NULL)
 					ctx->state = STATE_CHANGE;
 			break;

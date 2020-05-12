@@ -250,6 +250,7 @@ static int decoder_check(const char *path)
 
 static int decoder_prepare(decoder_ctx_t *ctx)
 {
+	decoder_dbg("decoder: prepare");
 	int ret;
 	FLAC__stream_decoder_set_metadata_ignore(ctx->decoder, FLAC__METADATA_TYPE_PADDING);
 	FLAC__stream_decoder_set_metadata_ignore(ctx->decoder, FLAC__METADATA_TYPE_VORBIS_COMMENT);
@@ -282,7 +283,7 @@ static int decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 	 */
 	if (ctx->filter)
 		ret = ctx->filter->ops->set(ctx->filter->ctx, NULL, jitter->format, jitter->ctx->frequence);
-	if (ret == 0 && (ret = decoder_prepare(ctx)) == 0)
+	if (ret == 0)
 		pthread_create(&ctx->thread, NULL, decoder_thread, ctx);
 	return ret;
 }
@@ -312,6 +313,7 @@ const decoder_ops_t *decoder_flac = &(decoder_ops_t)
 	.check = decoder_check,
 	.init = decoder_init,
 	.jitter = decoder_jitter,
+	.prepare = decoder_prepare,
 	.run = decoder_run,
 	.mime = decoder_mime,
 	.destroy = decoder_destroy,

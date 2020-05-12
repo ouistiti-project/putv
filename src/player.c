@@ -239,6 +239,8 @@ static void _player_new_es(player_ctx_t *ctx, const src_t *src, void *eventarg)
 		err("player: decoder not found for %s", event_data->mime);
 	else {
 		src->ops->attach(src->ctx, event_data->pid, event_data->decoder);
+		if (event_data->decoder->ops->prepare)
+			event_data->decoder->ops->prepare(event_data->decoder->ctx);
 	}
 }
 

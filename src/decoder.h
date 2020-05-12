@@ -16,6 +16,7 @@ struct decoder_ops_s
 	int (*check)(const char *path);
 	decoder_ctx_t *(*init)(player_ctx_t *);
 	jitter_t *(*jitter)(decoder_ctx_t *decoder, jitte_t jitte);
+	int (*prepare)(decoder_ctx_t *);
 	int (*run)(decoder_ctx_t *, jitter_t *);
 	const char *(*mime)(decoder_ctx_t *ctx);
 	void (*destroy)(decoder_ctx_t *);

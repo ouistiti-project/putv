@@ -295,7 +295,7 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 	}
 	else
 	{
-		dbg("player: src not found for %s", url);
+		err("player: src not found for %s", url);
 		ctx->nextsrc = NULL;
 	}
 	return -1;

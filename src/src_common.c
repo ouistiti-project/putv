@@ -52,9 +52,10 @@
 
 #define src_dbg(...)
 
-static src_t *_src_build(const src_ops_t *const src_list[], const src_ops_t *src_default,
+static src_t *_src_build(const src_ops_t *const src_list[],
 		player_ctx_t *player, const char *url, const char *mime)
 {
+	const src_ops_t *src_ops = NULL;
 	int i = 0;
 	src_ctx_t *src_ctx = NULL;
 	while (src_list[i] != NULL)
@@ -70,7 +71,7 @@ static src_t *_src_build(const src_ops_t *const src_list[], const src_ops_t *src
 			if (!(strncmp(url, protocol, len)))
 			{
 				src_ctx = src_list[i]->init(player, url, mime);
-				src_default = src_list[i];
+				src_ops = src_list[i];
 				break;
 			}
 			protocol = next;
@@ -85,17 +86,13 @@ static src_t *_src_build(const src_ops_t *const src_list[], const src_ops_t *src
 		i++;
 	}
 
-	if (src_ctx == NULL && src_default != NULL)
-	{
-		src_ctx = src_default->init(player, url, mime);
-	}
 	if (src_ctx == NULL)
 	{
 		err("src not found %s", url);
 		return NULL;
 	}
 	src_t *src = calloc(1, sizeof(*src));
-	src->ops = src_default;
+	src->ops = src_ops;
 	src->ctx = src_ctx;
 	src->mediaid = -1;
 
@@ -120,30 +117,12 @@ src_t *src_build(player_ctx_t *player, const char *url, const char *mime, int id
 	#ifdef SRC_UDP
 		src_udp,
 	#endif
-	#ifdef DEMUX_PASSTHROUGH
-		demux_passthrough,
-	#endif
-	#ifdef DEMUX_RTP
-		demux_rtp,
-	#endif
 		NULL
 	};
 
-	const src_ops_t *src_default = NULL;
-	#if defined(SRC_FILE)
-	src_default = src_file;
-	#elif defined(SRC_UNIX)
-	src_default = src_unix;
-	#elif defined(SRC_CURL)
-	src_default = src_curl;
-	#elif defined(SRC_ALSA)
-	src_default = src_alsa;
-	#elif defined(SRC_UDP)
-	src_default = src_udp;
-	#endif
-
-	src_t *src = _src_build(src_list, src_default, player, url, mime);
-	src->mediaid = id;
+	src_t *src = _src_build(src_list, player, url, mime);
+	if (src != NULL)
+		src->mediaid = id;
 	return src;
 }
 
@@ -159,8 +138,5 @@ demux_t *demux_build(player_ctx_t *player, const char *url, const char *mime)
 		NULL
 	};
 
-	const demux_ops_t *src_default = NULL;
-	src_default = demux_passthrough;
-
-	return _src_build(src_list, src_default, player, url, mime);
+	return _src_build(src_list, player, url, mime);
 }

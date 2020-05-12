@@ -190,6 +190,8 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 		// JOIN multicast group on default interface
 		ret = setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP,
 			(const void *)&imreq, sizeof(imreq));
+		if (ret < 0)
+			err("src: multicast route missing on the interface");
 	}
 	else if ((ret == 0) && (af == AF_INET6) && IN6_IS_ADDR_MULTICAST(&in6addr))
 	{

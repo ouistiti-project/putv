@@ -75,6 +75,7 @@ struct demux_ctx_s
 	jitter_t *in;
 	jitte_t jitte;
 	unsigned short seqnum;
+	unsigned short seqorig;
 	unsigned long missing;
 	demux_reorder_t reorder[NB_BUFFERS];
 	const char *mime;
@@ -234,7 +235,7 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 	if (out->jitter != NULL)
 	{
 		if (ctx->seqnum == 0)
-			ctx->seqnum = header->b.seqnum - 1;
+			ctx->seqorig = ctx->seqnum = header->b.seqnum - 1;
 		ctx->seqnum++;
 		while (ctx->seqnum < header->b.seqnum)
 		{
@@ -246,7 +247,7 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 			out->data = NULL;
 #endif
 			ctx->missing++;
-			warn("demux: packet missing %ld", ctx->missing);
+			warn("demux: packet missing %ld/%d", ctx->missing, ctx->seqnum - ctx->seqorig);
 			ctx->seqnum++;
 		}
 		if (out->data == NULL)

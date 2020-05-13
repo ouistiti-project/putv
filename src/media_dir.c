@@ -100,7 +100,6 @@ struct media_dirlist_s
 #endif
 
 static int media_count(media_ctx_t *ctx);
-static int media_insert(media_ctx_t *ctx, const char *path, const char *info, const char *mime);
 static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data);
 static int media_play(media_ctx_t *ctx, media_parse_t play, void *data);
 static int media_next(media_ctx_t *ctx);
@@ -226,6 +225,7 @@ static int _find(media_ctx_t *ctx, int level, media_dirlist_t **pit, int *pmedia
 {
 	int ret = -1;
 	media_dirlist_t *it = *pit;
+
 	if (it == NULL)
 	{
 		it = calloc(1, sizeof(*it));
@@ -298,10 +298,10 @@ static int _find(media_ctx_t *ctx, int level, media_dirlist_t **pit, int *pmedia
 			break;
 			case DT_REG:
 			{
-				char *path = malloc(strlen(it->path) + 1 + strlen(it->items[it->index]->d_name) + 1);
+				char *path = malloc(7 + strlen(it->path) + 1 + strlen(it->items[it->index]->d_name) + 1);
 				if (path)
 				{
-					sprintf(path, "%s/%s", it->path, it->items[it->index]->d_name);
+					sprintf(path, "file://%s/%s", it->path, it->items[it->index]->d_name);
 					const char *mime = utils_getmime(path);
 					ret = -1;
 					if (strcmp(mime, mime_octetstream) != 0)
@@ -555,6 +555,7 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url,...)
 		pthread_create(&ctx->thread, NULL, _check_dir, (void *)ctx);
 		ctx->options |= OPTION_INOTIFY;
 #endif
+		dbg("media dir: open %d", path);
 	}
 	else
 			err("media dir: error on url");

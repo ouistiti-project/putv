@@ -22,9 +22,13 @@ client() {
 }
 
 start() {
-  OPTIONS="${OPTIONS} -m ${MEDIA} -a -l -r"
+  printf "Starting ouiradio: "
+
+  OPTIONS="${OPTIONS} -m ${MEDIA}"
+  OPTIONS="${OPTIONS} -a -l -r"
+#  OPTIONS="${OPTIONS} -a -r"
   OPTIONS="${OPTIONS} -R ${WEBSOCKETDIR}"
-  #OPTIONS="${OPTIONS} -u ${USER}"
+#  OPTIONS="${OPTIONS} -u ${USER}"
   OPTIONS="${OPTIONS} -L ${LOGFILE}"
   OPTIONS="${OPTIONS} -p ${RUNDIR}/${DAEMON}.pid"
   if [ "${OUTPUT}" != "" ]; then
@@ -33,41 +37,49 @@ start() {
 
   ${DAEMON} ${OPTIONS} -D
   if [ ! $? -eq 0 ]; then
+    echo "KO"
     exit 1
   fi
+  echo "OK"
 }
 stop() {
   OPTIONS="${OPTIONS} -p ${RUNDIR}/${DAEMON}.pid"
 
+  printf "Stopping ouiradio: "
   ${DAEMON} ${OPTIONS} -K
+  echo "OK"
 }
 restart() {
+	client
 	stop
 	start
 }
 
 case "$1" in
   client)
-	client;
-	;;
+    client;
+    ;;
   rising)
-	start;
-	;;
+    start;
+    ;;
   start)
-	start
-	;;
+    client
+    if [ ! -e ${RUNDIR}/gpiod.pid ]; then
+      start
+    fi
+    ;;
   falling)
-	stop
-	;;
+    stop
+    ;;
   stop)
-	stop
-	;;
+    stop
+    ;;
   restart|reload)
-	restart
-	;;
+    restart
+    ;;
   *)
-	echo "Usage: $0 {start|stop|restart}"
-	exit 1
+    echo "Usage: $0 {start|stop|restart}"
+    exit 1
 esac
 
 exit $?

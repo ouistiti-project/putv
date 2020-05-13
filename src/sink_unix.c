@@ -403,9 +403,9 @@ static void sink_destroy(sink_ctx_t *ctx)
 	}
 	jitter_scattergather_destroy(ctx->in);
 #ifdef SINK_UNIX_ASYNC
-	pthread_mutex_destroy(&ctx->mutex, NULL);
-	pthread_cond_destroy(&ctx->event, NULL);
-	pthread_cond_destroy(&ctx->ack, NULL);
+	pthread_mutex_destroy(&ctx->mutex);
+	pthread_cond_destroy(&ctx->event);
+	pthread_cond_destroy(&ctx->ack);
 	free(ctx->out);
 #endif
 	free(ctx);

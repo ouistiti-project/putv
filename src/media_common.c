@@ -128,9 +128,12 @@ char *utils_getpath(const char *url, const char *proto, char **query)
 	if (!strncmp(path,"://", 3))
 		path+=3;
 	int length = strlen(path);
-	char *search = strchr(path, '?');
-	if (search != NULL)
-		length -= strlen(search);
+	*query = strchr(path, '?');
+	if (*query != NULL)
+	{
+		length -= strlen(*query);
+		*query += 1;
+	}
 	if (path[0] == '~')
 	{
 		path++;
@@ -159,14 +162,6 @@ char *utils_getpath(const char *url, const char *proto, char **query)
 		strncpy(newpath, path, length + 1);
 		newpath[length] = '\0';
 	}
-#ifndef SQLITE3_OPENQUERY
-	*query = strchr(newpath, '?');
-	if (*query != NULL)
-	{
-		*query[0] = '\0';
-		*query += 1;
-	}
-#endif
 	newpath[length + 1] = 0;
 	return newpath;
 }
@@ -504,8 +499,12 @@ int media_parseoggmetadata(const char *path, json_t *object)
 		{str_date, str_year, 4, label_integer},
 		{"TRACKNUMBER", str_track, 11, label_integer},
 	};
-	FLAC__StreamMetadata *vorbiscomment;
-	FLAC__metadata_get_tags(path, &vorbiscomment);
+	FLAC__StreamMetadata *vorbiscomment = NULL;
+	if (!FLAC__metadata_get_tags(path, &vorbiscomment))
+	{
+		warn("media: no Vorbis Comment for %s", path);
+		return -1;
+	}
 	FLAC__StreamMetadata_VorbisComment *data;
 	data = &vorbiscomment->data.vorbis_comment;
 	int n;

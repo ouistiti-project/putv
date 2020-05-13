@@ -39,8 +39,8 @@
 #include "player.h"
 #include "decoder.h"
 #include "event.h"
-typedef struct demux_s demux_t;
-typedef struct demux_ops_s demux_ops_t;
+typedef struct src_s demux_t;
+typedef struct src_ops_s demux_ops_t;
 
 #define NB_LOOPS 21
 #define NB_BUFFERS 8
@@ -68,20 +68,24 @@ struct demux_out_s
 };
 
 typedef struct demux_ctx_s demux_ctx_t;
+typedef struct demux_ctx_s src_ctx_t;
 struct demux_ctx_s
 {
 	demux_out_t *out;
 	jitter_t *in;
 	jitte_t jitte;
 	unsigned short seqnum;
+	unsigned short seqorig;
 	unsigned long missing;
 	demux_reorder_t reorder[NB_BUFFERS];
 	const char *mime;
 	pthread_t thread;
 	event_listener_t *listener;
 };
+#define SRC_CTX
 #define DEMUX_CTX
 #include "demux.h"
+#include "src.h"
 #include "media.h"
 #include "jitter.h"
 #include "rtp.h"
@@ -101,18 +105,8 @@ struct demux_ctx_s
 
 static const char *jitter_name = "rtp demux";
 
-static demux_ctx_t *demux_init(player_ctx_t *player, const char *search)
+static demux_ctx_t *demux_init(player_ctx_t *player, const char *protocol, const char *mime)
 {
-	char *mime = NULL;
-	if (search != NULL)
-	{
-		mime = strstr(search, "mime=");
-		if (mime != NULL)
-		{
-			mime += 5;
-		}
-	}
-
 	demux_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->mime = utils_mime2mime(mime);
 	return ctx;
@@ -173,10 +167,15 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 		ctx->out = out;
 		warn("demux: new  rtp substream %d %s", out->ssrc, out->mime);
 		event_listener_t *listener = ctx->listener;
-		const event_new_es_t event = {.pid = out->ssrc, .mime = out->mime, .jitte = JITTE_HIGH};
+		event_new_es_t event = {.pid = out->ssrc, .mime = out->mime, .jitte = JITTE_HIGH};
+		event_decode_es_t event_decode = {0};
+		const src_t src = { .ops = demux_rtp, .ctx = ctx };
 		while (listener != NULL)
 		{
-			listener->cb(listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
+			listener->cb(listener->arg, &src, SRC_EVENT_NEW_ES, (void *)&event);
+			event_decode.pid = event.pid;
+			event_decode.decoder = event.decoder;
+			listener->cb(listener->arg, &src, SRC_EVENT_DECODE_ES, (void *)&event_decode);
 			listener = listener->next;
 		}
 	}
@@ -236,7 +235,7 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 	if (out->jitter != NULL)
 	{
 		if (ctx->seqnum == 0)
-			ctx->seqnum = header->b.seqnum - 1;
+			ctx->seqorig = ctx->seqnum = header->b.seqnum - 1;
 		ctx->seqnum++;
 		while (ctx->seqnum < header->b.seqnum)
 		{
@@ -248,7 +247,7 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 			out->data = NULL;
 #endif
 			ctx->missing++;
-			warn("demux: packet missing %ld", ctx->missing);
+			warn("demux: packet missing %ld/%d", ctx->missing, ctx->seqnum - ctx->seqorig);
 			ctx->seqnum++;
 		}
 		if (out->data == NULL)
@@ -434,6 +433,8 @@ static void demux_destroy(demux_ctx_t *ctx)
 
 const demux_ops_t *demux_rtp = &(demux_ops_t)
 {
+	.name = "demux_rtp",
+	.protocol = "rtp",
 	.init = demux_init,
 	.jitter = demux_jitter,
 	.run = demux_run,

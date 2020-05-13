@@ -57,7 +57,8 @@ struct decoder_ctx_s
 	unsigned char *outbuffer;
 	size_t outbufferlen;
 
-	const filter_t *filter;
+	filter_t *filter;
+	player_ctx_t *player;
 
 	heartbeat_t heartbeat;
 	beat_samples_t beat;
@@ -96,6 +97,11 @@ enum mad_flow input(void *data,
 		    struct mad_stream *stream)
 {
 	decoder_ctx_t *ctx = (decoder_ctx_t *)data;
+	if (ctx->in == NULL)
+	{
+		err("decoder mad: input stream error");
+		return MAD_FLOW_BREAK;
+	}
 	size_t len = ctx->in->ctx->size;
 
 	if (stream->next_frame)
@@ -133,6 +139,11 @@ enum mad_flow output(void *data,
 	decoder_ctx_t *ctx = (decoder_ctx_t *)data;
 	filter_audio_t audio;
 
+	if (player_waiton(ctx->player, STATE_PAUSE) < 0)
+	{
+		return MAD_FLOW_STOP;
+	}
+
 	/* pcm->samplerate contains the sampling frequency */
 
 #ifdef DEBUG
@@ -169,9 +180,6 @@ enum mad_flow output(void *data,
 	for (i = 0; i < audio.nchannels && i < MAXCHANNELS; i++)
 	{
 		audio.samples[i] = pcm->samples[i];
-#ifdef FILTER_SCALING
-		ctx->filter->ops->scaling(ctx->filter->ctx, audio.samples[i], audio.nsamples);
-#endif
 	}
 	decoder_dbg("decoder mad: audio frame %d Hz, %d channels, %d samples", audio.samplerate, audio.nchannels, audio.nsamples);
 
@@ -183,6 +191,18 @@ enum mad_flow output(void *data,
 		if (ctx->outbuffer == NULL)
 		{
 			ctx->outbuffer = ctx->out->ops->pull(ctx->out->ctx);
+			/**
+			 * the pipe is broken. close the src and the decoder
+			 */
+			if (ctx->outbuffer == NULL)
+			{
+				ctx->outbufferlen = 0;
+				/**
+				 * flush the src jitter to break the stream
+				 */
+				ctx->in->ops->flush(ctx->in->ctx);
+				return MAD_FLOW_STOP;
+			}
 		}
 
 		ctx->outbufferlen +=
@@ -276,7 +296,7 @@ enum mad_flow header(void *data, struct mad_header const *header)
 
 static const char *jitter_name = "mad decoder";
 
-static void _decoder_listener(void *arg, event_t event, void *eventarg)
+static void _decoder_listener(void *arg, const src_t *src, event_t event, void *eventarg)
 {
 	decoder_ctx_t *ctx = (decoder_ctx_t *)arg;
 	switch(event)
@@ -290,21 +310,17 @@ static void _decoder_listener(void *arg, event_t event, void *eventarg)
 	}
 }
 
-static decoder_ctx_t *mad_init(player_ctx_t *player, const filter_t *filter)
+static decoder_ctx_t *mad_init(player_ctx_t *player)
 {
 	decoder_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->ops = decoder_mad;
+	ctx->player = player;
 
-	ctx->filter = filter;
+	ctx->filter = filter_build(player_filtername(player), PCM_24bits4_LE_stereo, sampled_scaling);
 	mad_decoder_init(&ctx->decoder, ctx,
 			input, header /* header */, 0 /* filter */, output,
 			error, 0 /* message */);
 
-	const src_t *src = player_source(player);
-	if (src->ops->eventlistener)
-	{
-		src->ops->eventlistener(src->ctx, _decoder_listener, ctx);
-	}
 	return ctx;
 }
 
@@ -350,7 +366,6 @@ static void *mad_thread(void *arg)
 	}
 	dbg("decoder: end %lu.%09lu", now.tv_sec, now.tv_nsec);
 #endif
-	dbg("decoder: stop running");
 	/**
 	 * push the last buffer to the encoder, otherwise the next
 	 * decoder will begins with a pull buffer
@@ -359,14 +374,18 @@ static void *mad_thread(void *arg)
 	{
 		ctx->out->ops->push(ctx->out->ctx, ctx->outbufferlen, NULL);
 	}
+	dbg("decoder: stop running");
+	player_state(ctx->player, STATE_CHANGE);
 
 	return (void *)(intptr_t)result;
 }
 
 static int mad_run(decoder_ctx_t *ctx, jitter_t *jitter)
 {
+	int ret = 0;
 	ctx->out = jitter;
-	ctx->filter->ops->set(ctx->filter->ctx, NULL, jitter->ctx->frequence);
+	if (ctx->filter)
+		ret = ctx->filter->ops->set(ctx->filter->ctx, NULL, jitter->format, jitter->ctx->frequence);
 #ifdef DECODER_HEARTBEAT
 	if (heartbeat_samples)
 	{
@@ -382,8 +401,9 @@ static int mad_run(decoder_ctx_t *ctx, jitter_t *jitter)
 		jitter->ops->heartbeat(jitter->ctx, &ctx->heartbeat);
 	}
 #endif
-	pthread_create(&ctx->thread, NULL, mad_thread, ctx);
-	return 0;
+	if (ret == 0)
+		pthread_create(&ctx->thread, NULL, mad_thread, ctx);
+	return ret;
 }
 
 static int decoder_check(const char *path)
@@ -408,6 +428,11 @@ static void mad_destroy(decoder_ctx_t *ctx)
 #ifdef DECODER_HEARTBEAT
 	ctx->heartbeat.ops->destroy(ctx->heartbeat.ctx);
 #endif
+	if (ctx->filter)
+	{
+		ctx->filter->ops->destroy(ctx->filter->ctx);
+		free(ctx->filter);
+	}
 	JITTER_destroy(ctx->in);
 	free(ctx);
 }

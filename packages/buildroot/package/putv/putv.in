@@ -1,0 +1,28 @@
+# putv config.
+
+DAEMON=totem
+MAINDAEMON=${BINDIR}/${DAEMON}
+MEDIA=file:///home/share/Musics/
+WEBSOCKETDIR=${RUNDIR}/websocket
+LOGFILE=/var/run/putv.log
+USER=www-data
+case $DAEMON in
+  totem)
+    #OUTPUT="card0:format=24le,mixer=Master"
+    ;;
+  putv)
+    OUTPUT="unix://${WEBSOCKETDIR}/totem.mp3"
+    ;;
+  ouiradio)
+    OUTPUT="rtp://224.0.0.0:4400"
+    ;;
+esac
+
+CINPUT_DEVICE="/dev/input/event0"
+CINPUT_JSON="/home/ouiradio.json"
+
+CDISPLAY=${BINDIR}/putv_display
+CINPUT=${BINDIR}/putv_input
+OPTIONS_CLIENTS="-R ${WEBSOCKETDIR} -n ${DAEMON}"
+OPTIONS_CINPUT="-i ${CINPUT_DEVICE} -m ${CINPUT_JSON}"
+

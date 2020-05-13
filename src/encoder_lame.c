@@ -162,7 +162,7 @@ static encoder_ctx_t *encoder_init(player_ctx_t *player)
 				ctx->samplesframe * ctx->samplesize * ctx->nchannels);
 	ctx->in = jitter;
 	jitter->format = PCM_16bits_LE_stereo;
-	jitter->ctx->frequence = DEFAULT_SAMPLERATE;
+	jitter->ctx->frequence = 0; // automatic freq
 	jitter->ctx->thredhold = 1;
 
 	return ctx;

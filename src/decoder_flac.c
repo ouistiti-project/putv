@@ -51,7 +51,8 @@ struct decoder_ctx_s
 	jitter_t *out;
 	unsigned char *outbuffer;
 	size_t outbufferlen;
-	const filter_t *filter;
+	filter_t *filter;
+	player_ctx_t *player;
 };
 #define DECODER_CTX
 #include "decoder.h"
@@ -69,19 +70,20 @@ struct decoder_ctx_s
 
 #define decoder_dbg(...)
 
-#define BUFFERSIZE 1500
+#define BUFFERSIZE 9000
 
-#define NBUFFER 3
+#define NBUFFER 4
 
 static const char *jitter_name = "flac decoder";
-static decoder_ctx_t *decoder_init(player_ctx_t *player, const filter_t *filter)
+static decoder_ctx_t *decoder_init(player_ctx_t *player)
 {
 	decoder_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->ops = decoder_flac;
 	ctx->nchannels = 2;
 	ctx->samplerate = DEFAULT_SAMPLERATE;
+	ctx->player = player;
 
-	ctx->filter = filter;
+	ctx->filter = filter_build(player_filtername(player), PCM_24bits4_LE_stereo, sampled_change);
 
 	ctx->decoder = FLAC__stream_decoder_new();
 	if (ctx->decoder == NULL)
@@ -98,8 +100,11 @@ static jitter_t *decoder_jitter(decoder_ctx_t *ctx, jitte_t jitte)
 {
 	if (ctx->in == NULL)
 	{
-		jitter_t *jitter = jitter_ringbuffer_init(jitter_name, NBUFFER, BUFFERSIZE);
+		int factor = jitte;
+		int nbbuffer = NBUFFER << factor;
+		jitter_t *jitter = jitter_ringbuffer_init(jitter_name, nbbuffer, BUFFERSIZE);
 		ctx->in = jitter;
+		jitter->ctx->thredhold = nbbuffer / 2;
 		jitter->format = FLAC;
 	}
 	return ctx->in;
@@ -139,6 +144,10 @@ output(const FLAC__StreamDecoder *decoder,
 	decoder_ctx_t *ctx = (decoder_ctx_t *)data;
 	filter_audio_t audio;
 
+	if (player_waiton(ctx->player, STATE_PAUSE) < 0)
+	{
+		return FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
+	}
 	/* pcm->samplerate contains the sampling frequency */
 
 	audio.samplerate = FLAC__stream_decoder_get_sample_rate(decoder);
@@ -170,6 +179,17 @@ output(const FLAC__StreamDecoder *decoder,
 		if (ctx->outbuffer == NULL)
 		{
 			ctx->outbuffer = ctx->out->ops->pull(ctx->out->ctx);
+			/**
+			 * the pipe is broken. close the src and the decoder
+			 */
+			if (ctx->outbuffer == NULL)
+			{
+				/**
+				 * flush the src jitter to break the stream
+				 */
+				ctx->in->ops->flush(ctx->in->ctx);
+				return FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
+			}
 		}
 
 		int len =
@@ -191,7 +211,7 @@ output(const FLAC__StreamDecoder *decoder,
 static void
 metadata(const FLAC__StreamDecoder *decoder,
 	const FLAC__StreamMetadata *metadata,
-	void *client_data)
+	void *data)
 {
 }
 
@@ -206,16 +226,7 @@ static void *decoder_thread(void *arg)
 {
 	int result = 0;
 	decoder_ctx_t *ctx = (decoder_ctx_t *)arg;
-	result = FLAC__stream_decoder_init_stream(ctx->decoder,
-		input,
-		NULL,
-		NULL,
-		NULL,
-		NULL,
-		output,
-		metadata,
-		error,
-		ctx);
+	dbg("decoder: start running");
 	result = FLAC__stream_decoder_process_until_end_of_stream(ctx->decoder);
 	/**
 	 * push the last buffer to the encoder, otherwise the next
@@ -225,7 +236,9 @@ static void *decoder_thread(void *arg)
 	{
 		ctx->out->ops->push(ctx->out->ctx, ctx->outbufferlen, NULL);
 	}
-	ctx->out->ops->flush(ctx->out->ctx);
+
+	dbg("decoder: stop running");
+	player_state(ctx->player, STATE_CHANGE);
 
 	return (void *)(intptr_t)result;
 }
@@ -238,17 +251,44 @@ static int decoder_check(const char *path)
 	return -1;
 }
 
+static int decoder_prepare(decoder_ctx_t *ctx)
+{
+	decoder_dbg("decoder: prepare");
+	int ret;
+	FLAC__stream_decoder_set_metadata_ignore(ctx->decoder, FLAC__METADATA_TYPE_PADDING);
+	FLAC__stream_decoder_set_metadata_ignore(ctx->decoder, FLAC__METADATA_TYPE_VORBIS_COMMENT);
+	FLAC__stream_decoder_set_metadata_ignore(ctx->decoder, FLAC__METADATA_TYPE_CUESHEET);
+	FLAC__stream_decoder_set_metadata_ignore(ctx->decoder, FLAC__METADATA_TYPE_PICTURE);
+	ret = FLAC__stream_decoder_init_stream(ctx->decoder,
+		input,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		output,
+		metadata,
+		error,
+		ctx);
+	if (ret == FLAC__STREAM_DECODER_INIT_STATUS_OK)
+	{
+		ret != FLAC__stream_decoder_process_until_end_of_metadata(ctx->decoder);
+	}
+	return ret;
+}
+
 static int decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 {
+	int ret = 0;
 	ctx->out = jitter;
 	/**
 	 * Initialization of the filter here.
 	 * Because we need the jitter out.
 	 */
 	if (ctx->filter)
-		ctx->filter->ops->set(ctx->filter->ctx, NULL, jitter->ctx->frequence);
-	pthread_create(&ctx->thread, NULL, decoder_thread, ctx);
-	return 0;
+		ret = ctx->filter->ops->set(ctx->filter->ctx, NULL, jitter->format, jitter->ctx->frequence);
+	if (ret == 0)
+		pthread_create(&ctx->thread, NULL, decoder_thread, ctx);
+	return ret;
 }
 
 static const char *decoder_mime(decoder_ctx_t *ctx)
@@ -263,6 +303,11 @@ static void decoder_destroy(decoder_ctx_t *ctx)
 	/* release the decoder */
 	FLAC__stream_decoder_delete(ctx->decoder);
 	jitter_ringbuffer_destroy(ctx->in);
+	if (ctx->filter)
+	{
+		ctx->filter->ops->destroy(ctx->filter->ctx);
+		free(ctx->filter);
+	}
 	free(ctx);
 }
 
@@ -271,6 +316,7 @@ const decoder_ops_t *decoder_flac = &(decoder_ops_t)
 	.check = decoder_check,
 	.init = decoder_init,
 	.jitter = decoder_jitter,
+	.prepare = decoder_prepare,
 	.run = decoder_run,
 	.mime = decoder_mime,
 	.destroy = decoder_destroy,

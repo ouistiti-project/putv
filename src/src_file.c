@@ -49,6 +49,7 @@ struct src_ctx_s
 	jitter_t *out;
 	decoder_t *estream;
 	event_listener_t *listener;
+	long pid;
 };
 #define SRC_CTX
 #include "src.h"
@@ -69,10 +70,6 @@ struct src_ctx_s
 static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 {
 	int ret = 0;
-	if (player_waiton(ctx->player, STATE_PAUSE) < 0)
-	{
-		return 0;
-	}
 	fd_set rfds;
 	int maxfd = ctx->fd;
 	FD_ZERO(&rfds);
@@ -87,22 +84,15 @@ static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 	{
 		warn("src: timeout");
 	}
-	src_dbg("src: read %d", ret);
+	src_dbg("src: read %d %d", ctx->fd, ret);
 	if (ret < 0)
 		err("src file %d error: %s", ctx->fd, strerror(errno));
-	if (ret == 0)
-	{
-		ctx->out->ops->flush(ctx->out->ctx);
-		dbg("src: end of file");
-		player_next(ctx->player);
-	}
 	return ret;
 }
 
 static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mime)
 {
 	int fd = -1;
-	char *path = NULL;
 	if (!strcmp(url, "-"))
 		fd = 0;
 	else
@@ -141,24 +131,43 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 		src->fd = fd;
 		src->player = player;
 		src->mime = mime;
+		dbg("src: %s %s", src_file->name, url);
 		return src;
 	}
-	if (path != NULL)
-		err("src file %s error: %s", path, strerror(errno));
-	else
-		err("src file %s error: %s", url, strerror(errno));
+	err("src file %s error: %s", url, strerror(errno));
 	return NULL;
+}
+
+static int src_prepare(src_ctx_t *ctx)
+{
+	dbg("src: prepare");
+	event_new_es_t event = {.pid = ctx->pid, .mime = ctx->mime, .jitte = JITTE_LOW};
+	event_listener_t *listener = ctx->listener;
+	const src_t src = { .ops = src_file, .ctx = ctx};
+	while (listener)
+	{
+		listener->cb(listener->arg, &src, SRC_EVENT_NEW_ES, (void *)&event);
+		listener = listener->next;
+	}
+	/**
+	 * the decoder or demux must be attached here.
+	 */
 }
 
 static int src_run(src_ctx_t *ctx)
 {
-	const event_new_es_t event = {.pid = 0, .mime = ctx->mime, .jitte = JITTE_LOW};
+	dbg("src: run");
+	event_decode_es_t event_decode = {.pid = ctx->pid, .decoder = ctx->estream};
 	event_listener_t *listener = ctx->listener;
+	const src_t src = { .ops = src_file, .ctx = ctx};
 	while (listener)
 	{
-		listener->cb(listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
+		listener->cb(listener->arg, &src, SRC_EVENT_DECODE_ES, (void *)&event_decode);
 		listener = listener->next;
 	}
+	/**
+	 * src_file is a producer on the jitter, the run function may leave
+	 */
 	return 0;
 }
 
@@ -182,7 +191,7 @@ static void src_eventlistener(src_ctx_t *ctx, event_listener_cb_t cb, void *arg)
 	}
 }
 
-static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
+static int src_attach(src_ctx_t *ctx, long index, decoder_t *decoder)
 {
 	if (index > 0)
 		return -1;
@@ -193,7 +202,7 @@ static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
 	ctx->out->ctx->producter = (void *)ctx;
 }
 
-static decoder_t *src_estream(src_ctx_t *ctx, int index)
+static decoder_t *src_estream(src_ctx_t *ctx, long index)
 {
 	return ctx->estream;
 }
@@ -215,8 +224,10 @@ static void src_destroy(src_ctx_t *ctx)
 
 const src_ops_t *src_file = &(src_ops_t)
 {
+	.name = "file",
 	.protocol = "file://",
 	.init = src_init,
+	.prepare = src_prepare,
 	.run = src_run,
 	.eventlistener = src_eventlistener,
 	.attach = src_attach,

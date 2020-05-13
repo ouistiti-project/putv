@@ -1,0 +1,30 @@
+menu "Putv"
+
+config BR2_PACKAGE_PUTV
+	bool "putv: Embedded media streamer"
+	select BR2_PACKAGE_LIBMAD
+	select BR2_PACKAGE_JANSSON
+	select BR2_PACKAGE_SQLITE
+	select BR2_PACKAGE_LIBID3TAG
+	select BR2_PACKAGE_ALSA_LIB
+	select BR2_PACKAGE_LAME
+	select BR2_PACKAGE_FLAC
+	select BR2_PACKAGE_LIBCURL
+	help
+	  https://github.com/ouistiti-project
+
+config BR2_PACKAGE_PUTV_DEFCONFIG
+	string "defconfig"
+	depends on BR2_PACKAGE_PUTV
+	default "ouiradio_defconfig"
+
+config BR2_PACKAGE_PUTV_WEBIF_HTTPS
+	bool "install web interface on HTTPS"
+	depends on BR2_PACKAGE_PUTV
+
+config BR2_PACKAGE_PUTV_UPNPRENDERER
+	bool "Enable Upnp renderer"
+	select BR2_PACKAGE_GMRENDER_RESURRECT2
+	depends on BR2_PACKAGE_PUTV
+
+endmenu

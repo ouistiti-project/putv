@@ -45,7 +45,6 @@ struct media_ctx_s
 	sqlite3 *db;
 	char *path;
 	char *query;
-	char *playlist;
 	int mediaid;
 	unsigned int options;
 	int listid;
@@ -71,7 +70,7 @@ struct media_ctx_s
 #ifdef DEBUG
 #define SQLITE3_CHECK(ret, value, sql) \
 		if (ret != SQLITE_OK) {\
-			err("%s(%d) %s", __FUNCTION__, __LINE__, sql); \
+			err("%s(%d) => %d %s", __FUNCTION__, __LINE__, ret, sql); \
 			return value; \
 		}
 #else
@@ -88,6 +87,8 @@ static int media_end(media_ctx_t *ctx);
 static option_state_t media_loop(media_ctx_t *ctx, option_state_t enable);
 static option_state_t media_random(media_ctx_t *ctx, option_state_t enable);
 static void media_destroy(media_ctx_t *ctx);
+
+static const char str_mediasqlite[] = "sqlite DB";
 
 static int _execute(sqlite3_stmt *statement)
 {
@@ -1113,6 +1114,7 @@ static int media_list(media_ctx_t *ctx, media_parse_t cb, void *data)
 	sqlite3 *db = ctx->db;
 	int count = 0;
 	sqlite3_stmt *statement;
+
 #ifndef MEDIA_SQLITE_EXT
 	char *sql = "select \"url\", \"mimeid\", \"id\", \"info\" from \"media\" inner join playlist on media.id=playlist.id";
 #else
@@ -1314,6 +1316,7 @@ static int _media_changelist(media_ctx_t *ctx, char *playlist)
 		else
 		{
 			listid = sqlite3_last_insert_rowid(db);
+			dbg("new playlist %s %d", playlist, listid);
 			int tempolist = ctx->listid;
 			ctx->listid = listid;
 			if (ctx->fill == 1)
@@ -1351,17 +1354,20 @@ static int _media_opendb(media_ctx_t *ctx, const char *url)
 		ret = sqlite3_open_v2(ctx->path, &ctx->db, SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE, NULL);
 		ret = SQLITE_CORRUPT;
 	}
+	ctx->listid = 1;
 	if (ctx->query != NULL)
 	{
 		char *fill = strstr(ctx->query, "fill=true");
-		ctx->playlist = strstr(ctx->query, "playlist=");
-		if (ctx->playlist != NULL)
+		char *playlist = strstr(ctx->query, "playlist=");
+		if (playlist != NULL)
 		{
-			ctx->playlist[8] = '\0';
-			ctx->playlist += 9;
-			char *end = strchr(ctx->playlist, ',');
+			playlist += 9;
+			char tempo[64];
+			strncpy(tempo, playlist, sizeof(tempo));
+			char *end = strchr(tempo, ',');
 			if (end != NULL)
 				*end = '\0';
+			ctx->listid = _media_changelist(ctx, tempo);
 		}
 		if (fill != NULL)
 		{
@@ -1436,8 +1442,9 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url, ...)
 	"FOREIGN KEY (albumid) REFERENCES album(id) ON UPDATE SET NULL);",
 "create table opus (id INTEGER PRIMARY KEY,  titleid INTEGER UNIQUE NOT NULL, " \
 	"artistid INTEGER, otherid INTEGER, albumid INTEGER, " \
-	"genreid INTEGER, coverid INTEGER, like INTEGER, comment BLOB, " \
+	"genreid INTEGER, coverid INTEGER, like INTEGER, introid INTEGER, comment BLOB, " \
 	"FOREIGN KEY (titleid) REFERENCES word(id), " \
+	"FOREIGN KEY (introid) REFERENCES opus(id), " \
 	"FOREIGN KEY (artistid) REFERENCES artist(id) ON UPDATE SET NULL," \
 	"FOREIGN KEY (albumid) REFERENCES album(id) ON UPDATE SET NULL," \
 	"FOREIGN KEY (genreid) REFERENCES word(id) ON UPDATE SET NULL," \
@@ -1470,10 +1477,6 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url, ...)
 		if (ret == SQLITE_OK)
 		{
 			dbg("open db %s", url);
-			if (ctx->playlist != NULL)
-				ctx->listid = _media_changelist(ctx, ctx->playlist);
-			else
-				ctx->listid = 1;
 		}
 		else
 		{
@@ -1500,6 +1503,7 @@ static void media_destroy(media_ctx_t *ctx)
 
 const media_ops_t *media_sqlite = &(const media_ops_t)
 {
+	.name = str_mediasqlite,
 	.init = media_init,
 	.destroy = media_destroy,
 	.next = media_next,
@@ -1507,6 +1511,7 @@ const media_ops_t *media_sqlite = &(const media_ops_t)
 	.list = media_list,
 	.find = media_find,
 	.insert = media_insert,
+	.append = media_insert,
 	.remove = media_remove,
 	.count = media_count,
 	.end = media_end,

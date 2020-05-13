@@ -59,24 +59,60 @@ struct filter_ctx_s
 #define dbg(...)
 #endif
 
+static filter_ctx_t *filter_init(sampled_t sampled, jitter_format_t format,...);
+static int filter_set(filter_ctx_t *ctx, sampled_t sampled, jitter_format_t format, unsigned int samplerate);
+static void filter_destroy(filter_ctx_t *ctx);
+
 # define FRACBITS		28
 # define ONE		((sample_t)(0x10000000L))
 
-#define SCALING_GAIN 7
-
-static int sampled_change(filter_ctx_t *ctx, sample_t sample, int bitspersample, unsigned char *out);
-static int sampled_scaling(filter_ctx_t *ctx, sample_t sample, int bitspersample, unsigned char *out);
-
-filter_ctx_t *filter_init(sampled_t sampled, jitter_format_t format,...)
+static filter_ctx_t *filter_init(sampled_t sampled, jitter_format_t format,...)
 {
 	filter_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->sampled = sampled;
+
+	filter_set(ctx, sampled, format, 44100);
+	return ctx;
+}
+
+#ifdef FILTER_ONECHANNEL
+static filter_ctx_t *filter_init_onechannel(sampled_t sampled, jitter_format_t format, int channel)
+{
+	filter_ctx_t *ctx = filter_init(sampled, format);
+	if (ctx != NULL)
+	{
+		ctx->channel = channel;
+	}
+	return ctx;
+}
+
+static filter_ctx_t *filter_init_left(sampled_t sampled, jitter_format_t format, ...)
+{
+	filter_ctx_t *ctx = filter_init_onechannel(sampled, format, 0);
+	return ctx;
+}
+static filter_ctx_t *filter_init_right(sampled_t sampled, jitter_format_t format, ...)
+{
+	filter_ctx_t *ctx = filter_init_onechannel(sampled, format, 1);
+	return ctx;
+}
+#endif
+
+static int filter_set(filter_ctx_t *ctx, sampled_t sampled, jitter_format_t format, unsigned int samplerate)
+{
+	if (sampled != NULL)
+		ctx->sampled = sampled;
 
 	unsigned char samplesize = 4;
 	unsigned char shift = 24;
 	unsigned char nchannels = 2;
 	switch (format)
 	{
+	case PCM_8bits_mono:
+		samplesize = 2;
+		shift = 8;
+		nchannels = 1;
+	break;
 	case PCM_16bits_LE_mono:
 		samplesize = 2;
 		shift = 16;
@@ -105,53 +141,20 @@ filter_ctx_t *filter_init(sampled_t sampled, jitter_format_t format,...)
 	break;
 	default:
 		err("decoder out format not supported %d", format);
-		return NULL;
+		return -1;
 	}
 	ctx->samplesize = samplesize;
 	ctx->shift = shift;
 	ctx->nchannels = nchannels;
-
-	ctx->samplerate = 44100;
-	return ctx;
-}
-
-#ifdef FILTER_ONECHANNEL
-static filter_ctx_t *filter_init_onechannel(sampled_t sampled, jitter_format_t format, int channel)
-{
-	filter_ctx_t *ctx = filter_init(sampled, format);
-	if (ctx != NULL)
-	{
-		ctx->channel = channel;
-	}
-	return ctx;
-}
-
-static filter_ctx_t *filter_init_left(sampled_t sampled, jitter_format_t format, ...)
-{
-	filter_ctx_t *ctx = filter_init_onechannel(sampled, format, 0);
-	return ctx;
-}
-static filter_ctx_t *filter_init_right(sampled_t sampled, jitter_format_t format, ...)
-{
-	filter_ctx_t *ctx = filter_init_onechannel(sampled, format, 1);
-	return ctx;
-}
-#endif
-
-int filter_set(filter_ctx_t *ctx, sampled_t sampled, unsigned int samplerate)
-{
-	if (sampled != NULL)
-		ctx->sampled = sampled;
 	ctx->samplerate = samplerate;
 	return 0;
 }
 
-void filter_destroy(filter_ctx_t *ctx)
+static void filter_destroy(filter_ctx_t *ctx)
 {
 	free(ctx);
 }
 
-#ifdef FILTER_SCALING
 /**
  * @brief this function comes from mad decoder
  *
@@ -175,20 +178,16 @@ signed int scale_sample(sample_t sample, int length)
 	return sample;
 }
 
-static int filter_scaling(filter_ctx_t *ctx, sample_t *samples, int nsamples)
+int sampled_scaling(filter_ctx_t *ctx, sample_t sample, int bitspersample, unsigned char *out)
 {
-	int scaling = ((ctx->shift) > 24)?24:ctx->shift;
-	int j;
-	for (j = 0; j < nsamples; j++)
-	{
-		sample_t sample = samples[j];
-		samples[j] = scale_sample(sample, scaling);
-	}
-	return j;
-}
-#endif
+	int length = ((ctx->shift) > bitspersample)?bitspersample:ctx->shift;
+	sample = scale_sample(sample, length);
 
-static int sampled_change(filter_ctx_t *ctx, sample_t sample, int bitspersample, unsigned char *out)
+	return sampled_change(ctx, sample, bitspersample, out);
+}
+
+
+int sampled_change(filter_ctx_t *ctx, sample_t sample, int bitspersample, unsigned char *out)
 {
 	int i = 0, j = 0;
 	for (i = 0; i < ctx->samplesize; i++)
@@ -206,7 +205,7 @@ static int sampled_change(filter_ctx_t *ctx, sample_t sample, int bitspersample,
 	return ctx->samplesize;
 }
 
-static int filter_run(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *buffer, size_t size)
+static int filter_interleave(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *buffer, size_t size)
 {
 	int j;
 	int i;
@@ -224,10 +223,10 @@ static int filter_run(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *b
 				sample = audio->samples[(j % audio->nchannels)][i];
 			else
 				sample = audio->samples[0][i];
-			if (audio->regain)
-			{
-				sample = sample << audio->regain;
-			}
+			if (audio->regain > 0)
+					sample = sample << audio->regain;
+			else if (audio->regain < 0)
+				sample = sample >> -audio->regain;
 			int len = ctx->sampled(ctx, sample, audio->bitspersample,
 						buffer + bufferlen);
 			bufferlen += len;
@@ -241,7 +240,7 @@ filter_exit:
 }
 
 #ifdef FILTER_MIXED
-static int filter_run_mixed(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *buffer, size_t size)
+static int filter_mixemono(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *buffer, size_t size)
 {
 	int j;
 	int i;
@@ -282,7 +281,7 @@ filter_exit:
 #endif
 
 #ifdef FILTER_ONECHANNEL
-static int filter_run_onechannel(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *buffer, size_t size)
+static int filter_mono(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *buffer, size_t size)
 {
 	int j;
 	int i;
@@ -316,17 +315,12 @@ filter_exit:
 
 #endif
 
-const filter_ops_t *filter_pcm = &(filter_ops_t)
+const filter_ops_t *filter_pcm_interleave = &(filter_ops_t)
 {
 	.name = "pcm_stereo",
 	.init = filter_init,
 	.set = filter_set,
-#ifdef FILTER_SCALING
-	.scaling = filter_scaling,
-#else
-	.scaling = NULL,
-#endif
-	.run = filter_run,
+	.run = filter_interleave,
 	.destroy = filter_destroy,
 };
 
@@ -337,12 +331,7 @@ const filter_ops_t *filter_pcm_mixed = &(filter_ops_t)
 	.name = "pcm_mixed",
 	.init = filter_init,
 	.set = filter_set,
-#ifdef FILTER_SCALING
-	.scaling = filter_scaling,
-#else
-	.scaling = NULL,
-#endif
-	.run = filter_run_mixed,
+	.run = filter_mixemono,
 	.destroy = filter_destroy,
 };
 #endif
@@ -353,12 +342,7 @@ const filter_ops_t *filter_pcm_left = &(filter_ops_t)
 	.name = "pcm_left",
 	.init = filter_init_left,
 	.set = filter_set,
-#ifdef FILTER_SCALING
-	.scaling = filter_scaling,
-#else
-	.scaling = NULL,
-#endif
-	.run = filter_run_onechannel,
+	.run = filter_mono,
 	.destroy = filter_destroy,
 };
 
@@ -367,21 +351,16 @@ const filter_ops_t *filter_pcm_right = &(filter_ops_t)
 	.name = "pcm_right",
 	.init = filter_init_right,
 	.set = filter_set,
-#ifdef FILTER_SCALING
-	.scaling = filter_scaling,
-#else
-	.scaling = NULL,
-#endif
-	.run = filter_run_onechannel,
+	.run = filter_mono,
 	.destroy = filter_destroy,
 };
 #endif
 
-filter_t *filter_build(const char *name, jitter_format_t format)
+filter_t *filter_build(const char *name, jitter_format_t format, sampled_t sampled)
 {
 	filter_t *filter = calloc(1, sizeof (*filter));
-	if (!strcmp(name, filter_pcm->name))
-		filter->ops = filter_pcm;
+	if (!strcmp(name, filter_pcm_interleave->name))
+		filter->ops = filter_pcm_interleave;
 #ifdef FILTER_MIXED
 	if (!strcmp(name, filter_pcm_mixed->name))
 		filter->ops = filter_pcm_mixed;
@@ -392,6 +371,6 @@ filter_t *filter_build(const char *name, jitter_format_t format)
 	if (!strcmp(name, filter_pcm_right->name))
 		filter->ops = filter_pcm_right;
 #endif
-	filter->ctx = filter->ops->init(sampled_change, format);
+	filter->ctx = filter->ops->init(sampled, format);
 	return filter;
 }

@@ -53,6 +53,9 @@ struct sink_ctx_s
 	int buffersize;
 	char samplesize;
 	char nchannels;
+
+	unsigned char *noise;
+	unsigned int noisecnt;
 };
 #define SINK_CTX
 #include "sink.h"
@@ -67,8 +70,8 @@ struct sink_ctx_s
 
 #define sink_dbg(...)
 
-#define LATENCE_MS 50
-#define NB_BUFFER 3
+#define LATENCE_MS 5
+#define NB_BUFFER 16
 
 #ifdef USE_REALTIME
 // REALTIME_SCHED is set from the Makefile to SCHED_RR
@@ -77,11 +80,7 @@ struct sink_ctx_s
 #endif
 
 #ifndef ALSA_MIXER
-#ifdef SINK_ALSA_MIXER_CH
-#define ALSA_MIXER SINK_ALSA_MIXER_CH
-#else
 #define ALSA_MIXER "Master"
-#endif
 #endif
 
 const sink_ops_t *sink_alsa;
@@ -117,41 +116,70 @@ unsigned int _mixer_getvolume(sink_ctx_t *ctx)
 # define _mixer_getvolume NULL
 #endif
 
+typedef struct pcm_config_s
+{
+	int samplesize;
+	int nchannels;
+	snd_pcm_format_t pcm_format;
+} pcm_config_t;
+
+static int _pcm_config(jitter_format_t format, pcm_config_t *config)
+{
+	jitter_format_t downformat = format;
+	switch (format)
+	{
+		case PCM_32bits_LE_stereo:
+			config->pcm_format = SND_PCM_FORMAT_S32_LE;
+			downformat = PCM_24bits4_LE_stereo;
+			config->samplesize = 4;
+			config->nchannels = 2;
+		break;
+		case PCM_24bits4_LE_stereo:
+			config->pcm_format = SND_PCM_FORMAT_S24_LE;
+			downformat = PCM_16bits_LE_stereo;
+			config->samplesize = 4;
+			config->nchannels = 2;
+		break;
+		case PCM_24bits3_LE_stereo:
+			config->pcm_format = SND_PCM_FORMAT_S24_3LE;
+			downformat = PCM_16bits_LE_stereo;
+			config->samplesize = 3;
+			config->nchannels = 2;
+		break;
+		case PCM_16bits_LE_stereo:
+			config->pcm_format = SND_PCM_FORMAT_S16_LE;
+			config->samplesize = 2;
+			config->nchannels = 2;
+		break;
+		case PCM_16bits_LE_mono:
+			config->pcm_format = SND_PCM_FORMAT_S16_LE;
+			config->samplesize = 2;
+			config->nchannels = 1;
+		break;
+		case PCM_8bits_mono:
+			config->pcm_format = SND_PCM_FORMAT_S8;
+			downformat = PCM_16bits_LE_mono;
+			config->samplesize = 2;
+			config->nchannels = 1;
+		break;
+	}
+	return downformat;
+}
+
 static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate, unsigned int *size)
 {
 	int ret;
 
+	sink_dbg("sink: open %s", ctx->soundcard);
 	ret = snd_pcm_open(&ctx->playback_handle, ctx->soundcard, SND_PCM_STREAM_PLAYBACK, 0);
-
-	snd_pcm_format_t pcm_format;
-	switch (format)
+	if (ret < 0)
 	{
-		case PCM_32bits_LE_stereo:
-			pcm_format = SND_PCM_FORMAT_S32_LE;
-			ctx->samplesize = 4;
-			ctx->nchannels = 2;
-		break;
-		case PCM_24bits4_LE_stereo:
-			pcm_format = SND_PCM_FORMAT_S24_LE;
-			ctx->samplesize = 4;
-			ctx->nchannels = 2;
-		break;
-		case PCM_24bits3_LE_stereo:
-			pcm_format = SND_PCM_FORMAT_S24_3LE;
-			ctx->samplesize = 3;
-			ctx->nchannels = 2;
-		break;
-		case PCM_16bits_LE_stereo:
-			pcm_format = SND_PCM_FORMAT_S16_LE;
-			ctx->samplesize = 2;
-			ctx->nchannels = 2;
-		break;
-		case PCM_16bits_LE_mono:
-			pcm_format = SND_PCM_FORMAT_S16_LE;
-			ctx->samplesize = 2;
-			ctx->nchannels = 1;
-		break;
+		err("sink: open %s", ctx->soundcard);
+		goto error;
 	}
+
+	pcm_config_t config = {0};
+	jitter_format_t downformat = _pcm_config(format, &config);
 
 	snd_pcm_hw_params_t *hw_params;
 	ret = snd_pcm_hw_params_malloc(&hw_params);
@@ -176,14 +204,12 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 		goto error;
 	}
 
-	ret = snd_pcm_hw_params_set_format(ctx->playback_handle, hw_params, pcm_format);
+	ret = snd_pcm_hw_params_set_format(ctx->playback_handle, hw_params, config.pcm_format);
 	if (ret < 0)
 	{
-		pcm_format = SND_PCM_FORMAT_S24_LE;
-		ctx->samplesize = 4;
-		ctx->nchannels = 2;
-		format = PCM_32bits_LE_stereo;
-		ret = snd_pcm_hw_params_set_format(ctx->playback_handle, hw_params, pcm_format);
+		format = downformat;
+		_pcm_config(format, &config);
+		ret = snd_pcm_hw_params_set_format(ctx->playback_handle, hw_params, config.pcm_format);
 		if (ret < 0)
 		{
 			err("sink: format");
@@ -192,6 +218,8 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 		warn("sink: alsa downgrade to 24bits over 32bits");
 	}
 	ctx->format = format;
+	ctx->nchannels = config.nchannels;
+	ctx->samplesize = config.samplesize;
 
 	unsigned int trate = rate;
 	if (rate == 0)
@@ -210,13 +238,22 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 		goto error;
 	}
 
+	unsigned int periods = NB_BUFFER/2;
 	snd_pcm_uframes_t periodsize = 0;
 	snd_pcm_uframes_t buffersize = 0;
 	if (*size > 0)
 	{
 		int dir = 0;
-		buffersize = *size;
-		periodsize = (*size / NB_BUFFER);
+		buffersize = *size * periods;
+		periodsize = *size;
+		dbg("set %ld %ld", buffersize, periodsize);
+		ret = snd_pcm_hw_params_set_periods(ctx->playback_handle, hw_params, periods, dir);
+		if (ret < 0)
+		{
+			err("sink: periods %s", snd_strerror(ret));
+			goto error;
+		}
+
 		ret = snd_pcm_hw_params_set_buffer_size_near(ctx->playback_handle, hw_params, &buffersize);
 		if (ret < 0)
 		{
@@ -241,14 +278,21 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 
 	snd_pcm_hw_params_get_buffer_size(hw_params, &buffersize);
 	snd_pcm_hw_params_get_period_size(hw_params, &periodsize, 0);
+	snd_pcm_hw_params_get_periods(hw_params, &periods, 0);
+	unsigned int periodtime = 0;
+	snd_pcm_hw_params_get_period_time(hw_params, &periodtime, 0);
 	dbg("sink alsa config :\n" \
 		"\tbuffer size %lu\n" \
 		"\tperiod size %lu\n" \
+		"\tnb periods %d\n" \
+		"\tperiod time %fms\n" \
 		"\tsample rate %d\n" \
 		"\tsample size %d\n" \
 		"\tnchannels %u",
 		buffersize,
 		periodsize,
+		periods,
+		((double)periodtime) / 1000,
 		rate,
 		ctx->samplesize,
 		ctx->nchannels);
@@ -256,7 +300,8 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 	*size = ctx->buffersize;
 
 	ret = snd_pcm_prepare(ctx->playback_handle);
-	if (ret < 0) {
+	if (ret < 0)
+	{
 		err("sink: prepare");
 		goto error;
 	}
@@ -264,6 +309,8 @@ static int _pcm_open(sink_ctx_t *ctx, jitter_format_t format, unsigned int rate,
 	ctx->samplerate = rate;
 
 error:
+	if (ret < 0)
+		err("alsa: pcm error %s", snd_strerror(ret));
 	snd_pcm_hw_params_free(hw_params);
 	return ret;
 }
@@ -285,36 +332,35 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 	ctx->soundcard = strdup(soundcard);
 	ctx->mixerch = ALSA_MIXER;
 #ifdef SINK_ALSA_CONFIG
-	char *setting = strchr(ctx->soundcard, ':');
+	char *setting = strchr(ctx->soundcard, '?');
 	while (setting != NULL)
 	{
-		*setting = '\0';
-		setting++;
-		if (setting == NULL)
-			break;
-		if (!strncmp(setting, "format=", 7))
+		if (!strncmp(setting + 1, "format=", 7))
 		{
-			setting += 7;
+			*setting = '\0';
+			setting += 8;
+			if (!strncmp(setting, "8", 4))
+				format = PCM_8bits_mono;
 			if (!strncmp(setting, "16le", 4))
 				format = PCM_16bits_LE_stereo;
 			if (!strncmp(setting, "24le", 4))
 				format = PCM_24bits4_LE_stereo;
 			if (!strncmp(setting, "32le", 4))
 				format = PCM_32bits_LE_stereo;
-			setting = strchr(setting, ',');
 		}
-		if (!strncmp(setting, "samplerate=", 11))
+		if (!strncmp(setting + 1, "samplerate=", 11))
 		{
-			setting += 11;
+			*setting = '\0';
+			setting += 12;
 			samplerate = atoi(setting);
-			setting = strchr(setting, ',');
 		}
-		if (!strncmp(setting, "mixer=", 6))
+		if (!strncmp(setting + 1, "mixer=", 6))
 		{
-			setting += 6;
+			*setting = '\0';
+			setting += 7;
 			ctx->mixerch = setting;
-			setting = strchr(setting, ',');
 		}
+		setting = strchr(setting, ',');
 	}
 #endif
 
@@ -327,7 +373,8 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 	}
 
 #ifdef SINK_ALSA_MIXER
-	if (strncasecmp(ctx->mixerch, "disable", 7))
+	if (strncasecmp(ctx->mixerch, "disable", 7) &&
+		strncasecmp(ctx->mixerch, "none", 4))
 	{
 		snd_mixer_selem_id_t *sid;
 
@@ -357,10 +404,15 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 #else
 	jitter->ctx->frequence = DEFAULT_SAMPLERATE;
 #endif
-	jitter->ctx->thredhold = 2;
+	jitter->ctx->thredhold = NB_BUFFER/2;
 	jitter->format = ctx->format;
-
 	ctx->in = jitter;
+	ctx->noise = malloc(ctx->buffersize);
+	int i = 0;
+	for (i = 0; i < ctx->buffersize; i++)
+	{
+		ctx->noise[i] = (char)random();
+	}
 
 	ctx->player = player;
 
@@ -380,6 +432,13 @@ static int _alsa_checksamplerate(sink_ctx_t *ctx)
 		_pcm_close(ctx);
 		int size = ctx->buffersize;
 		_pcm_open(ctx, ctx->in->format, ctx->in->ctx->frequence, &size);
+		free(ctx->noise);
+		ctx->noise = malloc(ctx->buffersize);
+		int i = 0;
+		for (i = 0; i < ctx->buffersize; i++)
+		{
+			ctx->noise[i] = (char)random();
+		}
 	}
 #ifdef SAMPLERATE_AUTO
 	ctx->in->ctx->frequence = 0;
@@ -392,27 +451,12 @@ static int _alsa_checksamplerate(sink_ctx_t *ctx)
 static void *sink_thread(void *arg)
 {
 	int ret;
-	int divider = 2;
 	sink_ctx_t *ctx = (sink_ctx_t *)arg;
-	switch (ctx->in->format)
-	{
-		case PCM_32bits_LE_stereo:
-			divider = 8;
-		break;
-		case PCM_24bits4_LE_stereo:
-			divider = 8;
-		break;
-		case PCM_24bits3_LE_stereo:
-			divider = 6;
-		break;
-		case PCM_16bits_LE_stereo:
-			divider = 4;
-		break;
-		case PCM_16bits_LE_mono:
-			divider = 2;
-		break;
-	}
+	int divider = ctx->samplesize * ctx->nchannels;
+
 	/* start decoding */
+	while (ctx->in->ops->empty(ctx->in->ctx))
+		usleep(LATENCE_MS * 1000);
 	while (ctx->state != STATE_ERROR)
 	{
 		if (player_waiton(ctx->player, STATE_PAUSE) < 0)
@@ -424,30 +468,88 @@ static void *sink_thread(void *arg)
 				continue;
 			}
 		}
-
-		unsigned char *buff = ctx->in->ops->peer(ctx->in->ctx, NULL);
-		if (buff != NULL)
+		if (player_state(ctx->player, STATE_UNKNOWN) == STATE_STOP)
 		{
-			int length = ctx->in->ops->length(ctx->in->ctx);
+			snd_pcm_drain(ctx->playback_handle);
+			player_waiton(ctx->player, STATE_STOP);
+			/**
+			 * alsa plays noise. but after to restart, the data are not available.
+			 * alsa must wait then before to restart really
+			 */
+			while (ctx->in->ops->empty(ctx->in->ctx))
+			{
+				sched_yield();
+				usleep(LATENCE_MS * 1000);
+			}
+			dbg("sink: continue %d", player_state(ctx->player, STATE_UNKNOWN));
+			snd_pcm_prepare(ctx->playback_handle);
+		}
+
+		unsigned char *buff = NULL;
+		int length = 0;
+		ret = snd_pcm_wait(ctx->playback_handle, 1000);
+		if (ret == -EPIPE)
+		{
+			warn("pcm recover");
+			ret = snd_pcm_recover(ctx->playback_handle, ret, 0);
+			/**
+			* This must never occure, the udp src needs to know
+			* how many PCM missing.
+			*/
+			err("alsa: pcm wait error %s", snd_strerror(ret));
+			break;
+		}
+		if (!ctx->in->ops->empty(ctx->in->ctx))
+		{
+			buff = ctx->in->ops->peer(ctx->in->ctx, NULL);
+			length = ctx->in->ops->length(ctx->in->ctx);
 			_alsa_checksamplerate(ctx);
-			//snd_pcm_mmap_begin
-			ret = snd_pcm_writei(ctx->playback_handle, buff, length / divider);
-			sink_dbg("sink  alsa : write %d/%d %d/%d %d", ret * divider, length, ret, length / divider, divider);
-			if (ret == -EPIPE)
+		}
+		else
+		{
+			snd_pcm_sframes_t samples;
+			snd_pcm_delay(ctx->playback_handle, &samples);
+			/**
+			 * alsa needs at least 3 periods to run correctly
+			 */
+			if (samples * ctx->samplesize * ctx->nchannels > ctx->buffersize * 3)
 			{
-				warn("pcm recover");
-				ret = snd_pcm_recover(ctx->playback_handle, ret, 0);
+				sched_yield();
+				usleep(LATENCE_MS * 1000);
+				continue;
 			}
+			length = ctx->buffersize;
+			buff = ctx->noise;
+			ctx->noisecnt ++;
+		}
+		//snd_pcm_mmap_begin
+		ret = snd_pcm_writei(ctx->playback_handle, buff, length / divider);
+		sink_dbg("sink  alsa : write %d/%d %d/%d %d", ret * divider, length, ret, length / divider, divider);
+		if (ret == -EPIPE)
+		{
+			warn("pcm recover");
+			ret = snd_pcm_recover(ctx->playback_handle, ret, 0);
+		}
+		if (buff != ctx->noise)
 			ctx->in->ops->pop(ctx->in->ctx, ret * divider);
-			if (ret < 0)
+		else
+		{
+			int i = 0;
+			char *tmp;
+			for (i = 0; i < ctx->buffersize; i++)
 			{
-				ctx->state = STATE_ERROR;
-				err("sink: error write pcm %d", ret);
+				tmp = &ctx->noise[i];
+				*tmp = (char)random();
 			}
-			else
-			{
-				sink_dbg("sink: play %d", ret);
-			}
+		}
+		if (ret < 0)
+		{
+			ctx->state = STATE_ERROR;
+			err("sink: error write pcm %s", snd_strerror(ret));
+		}
+		else
+		{
+			sink_dbg("sink: play %d", ret);
 		}
 	}
 	dbg("sink: thread end");
@@ -509,6 +611,7 @@ static void alsa_destroy(sink_ctx_t *ctx)
 		snd_mixer_close(ctx->mixer);
 #endif
 
+	free(ctx->noise);
 	jitter_scattergather_destroy(ctx->in);
 	free(ctx->soundcard);
 	free(ctx);

@@ -143,6 +143,7 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 		ctx->mime = mime_audioflac;
 #endif
 	}
+	dbg("src: %s", src_unix->name);
 	return ctx;
 }
 
@@ -162,6 +163,11 @@ static void *src_thread(void *arg)
 		}
 
 		unsigned char *buff = ctx->out->ops->pull(ctx->out->ctx);
+		if (buff == NULL)
+		{
+			ctx->state = STATE_ERROR;
+			break;
+		}
 		ret = recv(ctx->handle, buff, ctx->out->ctx->size, MSG_NOSIGNAL);
 		if (ret == -EPIPE)
 		{
@@ -189,15 +195,19 @@ static void *src_thread(void *arg)
 
 static int src_run(src_ctx_t *ctx)
 {
-	const event_new_es_t event = {.pid = 0, .mime = ctx->mime, .jitte = JITTE_MID};
+	event_new_es_t event = {.pid = 0, .mime = ctx->mime, .jitte = JITTE_MID};
+	event_decode_es_t event_decode = {0};
 	event_listener_t *listener = ctx->listener;
+	const src_t src = { .ops = src_unix, .ctx = ctx};
 	while (listener)
 	{
-		listener->cb(listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
+		listener->cb(listener->arg, &src, SRC_EVENT_NEW_ES, (void *)&event);
+		event_decode.pid = event.pid;
+		event_decode.decoder = event.decoder;
+		listener->cb(listener->arg, &src, SRC_EVENT_DECODE_ES, (void *)&event_decode);
 		listener = listener->next;
 	}
 	pthread_create(&ctx->thread, NULL, src_thread, ctx);
-	player_next(ctx->player);
 	return 0;
 }
 
@@ -228,7 +238,7 @@ static void src_eventlistener(src_ctx_t *ctx, event_listener_cb_t cb, void *arg)
 	}
 }
 
-static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
+static int src_attach(src_ctx_t *ctx, long index, decoder_t *decoder)
 {
 	if (index > 0)
 		return -1;
@@ -236,7 +246,7 @@ static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
 	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx, JITTE_MID);
 }
 
-static decoder_t *src_estream(src_ctx_t *ctx, int index)
+static decoder_t *src_estream(src_ctx_t *ctx, long index)
 {
 	return ctx->estream;
 }
@@ -260,6 +270,7 @@ static void src_destroy(src_ctx_t *ctx)
 
 const src_ops_t *src_unix = &(src_ops_t)
 {
+	.name = "unix",
 	.protocol = "unix://|file://",
 	.init = src_init,
 	.run = src_run,

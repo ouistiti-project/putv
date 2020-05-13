@@ -100,7 +100,6 @@ struct media_dirlist_s
 #endif
 
 static int media_count(media_ctx_t *ctx);
-static int media_insert(media_ctx_t *ctx, const char *path, const char *info, const char *mime);
 static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data);
 static int media_play(media_ctx_t *ctx, media_parse_t play, void *data);
 static int media_next(media_ctx_t *ctx);
@@ -108,6 +107,7 @@ static option_state_t media_loop(media_ctx_t *ctx, option_state_t enable);
 static option_state_t media_random(media_ctx_t *ctx, option_state_t enable);
 static int media_end(media_ctx_t *ctx);
 
+static const char str_mediadir[] = "directory browser";
 /**
  * directory browsing functions
  **/
@@ -226,6 +226,7 @@ static int _find(media_ctx_t *ctx, int level, media_dirlist_t **pit, int *pmedia
 {
 	int ret = -1;
 	media_dirlist_t *it = *pit;
+
 	if (it == NULL)
 	{
 		it = calloc(1, sizeof(*it));
@@ -298,10 +299,10 @@ static int _find(media_ctx_t *ctx, int level, media_dirlist_t **pit, int *pmedia
 			break;
 			case DT_REG:
 			{
-				char *path = malloc(strlen(it->path) + 1 + strlen(it->items[it->index]->d_name) + 1);
+				char *path = malloc(7 + strlen(it->path) + 1 + strlen(it->items[it->index]->d_name) + 1);
 				if (path)
 				{
-					sprintf(path, "%s/%s", it->path, it->items[it->index]->d_name);
+					sprintf(path, "file://%s/%s", it->path, it->items[it->index]->d_name);
 					const char *mime = utils_getmime(path);
 					ret = -1;
 					if (strcmp(mime, mime_octetstream) != 0)
@@ -338,16 +339,6 @@ static int _find(media_ctx_t *ctx, int level, media_dirlist_t **pit, int *pmedia
 static int media_count(media_ctx_t *ctx)
 {
 	return ctx->count;
-}
-
-static int media_insert(media_ctx_t *ctx, const char *path, const char *info, const char *mime)
-{
-	return -1;
-}
-
-static int media_remove(media_ctx_t *ctx, int id, const char *path)
-{
-	return -1;
 }
 
 static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *arg)
@@ -391,28 +382,19 @@ static int media_next(media_ctx_t *ctx)
 		ctx->mediaid = (random() % (ctx->count - 1));
 		_find_mediaid_t data = {ctx->mediaid, NULL, NULL};
 		ret = _find(ctx, 0, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
-		if (ctx->mediaid >= ctx->count)
+		if (ctx->mediaid > ctx->count)
 			ctx->mediaid = 0;
+		if (ctx->mediaid == 0)
+			ctx->mediaid = ctx->count;
 		ctx->mediaid--;
-		ctx->firstmediaid = -1;
 	}
 	else
 	{
 		_find_mediaid_t data = {ctx->mediaid + 1, NULL, NULL};
 		ret = _find(ctx, 0, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
 	}
-	if ((ctx->firstmediaid - 1) == ctx->mediaid)
-	{
-		if (!(ctx->options & OPTION_LOOP))
-		{
-			ctx->mediaid = -1;
-			if (ctx->current)
-			{
-				ctx->current = _free_medialist(ctx->current, 0);
-			}
-			ctx->current = NULL;
-		}
-	}
+	if (ctx->firstmediaid == -1)
+		ctx->firstmediaid = ctx->mediaid;
 	if (ret != 0)
 	{
 		if (ctx->count < ctx->mediaid)
@@ -424,7 +406,7 @@ static int media_next(media_ctx_t *ctx)
 		}
 		ctx->current = NULL;
 		if (ctx->count > 0 &&
-			(	(ctx->firstmediaid != ctx->mediaid) ||
+			((ctx->firstmediaid != ctx->mediaid) ||
 				(ctx->options & OPTION_LOOP)))
 		{
 			media_next(ctx);
@@ -555,7 +537,7 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url,...)
 		}
 		if (! S_ISDIR(pathstat.st_mode))
 		{
-			err("media dir: error %s in not a directory", path);
+			warn("media dir: error %s in not a directory", path);
 			return NULL;
 		}
 
@@ -574,6 +556,7 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url,...)
 		pthread_create(&ctx->thread, NULL, _check_dir, (void *)ctx);
 		ctx->options |= OPTION_INOTIFY;
 #endif
+		warn("media dir: open %s", path);
 	}
 	else
 			err("media dir: error on url");
@@ -596,14 +579,15 @@ static void media_destroy(media_ctx_t *ctx)
 
 const media_ops_t *media_dir = &(const media_ops_t)
 {
+	.name = str_mediadir,
 	.init = media_init,
 	.destroy = media_destroy,
 	.next = media_next,
 	.play = media_play,
 	.list = media_list,
 	.find = media_find,
-	.remove = media_remove,
-	.insert = media_insert,
+	.remove = NULL,
+	.insert = NULL,
 	.count = media_count,
 	.end = media_end,
 	.random = media_random,

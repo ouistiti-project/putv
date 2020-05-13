@@ -36,17 +36,22 @@
 #include "player.h"
 #include "decoder.h"
 #include "event.h"
-typedef struct demux_s demux_t;
-typedef struct demux_ops_s demux_ops_t;
-typedef struct demux_ctx_s demux_ctx_t;
-struct demux_ctx_s
+typedef struct src_s demux_t;
+typedef struct src_s src_t;
+typedef struct src_ops_s demux_ops_t;
+typedef struct src_ops_s src_ops_t;
+typedef struct src_ctx_s demux_ctx_t;
+typedef struct src_ctx_s src_ctx_t;
+struct src_ctx_s
 {
 	player_ctx_t *ctx;
 	decoder_t *estream;
 	const char *mime;
 	event_listener_t *listener;
 };
+#define SRC_CTX
 #define DEMUX_CTX
+#include "src.h"
 #include "demux.h"
 #include "media.h"
 #include "jitter.h"
@@ -59,43 +64,38 @@ struct demux_ctx_s
 #define dbg(...)
 #endif
 
-static demux_ctx_t *demux_init(player_ctx_t *player, const char *search)
+static src_ctx_t *demux_init(player_ctx_t *player, const char *protocol, const char *mime)
 {
-	const char *mime = mime_audiomp3;
-	if (search != NULL)
-	{
-		char *tmime = strstr(search, "mime=");
-		if (tmime != NULL)
-		{
-			mime = tmime + 5;
-		}
-	}
-
-	demux_ctx_t *ctx = calloc(1, sizeof(*ctx));
+	src_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->mime = utils_mime2mime(mime);
 	return ctx;
 }
 
-static jitter_t *demux_jitter(demux_ctx_t *ctx, jitte_t jitte)
+static jitter_t *demux_jitter(src_ctx_t *ctx, jitte_t jitte)
 {
 	if (ctx->estream == NULL)
 		return NULL;
 	return ctx->estream->ops->jitter(ctx->estream->ctx, jitte);
 }
 
-static int demux_run(demux_ctx_t *ctx)
+static int demux_run(src_ctx_t *ctx)
 {
-	const event_new_es_t event = {.pid = 0, .mime = ctx->mime, .jitte = JITTE_HIGH};
+	event_new_es_t event = {.pid = 0, .mime = ctx->mime, .jitte = JITTE_HIGH};
+	event_decode_es_t event_decode = {0};
 	event_listener_t *listener = ctx->listener;
+	const src_t src = { .ops = demux_passthrough, .ctx = ctx};
 	while (listener)
 	{
-		listener->cb(listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
+		listener->cb(listener->arg, &src, SRC_EVENT_NEW_ES, (void *)&event);
+		event_decode.pid = event.pid;
+		event_decode.decoder = event.decoder;
+		listener->cb(listener->arg, &src, SRC_EVENT_DECODE_ES, (void *)&event_decode);
 		listener = listener->next;
 	}
 	return 0;
 }
 
-static const char *demux_mime(demux_ctx_t *ctx, int index)
+static const char *demux_mime(src_ctx_t *ctx, int index)
 {
 	if (index > 0)
 		return NULL;
@@ -110,7 +110,7 @@ static const char *demux_mime(demux_ctx_t *ctx, int index)
 #endif
 }
 
-static void demux_eventlistener(demux_ctx_t *ctx, event_listener_cb_t cb, void *arg)
+static void demux_eventlistener(src_ctx_t *ctx, event_listener_cb_t cb, void *arg)
 {
 	event_listener_t *listener = calloc(1, sizeof(*listener));
 	listener->cb = cb;
@@ -130,20 +130,21 @@ static void demux_eventlistener(demux_ctx_t *ctx, event_listener_cb_t cb, void *
 	}
 }
 
-static int demux_attach(demux_ctx_t *ctx, long index, decoder_t *decoder)
+static int demux_attach(src_ctx_t *ctx, long index, decoder_t *decoder)
 {
 	if (index > 0)
 		return -1;
 	dbg("demux: attach");
 	ctx->estream = decoder;
+	return 0;
 }
 
-static decoder_t *demux_estream(demux_ctx_t *ctx, long index)
+static decoder_t *demux_estream(src_ctx_t *ctx, long index)
 {
 	return ctx->estream;
 }
 
-static void demux_destroy(demux_ctx_t *ctx)
+static void demux_destroy(src_ctx_t *ctx)
 {
 	if (ctx->estream != NULL)
 		ctx->estream->ops->destroy(ctx->estream->ctx);
@@ -157,8 +158,10 @@ static void demux_destroy(demux_ctx_t *ctx)
 	free(ctx);
 }
 
-const demux_ops_t *demux_passthrough = &(demux_ops_t)
+const src_ops_t *demux_passthrough = &(src_ops_t)
 {
+	.name = "demux_passthrough",
+	.protocol = "udp",
 	.init = demux_init,
 	.jitter = demux_jitter,
 	.run = demux_run,

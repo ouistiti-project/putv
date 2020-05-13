@@ -49,9 +49,17 @@ struct src_ctx_s
 	unsigned char *outbuffer;
 	size_t outlen;
 	pthread_t thread;
+	pthread_mutex_t mutex;
+	pthread_cond_t cond;
+	enum
+	{
+		SRC_STOP,
+		SRC_RUN,
+	} state;
 	CURL *curl;
 	const char *mime;
 	decoder_t *estream;
+	long pid;
 	event_listener_t *listener;
 };
 #define SRC_CTX
@@ -70,24 +78,34 @@ struct src_ctx_s
 
 #define src_dbg(...)
 
+#ifdef DEBUG
+#define SRC_CURL_VERBOSE 1L
+#else
+#define SRC_CURL_VERBOSE 0L
+#endif
+
 static uint write_cb(char *in, uint size, uint nmemb, src_ctx_t *ctx)
 {
 	size_t writelen = 0;
 	size_t len = ctx->out->ctx->size;
 
+	pthread_mutex_lock(&ctx->mutex);
+	while (ctx->state == SRC_STOP)
+	{
+		pthread_cond_wait(&ctx->cond, &ctx->mutex);
+	}
+	pthread_mutex_unlock(&ctx->mutex);
+
 	nmemb *= size;
 	while (nmemb > 0)
 	{
-		if (player_waiton(ctx->player, STATE_PAUSE) < 0)
-		{
-			ctx->outbuffer = ctx->out->ops->pull(ctx->out->ctx);
-			ctx->out->ops->push(ctx->out->ctx, 0, NULL);
-			return 0;
-		}
-
 		ctx->outbuffer = ctx->out->ops->pull(ctx->out->ctx);
 		if (ctx->outbuffer == NULL)
-			return 0;
+		{
+			dbg("src: out buffer stop");
+			return -1;
+		}
+		len = ctx->out->ctx->size;
 		if (len > nmemb)
 			len = nmemb;
 		memcpy(ctx->outbuffer, in + writelen, len);
@@ -102,7 +120,7 @@ static uint write_cb(char *in, uint size, uint nmemb, src_ctx_t *ctx)
 		ctx->out->ops->push(ctx->out->ctx, len, NULL);
 		pthread_yield();
 	}
-
+	src_dbg("src: curl read %ld", writelen);
 	return writelen;
 }
 
@@ -113,24 +131,26 @@ static src_ctx_t *src_init(player_ctx_t *player, const char * arg, const char *m
 	curl = curl_easy_init();
 	if (curl)
 	{
-		curl_easy_setopt(curl, CURLOPT_URL, arg);
-		curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
-		curl_easy_setopt(curl, CURLOPT_VERBOSE, 0L);
-		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
-		//curl_easy_setopt(curl, CURLOPT_USERPWD, "user:password");
-		//curl_easy_setopt(curl, CURLOPT_HTTPAUTH, CURLAUTH_BASIC | CURLAUTH_DIGEST);
-		curl_easy_setopt(curl, CURLOPT_MAX_RECV_SPEED_LARGE, (curl_off_t)31415);
-
 		ctx = calloc(1, sizeof(*ctx));
 		ctx->ops = src_curl;
 		ctx->curl = curl;
 		ctx->player = player;
 		ctx->mime = mime;
+		pthread_mutex_init(&ctx->mutex, NULL);
+		pthread_cond_init(&ctx->cond, NULL);
 
+		curl_easy_setopt(curl, CURLOPT_URL, arg);
+		curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
+		curl_easy_setopt(curl, CURLOPT_VERBOSE, SRC_CURL_VERBOSE);
+		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, ctx);
+		//curl_easy_setopt(curl, CURLOPT_USERPWD, "user:password");
+		//curl_easy_setopt(curl, CURLOPT_HTTPAUTH, CURLAUTH_BASIC | CURLAUTH_DIGEST);
+
 #ifdef CURL_DUMP
 		ctx->dumpfd = open("curl_dump.mp3", O_RDWR | O_CREAT, 0644);
 #endif
+		dbg("src: %s", src_curl->name);
 	}
 	return ctx;
 }
@@ -138,28 +158,62 @@ static src_ctx_t *src_init(player_ctx_t *player, const char * arg, const char *m
 static void *src_thread(void *arg)
 {
 	src_ctx_t *ctx = (src_ctx_t *)arg;
+	src_dbg("src: curl running");
 	int ret = curl_easy_perform(ctx->curl);
 	if ( ret != CURLE_OK)
 	{
 		dbg("src curl error %d on %p", ret, ctx->curl);
 	}
-	player_next(ctx->player);
+	dbg("src: end of stream");
+	ctx->out->ops->flush(ctx->out->ctx);
 	return 0;
+}
+
+static int src_prepare(src_ctx_t *ctx)
+{
+	src_dbg("src: prepare");
+	/**
+	 * decoder may need data to prepare the stream.
+	 * The thread starts for the preparation and
+	 * will be waiting until the running state
+	 */
+	int ret = pthread_create(&ctx->thread, NULL, src_thread, ctx);
+	pthread_mutex_lock(&ctx->mutex);
+	ctx->state = SRC_RUN;
+	pthread_cond_broadcast(&ctx->cond);
+	pthread_mutex_unlock(&ctx->mutex);
+
+	event_new_es_t event = {.pid = ctx->pid, .mime = ctx->mime, .jitte = JITTE_HIGH};
+	event_listener_t *listener = ctx->listener;
+	const src_t src = { .ops = src_curl, .ctx = ctx};
+	while (listener)
+	{
+		listener->cb(listener->arg, &src, SRC_EVENT_NEW_ES, (void *)&event);
+		listener = listener->next;
+	}
+	pthread_mutex_lock(&ctx->mutex);
+	ctx->state = SRC_STOP;
+	pthread_cond_broadcast(&ctx->cond);
+	pthread_mutex_unlock(&ctx->mutex);
+	return ret;
 }
 
 static int src_run(src_ctx_t *ctx)
 {
-	int ret;
-	const event_new_es_t event = {.pid = 0, .mime = ctx->mime, .jitte = JITTE_MID};
+	src_dbg("src: running");
+	pthread_mutex_lock(&ctx->mutex);
+	ctx->state = SRC_RUN;
+	pthread_cond_broadcast(&ctx->cond);
+	pthread_mutex_unlock(&ctx->mutex);
+	event_decode_es_t event_decode = {.pid = ctx->pid, .decoder = ctx->estream};
 	event_listener_t *listener = ctx->listener;
+	const src_t src = { .ops = src_curl, .ctx = ctx};
 	while (listener)
 	{
-		listener->cb(listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
+		listener->cb(listener->arg, &src, SRC_EVENT_DECODE_ES, (void *)&event_decode);
 		listener = listener->next;
 	}
-	//ret = curl_easy_perform(ctx->curl);
-	ret = pthread_create(&ctx->thread, NULL, src_thread, ctx);
-	return ret;
+	return 0;
 }
 
 static const char *src_mime(src_ctx_t *ctx, int index)
@@ -196,29 +250,34 @@ static void src_eventlistener(src_ctx_t *ctx, event_listener_cb_t cb, void *arg)
 	}
 }
 
-static int src_attach(src_ctx_t *ctx, int index, decoder_t *decoder)
+static int src_attach(src_ctx_t *ctx, long index, decoder_t *decoder)
 {
 	if (index > 0)
 		return -1;
 	ctx->estream = decoder;
-	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx, JITTE_MID);
+	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx, JITTE_HIGH);
 	curl_easy_setopt(ctx->curl, CURLOPT_BUFFERSIZE, ctx->out->ctx->size);
+	curl_easy_setopt(ctx->curl, CURLOPT_MAX_RECV_SPEED_LARGE,
+				(curl_off_t)ctx->out->ctx->size * ctx->out->ctx->count);
 }
 
-static decoder_t *src_estream(src_ctx_t *ctx, int index)
+static decoder_t *src_estream(src_ctx_t *ctx, long index)
 {
 	return ctx->estream;
 }
 
 static void src_destroy(src_ctx_t *ctx)
 {
-	if (ctx->thread)
-		pthread_join(ctx->thread, NULL);
+	dbg("src: destroy");
 	if (ctx->out != NULL)
 	{
-		ctx->outbuffer = ctx->out->ops->pull(ctx->out->ctx);
-		ctx->out->ops->push(ctx->out->ctx, 0, NULL);
 		ctx->out->ops->flush(ctx->out->ctx);
+	}
+	if (ctx->thread)
+	{
+		curl_easy_reset(ctx->curl);
+		curl_easy_cleanup(ctx->curl);
+		pthread_join(ctx->thread, NULL);
 	}
 	if (ctx->estream != NULL)
 		ctx->estream->ops->destroy(ctx->estream->ctx);
@@ -233,14 +292,15 @@ static void src_destroy(src_ctx_t *ctx)
 		free(listener);
 		listener = next;
 	}
-	curl_easy_cleanup(ctx->curl);
 	free(ctx);
 }
 
 const src_ops_t *src_curl = &(src_ops_t)
 {
+	.name = "curl",
 	.protocol = "http://|https://|file://",
 	.init = src_init,
+	.prepare = src_prepare,
 	.run = src_run,
 	.mime = src_mime,
 	.eventlistener = src_eventlistener,

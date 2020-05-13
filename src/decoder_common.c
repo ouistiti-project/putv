@@ -46,7 +46,7 @@
 
 #define decoder_dbg(...)
 
-decoder_t *decoder_build(player_ctx_t *player, const char *mime, const filter_t *filter)
+decoder_t *decoder_build(player_ctx_t *player, const char *mime)
 {
 	decoder_t *decoder = NULL;
 	const decoder_ops_t *ops = NULL;
@@ -72,11 +72,11 @@ decoder_t *decoder_build(player_ctx_t *player, const char *mime, const filter_t 
 
 	if (ops != NULL)
 	{
-		ctx = ops->init(player, filter);
+		ctx = ops->init(player);
 	}
 	if (ctx != NULL)
 	{
-		warn("new decoder for %s", decoder_mad->mime(NULL));
+		warn("new decoder for %s", ops->mime(NULL));
 		decoder = calloc(1, sizeof(*decoder));
 		decoder->ops = ops;
 		decoder->ctx = ctx;

@@ -1,5 +1,5 @@
 /*****************************************************************************
- * decoder_passthrough.c
+ * main.c
  * this file is part of https://github.com/ouistiti-project/putv
  *****************************************************************************
  * Copyright (C) 2016-2017
@@ -25,27 +25,13 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *****************************************************************************/
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include <string.h>
-
-#include "player.h"
-typedef struct decoder_s decoder_t;
-typedef struct decoder_ops_s decoder_ops_t;
-typedef struct decoder_ctx_s decoder_ctx_t;
-struct decoder_ctx_s
-{
-	const decoder_ops_t *ops;
-	jitter_t *inout;
-};
-#define DECODER_CTX
-#include "decoder.h"
-#include "media.h"
-#include "jitter.h"
+#include <errno.h>
+#include <signal.h>
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -55,53 +41,99 @@ struct decoder_ctx_s
 #define dbg(...)
 #endif
 
-static decoder_ctx_t *decoder_init(player_ctx_t *player)
+static int _pidfd = -1;
+static void _setpidfile(const char *pidfile)
 {
-	decoder_ctx_t *ctx = calloc(1, sizeof(*ctx));
-	ctx->ops = decoder_passthrough;
+	if (pidfile[0] != '\0')
+	{
+		int _pidfd = open(pidfile,O_WRONLY|O_CREAT|O_TRUNC,0644);
+		if (_pidfd > 0)
+		{
+			char buffer[12];
+			int length;
+			pid_t pid = 1;
 
-	return ctx;
+			struct flock fl;
+			memset(&fl, 0, sizeof(fl));
+			fl.l_type = F_WRLCK;
+			fl.l_whence = SEEK_SET;
+			fl.l_start = 0;
+			fl.l_len = 0;
+			fl.l_pid = 0;
+			if (fcntl(_pidfd, F_SETLK, &fl) == -1) {
+				err("server already running");
+				exit(1);
+			}
+
+			pid = getpid();
+			length = snprintf(buffer, 12, "%.10d\n", pid);
+			int len = write(_pidfd, buffer, length);
+			if (len != length)
+				err("pid file error %s", strerror(errno));
+			fsync(_pidfd);
+			/**
+			 * the file must be open while the process is running
+			close(pidfd);
+			 */
+		}
+		else
+		{
+			err("pid file error %s", strerror(errno));
+			pidfile = NULL;
+			exit(0);
+		}
+	}
 }
 
-static jitter_t *decoder_jitter(decoder_ctx_t *ctx, jitte_t jitte)
+int daemonize(const char *pidfile)
 {
-	return ctx->inout;
-}
+	pid_t pid = getpid();
+	if ( getppid() == 1 )
+	{
+		return -1;
+	}
+	if ((pid = fork()) > 0)
+	{
+		return -1;
+	}
+	int sid = setsid();
 
-static int decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
-{
-	ctx->inout = jitter;
+	if (pidfile != NULL)
+	{
+		_setpidfile(pidfile);
+	}
 	return 0;
 }
 
-static int decoder_check(const char *path)
+void killdaemon(const char *pidfile)
 {
-	if (!strncmp(path, "pcm://", 6))
-		return 0;
-	char *ext = strrchr(path, '.');
-	if (ext && !strcmp(ext, ".wav"))
-		return 0;
-	if (ext && !strcmp(ext, ".pcm"))
-		return 0;
-	return 1;
+	if (_pidfd > 0)
+	{
+		unlink(pidfile);
+		close(_pidfd);
+	}
+	else if (pidfile != NULL)
+	{
+		int _pidfd = open(pidfile,O_RDWR);
+		if (_pidfd > 0)
+		{
+			struct flock fl;
+			memset(&fl, 0, sizeof(fl));
+			fl.l_type = F_WRLCK;
+			fl.l_whence = SEEK_SET;
+			fl.l_start = 0;
+			fl.l_len = 0;
+			fl.l_pid = 0;
+			if (fcntl(_pidfd, F_GETLK, &fl) == -1) {
+				err("server not running");
+				exit(1);
+			}
+			kill(fl.l_pid, SIGTERM);
+			close(_pidfd);
+		}
+		else
+		{
+			unlink(pidfile);
+		}
+	}
 }
-
-static const char *decoder_mime(decoder_ctx_t *ctx)
-{
-	return mime_audiopcm;
-}
-
-static void decoder_destroy(decoder_ctx_t *ctx)
-{
-	free(ctx);
-}
-
-const decoder_ops_t *decoder_passthrough = &(decoder_ops_t)
-{
-	.check = decoder_check,
-	.init = decoder_init,
-	.jitter = decoder_jitter,
-	.run = decoder_run,
-	.mime = decoder_mime,
-	.destroy = decoder_destroy,
-};

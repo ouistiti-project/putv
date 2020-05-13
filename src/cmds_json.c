@@ -30,6 +30,7 @@
 #include <sys/un.h>
 #include <errno.h>
 #include <unistd.h>
+#include <sys/ioctl.h>
 
 #include <pthread.h>
 #include <jansson.h>
@@ -51,7 +52,7 @@ struct cmds_ctx_s
 	{
 		char data[DATA_LENGTH];
 		int length;
-	} buff_snd;
+	} buff_snd, buff_recv;
 };
 #define CMDS_CTX
 #include "cmds.h"
@@ -198,6 +199,7 @@ static int method_remove(json_t *json_params, json_t **result, void *userdata)
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 	media_t *media = player_media(ctx->player);
 	int ret = -1;
+	cmds_dbg("cmds: remove");
 
 	if (media->ops->remove == NULL)
 	{
@@ -257,8 +259,14 @@ static int method_append(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 	media_t *media = player_media(ctx->player);
+	int (*append_cb)(media_ctx_t *ctx, const char *path, const char *info, const char *mime);
+	cmds_dbg("cmds: append");
 
-	if (media->ops->insert == NULL)
+	if (media->ops->append != NULL)
+		append_cb = media->ops->append;
+	else if (media->ops->insert != NULL)
+		append_cb = media->ops->insert;
+	else
 	{
 		*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
 		return -1;
@@ -273,7 +281,8 @@ static int method_append(json_t *json_params, json_t **result, void *userdata)
 			if (json_is_string(value))
 			{
 				const char *str = json_string_value(value);
-				ret = media->ops->insert(media->ctx, str, "", NULL);
+				dbg("cmds: append %s", str);
+				ret = append_cb(media->ctx, str, "", NULL);
 			}
 			else if (json_is_object(value))
 			{
@@ -282,14 +291,14 @@ static int method_append(json_t *json_params, json_t **result, void *userdata)
 				json_t * mime = json_object_get(value, "mime");
 				if (json_is_string(info))
 				{
-					ret = media->ops->insert(media->ctx,
+					ret = append_cb(media->ctx,
 							json_string_value(path),
 							json_string_value(info),
 							json_string_value(mime));
 				}
 				else if (json_is_object(info))
 				{
-					ret = media->ops->insert(media->ctx,
+					ret = append_cb(media->ctx,
 							json_string_value(path),
 							json_dumps(info, 0),
 							json_string_value(mime));
@@ -316,80 +325,86 @@ static int method_play(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 	media_t *media = player_media(ctx->player);
+	int ret = -1;
+	cmds_dbg("cmds: play");
 
-	if (media->ops->count(media->ctx) > 0)
-		player_state(ctx->player, STATE_PLAY);
-	else
-	{
-		player_state(ctx->player, STATE_STOP);
-		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{ss,ss}", "state", str_stop, "message", "no item found"));
-		return -1;
-	}
-	switch (player_state(ctx->player, STATE_UNKNOWN))
+	player_state(ctx->player, STATE_PLAY);
+
+	int state = player_state(ctx->player, STATE_UNKNOWN);
+	switch (state)
 	{
 	case STATE_STOP:
 		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{ss}", "state", str_stop));
-	return -1;
+	break;
 	case STATE_CHANGE:
 	case STATE_PLAY:
 		*result = json_pack("{ss}", "state", str_play);
-	return 0;
+		ret = 0;
+	break;
 	case STATE_PAUSE:
 		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{ss}", "state", str_pause));
-	return -1;
+	break;
 	default:
 		*result = jsonrpc_error_object_predefined(JSONRPC_INVALID_PARAMS, json_string("player state error"));
-	return -1;
 	}
-	return 0;
+	return ret;
 }
 
 static int method_pause(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
+	int ret = -1;
+	cmds_dbg("cmds: pause");
 
 	switch (player_state(ctx->player, STATE_PAUSE))
 	{
 	case STATE_STOP:
 		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{ss}", "state", str_stop));
-	return -1;
+	break;
 	case STATE_PLAY:
 		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{ss}", "state", str_play));
-	return -1;
+	break;
 	case STATE_PAUSE:
 		*result = json_pack("{ss}", "state", str_pause);
-	return 0;
+		ret = 0;
+	break;
 	default:
 		*result = jsonrpc_error_object_predefined(JSONRPC_INVALID_PARAMS, json_string("player state error"));
-	return -1;
 	}
-	return 0;
+	return ret;
 }
 
 static int method_stop(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
+	int ret = -1;
+	cmds_dbg("cmds: stop");
+
 	switch (player_state(ctx->player, STATE_STOP))
 	{
 	case STATE_STOP:
 		*result = json_pack("{ss}", "state", str_stop);
-	return 0;
+		ret = 0;
+	break;
 	case STATE_PLAY:
 		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{ss}", "state", str_play));
-	return -1;
+	break;
 	case STATE_PAUSE:
 		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{ss}", "state", str_pause));
-	return -1;
+	break;
 	default:
 		*result = jsonrpc_error_object_predefined(JSONRPC_INVALID_PARAMS, json_string("player state error"));
-	return -1;
 	}
+	return ret;
 }
 
 static int method_next(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 	media_t *media = player_media(ctx->player);
+	int ret = -1;
+	cmds_dbg("cmds: next");
+
 	player_next(ctx->player);
 	const char *state = NULL;
 	switch (player_state(ctx->player, STATE_UNKNOWN))
@@ -397,24 +412,23 @@ static int method_next(json_t *json_params, json_t **result, void *userdata)
 	case STATE_STOP:
 		state = str_stop;
 		*result = json_pack("{ss}", "state", state);
-	return 0;
+		ret = 0;
 	break;
 	case STATE_PLAY:
 	case STATE_CHANGE:
 		state = str_play;
 		*result = json_pack("{ss}", "state", state);
-	return 0;
+		ret = 0;
 	break;
 	case STATE_PAUSE:
 		state = str_pause;
 		*result = json_pack("{ss}", "state", state);
-	return 0;
+		ret = 0;
 	break;
 	default:
 		*result = jsonrpc_error_object_predefined(JSONRPC_INVALID_PARAMS, json_string("player state error"));
-	return -1;
-	break;
 	}
+	return ret;
 }
 
 typedef struct _display_ctx_s _display_ctx_t;
@@ -443,6 +457,7 @@ static int _display(void *arg, int id, const char *url, const char *info, const 
 
 	switch (state)
 	{
+	case STATE_CHANGE:
 	case STATE_PLAY:
 		json_state = json_string(str_play);
 	break;
@@ -471,6 +486,9 @@ static int method_change(json_t *json_params, json_t **result, void *userdata)
 		.result = json_object(),
 	};
 	json_t *value;
+	int ret = -1;
+	cmds_dbg("cmds: change");
+
 	if (json_is_object(json_params))
 	{
 		int now = 1;
@@ -494,27 +512,38 @@ static int method_change(json_t *json_params, json_t **result, void *userdata)
 		value = json_object_get(json_params, "media");
 		if (json_is_string(value))
 		{
-			const char *media = json_string_value(value);
-			if (player_change(ctx->player, media, random, loop, now) == 0)
+			const char *str = json_string_value(value);
+			media_t *media = player_media(ctx->player);
+			if (media->ops->insert != NULL)
 			{
+				ret = media->ops->insert(media->ctx, str, "", NULL);
+			}
+			else
+			{
+				ret = player_change(ctx->player, str, random, loop, now);
+			}
+			if (ret == 0)
+			{
+				player_state(ctx->player, STATE_STOP);
 				*result = json_pack("{s:s,s:s}", "media", "changed", "state", str_stop);
+			}
+			else
+			{
+				*result = jsonrpc_error_object_predefined(JSONRPC_INVALID_PARAMS, json_string("media refused"));
 			}
 		}
 		value = json_object_get(json_params, "id");
-		if (json_is_integer(value))
+		if (*result == NULL && json_is_integer(value))
 		{
 			int id = json_integer_value(value);
 			if (media->ops->find(media->ctx, id, _display, &display) == 1)
 			{
 				*result = display.result;
+				ret = 0;
 			}
 		}
 	}
-	if (*result == NULL);
-	{
-		*result = json_pack("{s:s}", "state", str_stop);
-	}
-	return 0;
+	return ret;
 }
 
 static int method_onchange(json_t *json_params, json_t **result, void *userdata)
@@ -943,6 +972,42 @@ static int _cmds_send(const char *buff, size_t size, void *userctx)
 }
 #endif
 
+static size_t _cmds_recv(void *buff, size_t size, void *userctx)
+{
+	thread_info_t *info = (thread_info_t *)userctx;
+	cmds_ctx_t *ctx = info->userctx;
+	int sock = info->sock;
+	size_t ret = -1;
+
+	if (ctx->buff_recv.length > 0)
+	{
+		memcpy(buff, ctx->buff_recv.data, ctx->buff_recv.length);
+		ret = ctx->buff_recv.length;
+		ctx->buff_recv.length = 0;
+	}
+	else
+	{
+		int length;
+		length = recv(sock,
+			buff, size, MSG_DONTWAIT | MSG_NOSIGNAL);
+
+		if (length > 0)
+		{
+			ret = strlen(buff) + 1;
+		}
+		else
+		{
+			err("cmds: json recv error %s", strerror(errno));
+		}
+		if (length > 0 && length > ret)
+		{
+			ctx->buff_recv.length = length - ret;
+			memcpy(ctx->buff_recv.data, buff + ret, ctx->buff_recv.length);
+		}
+	}
+	return ret;
+}
+
 static void jsonrpc_onchange(void * userctx, player_ctx_t *player, state_t state)
 {
 	thread_info_t *info = (thread_info_t *)userctx;
@@ -982,6 +1047,37 @@ static void jsonrpc_onchange(void * userctx, player_ctx_t *player, state_t state
 	pthread_mutex_unlock(&ctx->mutex);
 }
 
+static int _jsonrpc_sendresponse(thread_info_t *info, json_t *request)
+{
+	int sock = info->sock;
+	cmds_ctx_t *ctx = info->userctx;
+	json_t *response = jsonrpc_jresponse(request, method_table, ctx);
+
+	/**
+	 * The json callback may send an event before the answer.
+	 * Use lock before jresonse may generate double lock
+	 */
+	if (response != NULL)
+	{
+#ifdef JSONRPC_LARGEPACKET
+		json_dump_callback(response, _cmds_send, info, JSONRPC_DEBUG_FORMAT);
+		if (ctx->buff_snd.length > 0)
+		{
+			int ret = send(sock, ctx->buff_snd.data, ctx->buff_snd.length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
+			cmds_dbg("send %d/%d: %s", ret, ctx->buff_snd.length + 1, ctx->buff_snd.data);
+		}
+		ctx->buff_snd.length = 0;
+#else
+		char *buff = json_dumps(response, JSONRPC_DEBUG_FORMAT );
+		ret = send(sock, buff, strlen(buff), MSG_NOSIGNAL);
+		ret = send(sock, "", 1, MSG_DONTWAIT | MSG_NOSIGNAL);
+#endif
+		fsync(sock);
+		json_decref(response);
+	}
+	json_decref(request);
+}
+
 static int jsonrpc_command(thread_info_t *info)
 {
 	int ret = 0;
@@ -990,8 +1086,9 @@ static int jsonrpc_command(thread_info_t *info)
 	ctx->info = info;
 
 	warn("json socket connection");
-	int onchangeid = player_onchange(ctx->player, jsonrpc_onchange, (void *)info);
+	int onchangeid = player_onchange(ctx->player, jsonrpc_onchange, (void *)info, "jsonrpc");
 	jsonrpc_onchange(info, ctx->player, player_state(ctx->player, STATE_UNKNOWN));
+	errno = 0;
 
 	while (sock > 0)
 	{
@@ -1007,57 +1104,37 @@ static int jsonrpc_command(thread_info_t *info)
 		ret = select(maxfd + 1, &rfds, NULL, NULL, &timeout);
 		if (ret > 0 && FD_ISSET(sock, &rfds))
 		{
-			char buffer[1500];
-			ret = recv(sock, buffer, 1500, MSG_NOSIGNAL);
-			if (ret > 0)
+			char buf[1];
+			if (recv(sock, buf, 1, MSG_PEEK | MSG_NOSIGNAL) == 0)
 			{
-				cmds_dbg("recv %d: %s", ret, buffer);
+				warn("json socket closed %d", errno);
+				unixserver_remove(info);
+				sock = 0;
+				continue;
+			}
+
+			json_t *request = NULL;
+			do
+			{
+				request = NULL;
 				json_error_t error;
-				json_t *request = json_loads(buffer, 0, &error);
+				int flags = JSON_DISABLE_EOF_CHECK;
+				//int flags = 0;
+				request = json_load_callback(_cmds_recv, info, flags, &error);
 				if (request != NULL)
 				{
-					json_t *response = jsonrpc_jresponse(request, method_table, ctx);
-					/**
-					 * The json callback may send an event before the answer.
-					 * Use lock before jresonse may generate double lock
-					 */
+					dbg("cmds: new request");
 					pthread_mutex_lock(&ctx->mutex);
-					if (response != NULL)
-					{
-#ifdef JSONRPC_LARGEPACKET
-						json_dump_callback(response, _cmds_send, info, JSONRPC_DEBUG_FORMAT);
-						if (ctx->buff_snd.length > 0)
-						{
-							int ret = send(sock, ctx->buff_snd.data, ctx->buff_snd.length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
-							cmds_dbg("send %d/%d: %s", ret, ctx->buff_snd.length + 1, ctx->buff_snd.data);
-						}
-						ctx->buff_snd.length = 0;
-#else
-						char *buff = json_dumps(response, JSONRPC_DEBUG_FORMAT );
-						ret = send(sock, buff, strlen(buff), MSG_NOSIGNAL);
-						ret = send(sock, "", 1, MSG_DONTWAIT | MSG_NOSIGNAL);
-#endif
-						fsync(sock);
-						json_decref(response);
-					}
-					json_decref(request);
+					_jsonrpc_sendresponse(info, request);
 					pthread_mutex_unlock(&ctx->mutex);
 				}
-			}
-			if (ret == 0)
-			{
-				warn("json socket closed");
-				unixserver_remove(info);
-				sock = 0;
-			}
-		}
-		if (ret < 0)
-		{
-			if (errno != EAGAIN)
-			{
-				unixserver_remove(info);
-				sock = 0;
-			}
+				else if (errno != EAGAIN)
+				{
+					warn("json socket closed %d", errno);
+					unixserver_remove(info);
+					sock = 0;
+				}
+			} while (request != NULL);
 		}
 	}
 	player_removeevent(ctx->player, onchangeid);
@@ -1092,7 +1169,8 @@ static int cmds_json_run(cmds_ctx_t *ctx, sink_t *sink)
 
 static void cmds_json_destroy(cmds_ctx_t *ctx)
 {
-	unixserver_remove(ctx->info);
+	if (ctx->info)
+		unixserver_kill(ctx->info);
 	ctx->info = NULL;
 	pthread_join(ctx->thread, NULL);
 	pthread_mutex_destroy(&ctx->mutex);

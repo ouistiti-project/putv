@@ -148,7 +148,8 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 	int sock;
 	int mtu;
 
-	sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP);
+	sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
+	//TODO: try IPPROTO_UDPLITE
 
 	struct sockaddr_in saddr;
 	memset(&saddr, 0, sizeof(struct in_addr));
@@ -193,7 +194,7 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 		int value=1;
 		setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &value, sizeof(value));
 		//check if the addrese is for broadcast diffusion
-		if (longaddress > 0xff000000)
+		if (htonl(longaddress) > 0xff000000)
 		{
 			warn("sink: udp broadcasting");
 			ret = setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &value, sizeof(value));
@@ -203,7 +204,7 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 				err("sync: udp broadcast interface not supported");
 		}
 		// check if the address is for multicast diffusion
-		else if (IN_MULTICAST(longaddress))
+		else if (IN_MULTICAST(htonl(longaddress)))
 		{
 			warn("sink: udp multicasting");
 			if (! ifr.ifr_flags & IFF_MULTICAST)
@@ -340,6 +341,7 @@ static void *sink_thread(void *arg)
 			{
 				ret = sendto(ctx->sock, buff, len, MSG_NOSIGNAL| MSG_DONTWAIT,
 						(struct sockaddr *)&ctx->saddr, sizeof(ctx->saddr));
+				sink_dbg("udp: send %d", ret);
 			}
 			if (ret < 0)
 			{

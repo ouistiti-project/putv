@@ -51,6 +51,10 @@ struct media_ops_s
 	/**
 	 * mandatory
 	 */
+	const char *name;
+	/**
+	 * mandatory
+	 */
 	media_ctx_t *(*init)(player_ctx_t *player, const char *url, ...);
 	/**
 	 * mandatory
@@ -66,9 +70,13 @@ struct media_ops_s
 	 */
 	int (*insert)(media_ctx_t *ctx, const char *path, const char *info, const char *mime);
 	/**
+	 * optional
+	 */
+	int (*append)(media_ctx_t *ctx, const char *path, const char *info, const char *mime);
+	/**
 	 * mandatory
 	 */
-	int (*find)(media_ctx_t *ctx, int id,media_parse_t cb, void *data);
+	int (*find)(media_ctx_t *ctx, int id, media_parse_t cb, void *data);
 	/**
 	 * optional
 	 */

@@ -40,6 +40,7 @@
 #include "decoder.h"
 #include "media.h"
 #include "src.h"
+#include "demux.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -51,7 +52,54 @@
 
 #define src_dbg(...)
 
-src_t *src_build(player_ctx_t *player, const char *url, const char *mime)
+static src_t *_src_build(const src_ops_t *const src_list[],
+		player_ctx_t *player, const char *url, const char *mime)
+{
+	const src_ops_t *src_ops = NULL;
+	int i = 0;
+	src_ctx_t *src_ctx = NULL;
+	while (src_list[i] != NULL)
+	{
+		src_dbg("src: check %s", src_list[i]->name);
+		const char *protocol = src_list[i]->protocol;
+		int len = strlen(protocol);
+		while (protocol != NULL)
+		{
+			const char *next = strchr(protocol,'|');
+			if (next != NULL)
+				len = next - protocol;
+			if (!(strncmp(url, protocol, len)))
+			{
+				src_ctx = src_list[i]->init(player, url, mime);
+				src_ops = src_list[i];
+				break;
+			}
+			protocol = next;
+			if (protocol)
+			{
+				protocol++;
+				len = strlen(protocol);
+			}
+		}
+		if (src_ctx != NULL)
+			break;
+		i++;
+	}
+
+	if (src_ctx == NULL)
+	{
+		err("src not found %s", url);
+		return NULL;
+	}
+	src_t *src = calloc(1, sizeof(*src));
+	src->ops = src_ops;
+	src->ctx = src_ctx;
+	src->mediaid = -1;
+
+	return src;
+}
+
+src_t *src_build(player_ctx_t *player, const char *url, const char *mime, int id)
 {
 	const src_ops_t *const src_list[] = {
 	#ifdef SRC_FILE
@@ -72,60 +120,23 @@ src_t *src_build(player_ctx_t *player, const char *url, const char *mime)
 		NULL
 	};
 
-	const src_ops_t *src_default = NULL;
-	#if defined(SRC_FILE)
-	src_default = src_file;
-	#elif defined(SRC_UNIX)
-	src_default = src_unix;
-	#elif defined(SRC_CURL)
-	src_default = src_curl;
-	#elif defined(SRC_ALSA)
-	src_default = src_alsa;
-	#elif defined(SRC_UDP)
-	src_default = src_udp;
-	#endif
-
-	int i = 0;
-	src_ctx_t *src_ctx = NULL;
-	while (src_list[i] != NULL)
-	{
-		const char *protocol = src_list[i]->protocol;
-		int len = strlen(protocol);
-		while (protocol != NULL)
-		{
-			const char *next = strchr(protocol,'|');
-			if (next != NULL)
-				len = next - protocol;
-			if (!(strncmp(url, protocol, len)))
-			{
-				src_ctx = src_list[i]->init(player, url, mime);
-				src_default = src_list[i];
-				break;
-			}
-			protocol = next;
-			if (protocol)
-			{
-				protocol++;
-				len = strlen(protocol);
-			}
-		}
-		if (src_ctx != NULL)
-			break;
-		i++;
-	}
-
-	if (src_ctx == NULL && src_default != NULL)
-	{
-		src_ctx = src_default->init(player, url, mime);
-	}
-	if (src_ctx == NULL)
-	{
-		err("src not found %s", url);
-		return NULL;
-	}
-	src_t *src = calloc(1, sizeof(*src));
-	src->ops = src_default;
-	src->ctx = src_ctx;
-
+	src_t *src = _src_build(src_list, player, url, mime);
+	if (src != NULL)
+		src->mediaid = id;
 	return src;
+}
+
+demux_t *demux_build(player_ctx_t *player, const char *url, const char *mime)
+{
+	const src_ops_t *const src_list[] = {
+	#ifdef DEMUX_PASSTHROUGH
+		demux_passthrough,
+	#endif
+	#ifdef DEMUX_RTP
+		demux_rtp,
+	#endif
+		NULL
+	};
+
+	return _src_build(src_list, player, url, mime);
 }

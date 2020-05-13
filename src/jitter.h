@@ -47,6 +47,7 @@ struct jitter_ops_s
 
 typedef enum jitter_format_e
 {
+	PCM_8bits_mono,
 	PCM_16bits_LE_mono,
 	PCM_16bits_LE_stereo,
 	PCM_24bits3_LE_stereo,

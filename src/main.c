@@ -59,6 +59,7 @@
 #include "sink.h"
 #include "media.h"
 #include "cmds.h"
+#include "daemonize.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -109,11 +110,19 @@ static int run_player(player_ctx_t *player, sink_t *sink)
 	return ret;
 }
 
+void help(const char *name)
+{
+	fprintf(stderr, "%s [-R <websocketdir>][-m <media>][-o <output>][-p <pidfile>]\n", name);
+	fprintf(stderr, "\t...[-f <filtername>][-x][-D][-a][-r][-l][-L <logfile>]\n");
+	fprintf(stderr, "\t...[-d <directory>]\n");
+}
+
 #define DAEMONIZE 0x01
 #define SRC_STDIN 0x02
 #define AUTOSTART 0x04
 #define LOOP 0x08
 #define RANDOM 0x10
+#define KILLDAEMON 0x20
 int main(int argc, char **argv)
 {
 	const char *mediapath = "file://"DATADIR;
@@ -131,7 +140,7 @@ int main(int argc, char **argv)
 	int opt;
 	do
 	{
-		opt = getopt(argc, argv, "R:m:o:u:p:f:hDVxalrL:d:");
+		opt = getopt(argc, argv, "R:m:o:u:p:f:hDKVxalrL:d:");
 		switch (opt)
 		{
 			case 'R':
@@ -153,6 +162,7 @@ int main(int argc, char **argv)
 				filtername = optarg;
 			break;
 			case 'h':
+				help(name);
 				return -1;
 			break;
 			case 'x':
@@ -160,6 +170,9 @@ int main(int argc, char **argv)
 			break;
 			case 'D':
 				mode |= DAEMONIZE;
+			break;
+			case 'K':
+				mode |= KILLDAEMON;
 			break;
 			case 'a':
 				mode |= AUTOSTART;
@@ -179,15 +192,13 @@ int main(int argc, char **argv)
 		}
 	} while(opt != -1);
 
-	pid_t pid = 0;
-	if ((mode & DAEMONIZE) && ((pid = fork()) != 0))
+	if (mode & KILLDAEMON)
 	{
-		if (pidfile != NULL)
-		{
-			FILE *file = fopen(pidfile, "w");
-			fprintf(file, "%d\n", pid);
-			fclose(file);
-		}
+		killdaemon(pidfile);
+		return 0;
+	}
+	if (mode & DAEMONIZE && daemonize(pidfile) == -1)
+	{
 		return 0;
 	}
 	utils_srandom();
@@ -209,7 +220,7 @@ int main(int argc, char **argv)
 		chdir(cwd);
 
 	player_ctx_t *player = player_init(filtername);
-	player_change(player, mediapath, (mode & RANDOM), (mode & LOOP), 1);
+	player_change(player, mediapath, ((mode & RANDOM) == RANDOM), ((mode & LOOP) == LOOP), 1);
 
 	if (mode & AUTOSTART)
 	{
@@ -307,9 +318,10 @@ int main(int argc, char **argv)
 	nbcmds++;
 #endif
 #ifdef TINYSVCMDNS
+#define MDNS_PATH "path="INDEX_HTML
 	const char *txt[] =
 	{
-		"path="INDEX_HTML,
+		MDNS_PATH,
 #ifdef NETIF
 		"if="NETIF,
 #endif
@@ -370,5 +382,6 @@ int main(int argc, char **argv)
 		if (cmds[i].ctx != NULL)
 			cmds[i].ops->destroy(cmds[i].ctx);
 	}
+	killdaemon(pidfile);
 	return 0;
 }

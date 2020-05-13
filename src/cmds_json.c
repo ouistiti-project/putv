@@ -325,6 +325,7 @@ static int method_play(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 	media_t *media = player_media(ctx->player);
+	int ret = -1;
 	cmds_dbg("cmds: play");
 
 	player_state(ctx->player, STATE_PLAY);
@@ -334,70 +335,74 @@ static int method_play(json_t *json_params, json_t **result, void *userdata)
 	{
 	case STATE_STOP:
 		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{ss}", "state", str_stop));
-	return -1;
+	break;
 	case STATE_CHANGE:
 	case STATE_PLAY:
 		*result = json_pack("{ss}", "state", str_play);
-	return 0;
+		ret = 0;
+	break;
 	case STATE_PAUSE:
 		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{ss}", "state", str_pause));
-	return -1;
+	break;
 	default:
 		*result = jsonrpc_error_object_predefined(JSONRPC_INVALID_PARAMS, json_string("player state error"));
-	return -1;
 	}
-	return 0;
+	return ret;
 }
 
 static int method_pause(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
+	int ret = -1;
 	cmds_dbg("cmds: pause");
 
 	switch (player_state(ctx->player, STATE_PAUSE))
 	{
 	case STATE_STOP:
 		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{ss}", "state", str_stop));
-	return -1;
+	break;
 	case STATE_PLAY:
 		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{ss}", "state", str_play));
-	return -1;
+	break;
 	case STATE_PAUSE:
 		*result = json_pack("{ss}", "state", str_pause);
-	return 0;
+		ret = 0;
+	break;
 	default:
 		*result = jsonrpc_error_object_predefined(JSONRPC_INVALID_PARAMS, json_string("player state error"));
-	return -1;
 	}
-	return 0;
+	return ret;
 }
 
 static int method_stop(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
+	int ret = -1;
 	cmds_dbg("cmds: stop");
 
 	switch (player_state(ctx->player, STATE_STOP))
 	{
 	case STATE_STOP:
 		*result = json_pack("{ss}", "state", str_stop);
-	return 0;
+		ret = 0;
+	break;
 	case STATE_PLAY:
 		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{ss}", "state", str_play));
-	return -1;
+	break;
 	case STATE_PAUSE:
 		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{ss}", "state", str_pause));
-	return -1;
+	break;
 	default:
 		*result = jsonrpc_error_object_predefined(JSONRPC_INVALID_PARAMS, json_string("player state error"));
-	return -1;
 	}
+	return ret;
 }
 
 static int method_next(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 	media_t *media = player_media(ctx->player);
+	int ret = -1;
 	cmds_dbg("cmds: next");
 
 	player_next(ctx->player);
@@ -407,24 +412,23 @@ static int method_next(json_t *json_params, json_t **result, void *userdata)
 	case STATE_STOP:
 		state = str_stop;
 		*result = json_pack("{ss}", "state", state);
-	return 0;
+		ret = 0;
 	break;
 	case STATE_PLAY:
 	case STATE_CHANGE:
 		state = str_play;
 		*result = json_pack("{ss}", "state", state);
-	return 0;
+		ret = 0;
 	break;
 	case STATE_PAUSE:
 		state = str_pause;
 		*result = json_pack("{ss}", "state", state);
-	return 0;
+		ret = 0;
 	break;
 	default:
 		*result = jsonrpc_error_object_predefined(JSONRPC_INVALID_PARAMS, json_string("player state error"));
-	return -1;
-	break;
 	}
+	return ret;
 }
 
 typedef struct _display_ctx_s _display_ctx_t;
@@ -482,6 +486,7 @@ static int method_change(json_t *json_params, json_t **result, void *userdata)
 		.result = json_object(),
 	};
 	json_t *value;
+	int ret = -1;
 	cmds_dbg("cmds: change");
 
 	if (json_is_object(json_params))
@@ -509,32 +514,36 @@ static int method_change(json_t *json_params, json_t **result, void *userdata)
 		{
 			const char *str = json_string_value(value);
 			media_t *media = player_media(ctx->player);
-			if (media->ops->insert != NULL &&
-				media->ops->insert(media->ctx, str, "", NULL) > -1)
+			if (media->ops->insert != NULL)
+			{
+				ret = media->ops->insert(media->ctx, str, "", NULL);
+			}
+			else
+			{
+				ret = player_change(ctx->player, str, random, loop, now);
+			}
+			if (ret == 0)
 			{
 				player_state(ctx->player, STATE_STOP);
 				*result = json_pack("{s:s,s:s}", "media", "changed", "state", str_stop);
 			}
-			else if (player_change(ctx->player, str, random, loop, now) == 0)
+			else
 			{
-				*result = json_pack("{s:s,s:s}", "media", "changed", "state", str_stop);
+				*result = jsonrpc_error_object_predefined(JSONRPC_INVALID_PARAMS, json_string("media refused"));
 			}
 		}
 		value = json_object_get(json_params, "id");
-		if (json_is_integer(value))
+		if (*result == NULL && json_is_integer(value))
 		{
 			int id = json_integer_value(value);
 			if (media->ops->find(media->ctx, id, _display, &display) == 1)
 			{
 				*result = display.result;
+				ret = 0;
 			}
 		}
 	}
-	if (*result == NULL);
-	{
-		*result = json_pack("{s:s}", "state", str_stop);
-	}
-	return 0;
+	return ret;
 }
 
 static int method_onchange(json_t *json_params, json_t **result, void *userdata)

@@ -51,6 +51,10 @@ struct media_ops_s
 	/**
 	 * mandatory
 	 */
+	const char *name;
+	/**
+	 * mandatory
+	 */
 	media_ctx_t *(*init)(player_ctx_t *player, const char *url, ...);
 	/**
 	 * mandatory

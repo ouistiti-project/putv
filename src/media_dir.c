@@ -107,6 +107,7 @@ static option_state_t media_loop(media_ctx_t *ctx, option_state_t enable);
 static option_state_t media_random(media_ctx_t *ctx, option_state_t enable);
 static int media_end(media_ctx_t *ctx);
 
+static const char str_mediadir[] = "directory browser";
 /**
  * directory browsing functions
  **/
@@ -536,7 +537,7 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url,...)
 		}
 		if (! S_ISDIR(pathstat.st_mode))
 		{
-			err("media dir: error %s in not a directory", path);
+			warn("media dir: error %s in not a directory", path);
 			return NULL;
 		}
 
@@ -555,7 +556,7 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url,...)
 		pthread_create(&ctx->thread, NULL, _check_dir, (void *)ctx);
 		ctx->options |= OPTION_INOTIFY;
 #endif
-		dbg("media dir: open %d", path);
+		warn("media dir: open %s", path);
 	}
 	else
 			err("media dir: error on url");
@@ -578,6 +579,7 @@ static void media_destroy(media_ctx_t *ctx)
 
 const media_ops_t *media_dir = &(const media_ops_t)
 {
+	.name = str_mediadir,
 	.init = media_init,
 	.destroy = media_destroy,
 	.next = media_next,

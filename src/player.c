@@ -97,6 +97,7 @@ int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop
 	media_t *media = media_build(ctx, mediapath);
 	if (media)
 	{
+		dbg("player: change media %s", media->ops->name);
 		ctx->nextmedia = media;
 		if (now || ctx->media == NULL)
 		{

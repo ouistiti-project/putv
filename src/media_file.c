@@ -75,6 +75,8 @@ static int media_end(media_ctx_t *ctx);
 static option_state_t media_loop(media_ctx_t *ctx, option_state_t enable);
 static option_state_t media_random(media_ctx_t *ctx, option_state_t enable);
 
+static const char str_mediafile[] = "url list";
+
 static int media_count(media_ctx_t *ctx)
 {
 	media_url_t *media = ctx->media;
@@ -278,7 +280,6 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url,...)
 	media_ctx_t *ctx = NULL;
 	if (url)
 	{
-		dbg("media: %s", url);
 		ctx = calloc(1, sizeof(*ctx));
 #ifdef MEDIA_FILE_LIST
 		media_insert(ctx, url, NULL, utils_getmime(url));
@@ -291,6 +292,7 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url,...)
 		media->id = 0;
 		ctx->media = media;
 #endif
+		warn("media url: %s", url);
 	}
 	return ctx;
 }
@@ -309,6 +311,7 @@ static void media_destroy(media_ctx_t *ctx)
 
 const media_ops_t *media_file = &(const media_ops_t)
 {
+	.name = str_mediafile,
 	.init = media_init,
 	.destroy = media_destroy,
 	.play = media_play,

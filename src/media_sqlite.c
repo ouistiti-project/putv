@@ -88,6 +88,8 @@ static option_state_t media_loop(media_ctx_t *ctx, option_state_t enable);
 static option_state_t media_random(media_ctx_t *ctx, option_state_t enable);
 static void media_destroy(media_ctx_t *ctx);
 
+static const char str_mediasqlite[] = "sqlite DB";
+
 static int _execute(sqlite3_stmt *statement)
 {
 	int id = -1;
@@ -1501,6 +1503,7 @@ static void media_destroy(media_ctx_t *ctx)
 
 const media_ops_t *media_sqlite = &(const media_ops_t)
 {
+	.name = str_mediasqlite,
 	.init = media_init,
 	.destroy = media_destroy,
 	.next = media_next,

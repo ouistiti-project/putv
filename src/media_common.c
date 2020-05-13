@@ -499,8 +499,12 @@ int media_parseoggmetadata(const char *path, json_t *object)
 		{str_date, str_year, 4, label_integer},
 		{"TRACKNUMBER", str_track, 11, label_integer},
 	};
-	FLAC__StreamMetadata *vorbiscomment;
-	FLAC__metadata_get_tags(path, &vorbiscomment);
+	FLAC__StreamMetadata *vorbiscomment = NULL;
+	if (!FLAC__metadata_get_tags(path, &vorbiscomment))
+	{
+		warn("media: no Vorbis Comment for %s", path);
+		return -1;
+	}
 	FLAC__StreamMetadata_VorbisComment *data;
 	data = &vorbiscomment->data.vorbis_comment;
 	int n;

@@ -100,8 +100,7 @@ int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop
 		ctx->nextmedia = media;
 		if (now || ctx->media == NULL)
 		{
-			ctx->state = STATE_STOP;
-			pthread_cond_broadcast(&ctx->cond);
+			player_state(ctx, STATE_STOP);
 		}
 
 		if (ctx->media == NULL)
@@ -318,6 +317,7 @@ int player_run(player_ctx_t *ctx)
 
 	int last_state = STATE_STOP;
 	int i;
+	warn("player: running");
 	while (last_state != STATE_ERROR)
 	{
 		pthread_mutex_lock(&ctx->mutex);

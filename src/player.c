@@ -50,6 +50,8 @@
 #define dbg(...)
 #endif
 
+#define player_dbg(...)
+
 typedef struct player_event_s player_event_t;
 struct player_event_s
 {
@@ -188,8 +190,12 @@ state_t player_state(player_ctx_t *ctx, state_t state)
 {
 	if ((state != STATE_UNKNOWN) && ctx->state != state)
 	{
+		player_dbg("player: change state %d => %d",ctx->state, state);
 		if (pthread_mutex_trylock(&ctx->mutex) != 0)
+		{
+			player_dbg("player: change state trylock caller %p", __builtin_return_address(0));
 			return ctx->state;
+		}
 		ctx->state = state;
 		pthread_mutex_unlock(&ctx->mutex);
 		pthread_cond_broadcast(&ctx->cond_int);

@@ -42,8 +42,11 @@ typedef struct client_data_s client_data_t;
 struct client_data_s
 {
 	int sock;
+	int run;
 	client_event_t *events;
 	unsigned long int pid;
+	char *message;
+	int messagelen;
 	client_event_prototype_t proto;
 	void *data;
 	json_t*params;

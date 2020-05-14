@@ -8,6 +8,7 @@ typedef enum event_e
 {
 	SRC_EVENT_NEW_ES,
 	SRC_EVENT_DECODE_ES,
+	SRC_EVENT_END_ES,
 } event_t;
 typedef struct event_new_es_s event_new_es_t;
 struct event_new_es_s
@@ -18,6 +19,7 @@ struct event_new_es_s
 	decoder_t *decoder;
 };
 
+typedef struct event_decode_es_s event_end_es_t;
 typedef struct event_decode_es_s event_decode_es_t;
 struct event_decode_es_s
 {

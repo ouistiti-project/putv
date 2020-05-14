@@ -87,6 +87,17 @@ static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 	src_dbg("src: read %d %d", ctx->fd, ret);
 	if (ret < 0)
 		err("src file %d error: %s", ctx->fd, strerror(errno));
+	if (ret == 0)
+	{
+		event_end_es_t event = {.pid = ctx->pid, .decoder = ctx->estream};
+		event_listener_t *listener = ctx->listener;
+		const src_t src = { .ops = src_file, .ctx = ctx};
+		while (listener)
+		{
+			listener->cb(listener->arg, &src, SRC_EVENT_END_ES, (void *)&event);
+			listener = listener->next;
+		}
+	}
 	return ret;
 }
 
@@ -157,12 +168,12 @@ static int src_prepare(src_ctx_t *ctx)
 static int src_run(src_ctx_t *ctx)
 {
 	dbg("src: run");
-	event_decode_es_t event_decode = {.pid = ctx->pid, .decoder = ctx->estream};
+	event_decode_es_t event = {.pid = ctx->pid, .decoder = ctx->estream};
 	event_listener_t *listener = ctx->listener;
 	const src_t src = { .ops = src_file, .ctx = ctx};
 	while (listener)
 	{
-		listener->cb(listener->arg, &src, SRC_EVENT_DECODE_ES, (void *)&event_decode);
+		listener->cb(listener->arg, &src, SRC_EVENT_DECODE_ES, (void *)&event);
 		listener = listener->next;
 	}
 	/**

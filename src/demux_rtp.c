@@ -296,6 +296,14 @@ static void *demux_thread(void *arg)
 	demux_out_t *out = ctx->out;
 	while (out != NULL)
 	{
+		event_end_es_t event = {.pid = out->ssrc, .decoder = out->estream};
+		event_listener_t *listener = ctx->listener;
+		const src_t src = { .ops = demux_rtp, .ctx = ctx};
+		while (listener)
+		{
+			listener->cb(listener->arg, &src, SRC_EVENT_END_ES, (void *)&event);
+			listener = listener->next;
+		}
 		if (out->data != NULL)
 			out->jitter->ops->push(out->jitter->ctx, 0, NULL);
 		out = out->next;

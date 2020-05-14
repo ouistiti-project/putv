@@ -350,6 +350,17 @@ static void *src_thread(void *arg)
 		}
 	}
 	dbg("src: thread end");
+	ctx->out->ops->flush(ctx->out->ctx);
+#ifndef DEMUX_PASSTHROUGH
+	event_end_es_t event = {.pid = ctx->pid, .decoder = ctx->estream};
+	event_listener_t *listener = ctx->listener;
+	const src_t src = { .ops = src_udp, .ctx = ctx};
+	while (listener)
+	{
+		listener->cb(listener->arg, &src, SRC_EVENT_END_ES, (void *)&event);
+		listener = listener->next;
+	}
+#endif
 	return NULL;
 }
 #endif

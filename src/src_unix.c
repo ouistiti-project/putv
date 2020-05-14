@@ -190,6 +190,15 @@ static void *src_thread(void *arg)
 		}
 	}
 	dbg("sink: thread end");
+	ctx->out->ops->flush(ctx->out->ctx);
+	event_end_es_t event = {.pid = 0, .decoder = ctx->estream};
+	event_listener_t *listener = ctx->listener;
+	const src_t src = { .ops = src_unix, .ctx = ctx};
+	while (listener)
+	{
+		listener->cb(listener->arg, &src, SRC_EVENT_END_ES, (void *)&event);
+		listener = listener->next;
+	}
 	return NULL;
 }
 

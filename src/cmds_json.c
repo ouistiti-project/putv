@@ -324,7 +324,6 @@ static int method_append(json_t *json_params, json_t **result, void *userdata)
 static int method_play(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
-	media_t *media = player_media(ctx->player);
 	int ret = -1;
 	cmds_dbg("cmds: play");
 
@@ -514,7 +513,7 @@ static int method_change(json_t *json_params, json_t **result, void *userdata)
 		{
 			const char *str = json_string_value(value);
 			media_t *media = player_media(ctx->player);
-			if (media->ops->insert != NULL)
+			if (media != NULL && media->ops->insert != NULL)
 			{
 				ret = media->ops->insert(media->ctx, str, "", NULL);
 			}
@@ -522,7 +521,7 @@ static int method_change(json_t *json_params, json_t **result, void *userdata)
 			{
 				ret = player_change(ctx->player, str, random, loop, now);
 			}
-			if (ret == 0)
+			if (ret >= 0)
 			{
 				player_state(ctx->player, STATE_STOP);
 				*result = json_pack("{s:s,s:s}", "media", "changed", "state", str_stop);
@@ -961,8 +960,13 @@ static int _cmds_send(const char *buff, size_t size, void *userctx)
 	int ret = size;
 	if (ctx->buff_snd.length + size + 1 > sizeof(ctx->buff_snd.data))
 	{
-		ret = send(sock, ctx->buff_snd.data, ctx->buff_snd.length, MSG_DONTWAIT | MSG_NOSIGNAL);
-		cmds_dbg("send %d/%d: %s", ret, ctx->buff_snd.length, ctx->buff_snd.data);
+		if (ctx->buff_snd.length != 0)
+		{
+			ret = send(sock, ctx->buff_snd.data, ctx->buff_snd.length, MSG_DONTWAIT | MSG_NOSIGNAL);
+			cmds_dbg("cmds: send %d/%d: %s", ret, ctx->buff_snd.length, ctx->buff_snd.data);
+		}
+		else
+			dbg("cmds: try to send empty buffer");
 		ctx->buff_snd.length = 0;
 	}
 	memcpy(ctx->buff_snd.data + ctx->buff_snd.length, buff, size);
@@ -1023,7 +1027,7 @@ static void jsonrpc_onchange(void * userctx, player_ctx_t *player, state_t state
 		if (ctx->buff_snd.length > 0)
 		{
 			int ret = send(sock, ctx->buff_snd.data, ctx->buff_snd.length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
-			cmds_dbg("send %d/%d: %s", ret, ctx->buff_snd.length + 1, ctx->buff_snd.data);
+			cmds_dbg("cmds: send %d/%d: %s", ret, ctx->buff_snd.length + 1, ctx->buff_snd.data);
 		}
 		ctx->buff_snd.length = 0;
 		fsync(sock);
@@ -1059,12 +1063,15 @@ static int _jsonrpc_sendresponse(thread_info_t *info, json_t *request)
 	 */
 	if (response != NULL)
 	{
+		dbg("cmds: send response %s", json_dumps(response, JSONRPC_DEBUG_FORMAT ));
 #ifdef JSONRPC_LARGEPACKET
 		json_dump_callback(response, _cmds_send, info, JSONRPC_DEBUG_FORMAT);
 		if (ctx->buff_snd.length > 0)
 		{
+			ctx->buff_snd.data[ctx->buff_snd.length] = 0;
 			int ret = send(sock, ctx->buff_snd.data, ctx->buff_snd.length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
-			cmds_dbg("send %d/%d: %s", ret, ctx->buff_snd.length + 1, ctx->buff_snd.data);
+			cmds_dbg("cmds: send %d/%d: %s", ret, ctx->buff_snd.length + 1, ctx->buff_snd.data);
+			fsync(sock);
 		}
 		ctx->buff_snd.length = 0;
 #else
@@ -1123,7 +1130,7 @@ static int jsonrpc_command(thread_info_t *info)
 				request = json_load_callback(_cmds_recv, info, flags, &error);
 				if (request != NULL)
 				{
-					dbg("cmds: new request");
+					dbg("cmds: new request %s", json_dumps(request, JSONRPC_DEBUG_FORMAT ));
 					pthread_mutex_lock(&ctx->mutex);
 					_jsonrpc_sendresponse(info, request);
 					pthread_mutex_unlock(&ctx->mutex);

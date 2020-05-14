@@ -103,7 +103,7 @@ static uint write_cb(char *in, uint size, uint nmemb, src_ctx_t *ctx)
 		if (ctx->outbuffer == NULL)
 		{
 			dbg("src: out buffer stop");
-			return -1;
+			return 0;
 		}
 		len = ctx->out->ctx->size;
 		if (len > nmemb)
@@ -283,8 +283,6 @@ static void src_destroy(src_ctx_t *ctx)
 	}
 	if (ctx->thread)
 	{
-		curl_easy_reset(ctx->curl);
-		curl_easy_cleanup(ctx->curl);
 		pthread_join(ctx->thread, NULL);
 	}
 	if (ctx->estream != NULL)

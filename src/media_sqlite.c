@@ -843,6 +843,9 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 		filename += 1;
 	else
 		filename = path;
+	if (info == NULL)
+		info = 	media_fillinfo(path, mime);
+
 	opusid = opus_insert(ctx, info, &albumid, filename);
 	if (opusid == -1)
 		err("opusid error");

@@ -612,6 +612,59 @@ media_t *media_build(player_ctx_t *player, const char *url)
 	return media;
 }
 
+char *media_fillinfo(const char *url, const char *mime)
+{
+	int ret = 0;
+	char *info = NULL;
+	json_t *object = NULL;
+	const char *path = url;
+
+	if (strncmp(path, "file://", 7) == 0)
+		path += 7;
+	else
+		return NULL;
+	object = json_object();
+#ifdef USE_ID3TAG
+	if (mime && !strcmp(mime, mime_audiomp3))
+	{
+		ret = media_parseid3tag(path, object);
+	}
+#endif
+#ifdef USE_OGGMETADDATA
+	if (mime && !strcmp(mime, mime_audioflac))
+	{
+		ret = media_parseoggmetadata(path, object);
+	}
+#endif
+	char coverpath[PATH_MAX];
+	strcpy(coverpath, url);
+	char *dname = strrchr(coverpath, '/');
+	if (strlen(dname) >= 8)
+	{
+		if (dname == NULL)
+			dname = coverpath;
+		else
+			dname++;
+		strcpy(dname, "cover.jpg");
+		if (!access(coverpath, R_OK))
+		{
+			json_t *value;
+			value = json_string(coverpath);
+			json_object_set(object, str_cover, value);
+		}
+		strcpy(dname, "cover.png");
+		if (!access(coverpath, R_OK))
+		{
+			json_t *value;
+			value = json_string(coverpath);
+			json_object_set(object, str_cover, value);
+		}
+	}
+	info = json_dumps(object, JSON_INDENT(2));
+	json_decref(object);
+	return info;
+}
+
 const char *media_path()
 {
 	return current_path;

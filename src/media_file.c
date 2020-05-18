@@ -119,6 +119,8 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 	media->url = strdup(path);
 	if (info)
 		media->info = strdup(info);
+	else
+		media->info = media_fillinfo(path, mime);
 	if (mime)
 		media->mime = mime;
 	else
@@ -151,6 +153,8 @@ static int media_append(media_ctx_t *ctx, const char *path, const char *info, co
 	media->url = strdup(path);
 	if (info)
 		media->info = strdup(info);
+	else
+		media->info = media_fillinfo(path, mime);
 	if (mime)
 		media->mime = mime;
 	else
@@ -288,6 +292,7 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url,...)
 		media_url_t *media;
 		media = calloc(1, sizeof(*media));
 		media->url = strdup(url);
+		media->info = media_fillinfo(path, mime);
 		media->mime = mime;
 		media->id = 0;
 		ctx->media = media;

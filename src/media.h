@@ -124,6 +124,7 @@ int media_parseid3tag(const char *path, json_t *object);
 #ifdef USE_OGGMETADDATA
 int media_parseoggmetadata(const char *path, json_t *object);
 #endif
+char *media_fillinfo(const char *url, const char *mime);
 
 extern const media_ops_t *media_sqlite;
 extern const media_ops_t *media_file;

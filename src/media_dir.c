@@ -121,16 +121,19 @@ struct _find_mediaid_s
 	void *arg;
 };
 
-static int _run_cb(_find_mediaid_t *mdata, int id, const char *path, const char *mime)
+static int _run_cb(_find_mediaid_t *mdata, int id, const char *url, const char *mime)
 {
 	int ret = 0;
 	if (mdata->cb != NULL)
 	{
 		char *info = NULL;
 		json_t *object = NULL;
+		const char *path = url;
 
 		object = json_object();
 
+		if (strncmp(path, "file://", 7) == 0)
+			path += 7;
 #ifdef USE_ID3TAG
 		if (mime && !strcmp(mime, mime_audiomp3))
 		{
@@ -144,7 +147,7 @@ static int _run_cb(_find_mediaid_t *mdata, int id, const char *path, const char 
 		}
 #endif
 		char coverpath[PATH_MAX];
-		strcpy(coverpath, path);
+		strcpy(coverpath, url);
 		char *dname = strrchr(coverpath, '/');
 		if (strlen(dname) >= 8)
 		{
@@ -170,7 +173,7 @@ static int _run_cb(_find_mediaid_t *mdata, int id, const char *path, const char 
 
 		info = json_dumps(object, JSON_INDENT(2));
 		json_decref(object);
-		ret = mdata->cb(mdata->arg, id, path, info, mime);
+		ret = mdata->cb(mdata->arg, id, url, info, mime);
 		if (info != NULL)
 			free(info);
 	}

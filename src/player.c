@@ -190,18 +190,18 @@ state_t player_state(player_ctx_t *ctx, state_t state)
 {
 	if ((state != STATE_UNKNOWN) && ctx->state != state)
 	{
-		player_dbg("player: change state %d => %d",ctx->state, state);
 		if (pthread_mutex_trylock(&ctx->mutex) != 0)
 		{
 			player_dbg("player: change state trylock caller %p", __builtin_return_address(0));
 			return ctx->state;
 		}
+
+		player_dbg("player: change state %d => %d",ctx->state, state);
 		ctx->state = state;
 		pthread_mutex_unlock(&ctx->mutex);
 		pthread_cond_broadcast(&ctx->cond_int);
 	}
-	state = ctx->state;
-	return state;
+	return ctx->state;
 }
 
 int player_mediaid(player_ctx_t *ctx)
@@ -219,15 +219,14 @@ int player_waiton(player_ctx_t *ctx, int state)
 //		ctx->state == STATE_STOP ||
 		ctx->state == STATE_ERROR)
 		return -1;
+	if (ctx->state != state && state != STATE_UNKNOWN)
+		return 0;
 	pthread_mutex_lock(&ctx->mutex);
-	while (ctx->state == state)
 	{
 		pthread_cond_wait(&ctx->cond, &ctx->mutex);
-		if (state == STATE_UNKNOWN)
-			break;
-	}
+	} while (ctx->state == state);
 	pthread_mutex_unlock(&ctx->mutex);
-	return 0;
+	return 1;
 }
 
 static void _player_new_es(player_ctx_t *ctx, const src_t *src, void *eventarg)

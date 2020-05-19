@@ -281,6 +281,13 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 	src = src_build(ctx, url, mime, id);
 	if (src != NULL)
 	{
+		if (ctx->nextsrc != NULL)
+		{
+			ctx->nextsrc->ops->destroy(ctx->nextsrc->ctx);
+			free(ctx->nextsrc);
+			ctx->nextsrc = NULL;
+		}
+
 		ctx->nextsrc = src;
 
 		if (src->ops->eventlistener)
@@ -316,13 +323,105 @@ int player_subscribe(player_ctx_t *ctx, estream_t type, jitter_t *encoder_jitter
 	return 0;
 }
 
+static int _player_stateengine(player_ctx_t *ctx, int state)
+{
+	int i;
+	switch (state)
+	{
+		case STATE_STOP:
+			dbg("player: stoping");
+			for (i = 0; i < ctx->noutstreams; i++)
+				ctx->outstream[i]->ops->flush(ctx->outstream[i]->ctx);
+			if (ctx->src != NULL)
+			{
+				ctx->src->ops->destroy(ctx->src->ctx);
+				free(ctx->src);
+				ctx->src = NULL;
+			}
+			if (ctx->nextsrc != NULL)
+			{
+				ctx->nextsrc->ops->destroy(ctx->nextsrc->ctx);
+				free(ctx->nextsrc);
+				ctx->nextsrc = NULL;
+			}
+
+			ctx->media->ops->end(ctx->media->ctx);
+			for (i = 0; i < ctx->noutstreams; i++)
+				ctx->outstream[i]->ops->reset(ctx->outstream[i]->ctx);
+			dbg("player: stop");
+		break;
+		case STATE_CHANGE:
+			if (ctx->src != NULL)
+			{
+				dbg("player: wait");
+				ctx->src->ops->destroy(ctx->src->ctx);
+				free(ctx->src);
+				ctx->src = NULL;
+			}
+			ctx->src = ctx->nextsrc;
+			ctx->nextsrc = NULL;
+
+			if (ctx->src != NULL)
+			{
+				dbg("player: play");
+				/**
+				 * the src needs to be ready before the decoder
+				 * to set a producer if it's needed
+				 */
+				ctx->src->ops->run(ctx->src->ctx);
+				state = STATE_PLAY;
+			}
+			else
+			{
+				state = STATE_STOP;
+			}
+		break;
+		case STATE_PLAY:
+			/**
+			 * first check if a new media is requested
+			 */
+			if (ctx->media != ctx->nextmedia)
+			{
+				if (ctx->media)
+				{
+					ctx->media->ops->destroy(ctx->media->ctx);
+					free(ctx->media);
+				}
+				ctx->media = ctx->nextmedia;
+			}
+			if (ctx->media == NULL)
+			{
+				err("media not available");
+				state = STATE_STOP;
+				break;
+			}
+
+			if (ctx->media->ops->next)
+			{
+				ctx->media->ops->next(ctx->media->ctx);
+			}
+			else if (ctx->media->ops->end)
+				ctx->media->ops->end(ctx->media->ctx);
+
+			ctx->media->ops->play(ctx->media->ctx, _player_play, ctx);
+			/**
+			 * there isn't any stream in the player
+			 * the new one is on nextsrc, then player pass on CHANGE
+			 * to switch nextsrc to src
+			 */
+			if (ctx->src == NULL)
+				state = STATE_CHANGE;
+		break;
+	}
+	return state;
+}
+
 int player_run(player_ctx_t *ctx)
 {
 	if (ctx->noutstreams == 0)
 		return -1;
 
 	int last_state = STATE_STOP;
-	int i;
 	warn("player: running");
 	while (last_state != STATE_ERROR)
 	{
@@ -336,105 +435,14 @@ int player_run(player_ctx_t *ctx)
 				pthread_cond_broadcast(&ctx->cond);
 			}
 		}
+
+		player_dbg("player: state %d => %d", last_state, ctx->state);
 		last_state = ctx->state;
-
-		switch (ctx->state)
-		{
-			case STATE_STOP:
-				dbg("player: stoping");
-				for (i = 0; i < ctx->noutstreams; i++)
-					ctx->outstream[i]->ops->flush(ctx->outstream[i]->ctx);
-				if (ctx->src != NULL)
-				{
-					ctx->src->ops->destroy(ctx->src->ctx);
-					free(ctx->src);
-					ctx->src = NULL;
-				}
-				if (ctx->nextsrc != NULL)
-				{
-					ctx->nextsrc->ops->destroy(ctx->nextsrc->ctx);
-					free(ctx->nextsrc);
-					ctx->nextsrc = NULL;
-				}
-
-				ctx->media->ops->end(ctx->media->ctx);
-				for (i = 0; i < ctx->noutstreams; i++)
-					ctx->outstream[i]->ops->reset(ctx->outstream[i]->ctx);
-				dbg("player: stop");
-			break;
-			case STATE_CHANGE:
-				if (ctx->src != NULL)
-				{
-					dbg("player: wait");
-					ctx->src->ops->destroy(ctx->src->ctx);
-					free(ctx->src);
-					ctx->src = NULL;
-				}
-				ctx->src = ctx->nextsrc;
-				ctx->nextsrc = NULL;
-
-				if (ctx->src != NULL)
-				{
-					dbg("player: play");
-					/**
-					 * the src needs to be ready before the decoder
-					 * to set a producer if it's needed
-					 */
-					ctx->src->ops->run(ctx->src->ctx);
-					ctx->state = STATE_PLAY;
-				}
-				else
-				{
-					ctx->state = STATE_STOP;
-				}
-			break;
-			case STATE_PLAY:
-				/**
-				 * first check if a new media is requested
-				 */
-				if (ctx->media != ctx->nextmedia)
-				{
-					if (ctx->media)
-					{
-						ctx->media->ops->destroy(ctx->media->ctx);
-						free(ctx->media);
-					}
-					ctx->media = ctx->nextmedia;
-				}
-				if (ctx->media == NULL)
-				{
-					err("media not available");
-					ctx->state = STATE_STOP;
-					break;
-				}
-
-				if (ctx->media->ops->next)
-				{
-					ctx->media->ops->next(ctx->media->ctx);
-				}
-				else if (ctx->media->ops->end)
-					ctx->media->ops->end(ctx->media->ctx);
-
-				if (ctx->nextsrc != NULL)
-				{
-					ctx->nextsrc->ops->destroy(ctx->nextsrc->ctx);
-					free(ctx->nextsrc);
-					ctx->nextsrc = NULL;
-				}
-
-				ctx->media->ops->play(ctx->media->ctx, _player_play, ctx);
-				/**
-				 * there isn't any stream in the player
-				 * the new one is on nextsrc, then player pass on CHANGE
-				 * to switch nextsrc to src
-				 */
-				if (ctx->src == NULL)
-					ctx->state = STATE_CHANGE;
-			break;
-			case STATE_PAUSE:
-			break;
-		}
 		pthread_mutex_unlock(&ctx->mutex);
+
+		ctx->state = _player_stateengine(ctx, last_state);
+
+		player_dbg("player: state end %d => %d", last_state, ctx->state);
 		if (last_state != ctx->state)
 			pthread_cond_broadcast(&ctx->cond);
 

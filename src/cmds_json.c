@@ -1012,10 +1012,17 @@ static size_t _cmds_recv(void *buff, size_t size, void *userctx)
 	return ret;
 }
 
-static void jsonrpc_onchange(void * userctx, player_ctx_t *player, state_t state)
+static void jsonrpc_onchange(void * userctx, event_t event, void *eventarg)
 {
 	thread_info_t *info = (thread_info_t *)userctx;
 	cmds_ctx_t *ctx = info->userctx;
+
+	if (event != PLAYER_EVENT_CHANGE)
+		return;
+
+	event_player_state_t *data = (event_player_state_t *)eventarg;
+	const player_ctx_t *player = data->playerctx;
+	int state = data->state;
 
 	pthread_mutex_lock(&ctx->mutex);
 #ifdef JSONRPC_LARGEPACKET
@@ -1094,7 +1101,9 @@ static int jsonrpc_command(thread_info_t *info)
 
 	warn("json socket connection");
 	int onchangeid = player_onchange(ctx->player, jsonrpc_onchange, (void *)info, "jsonrpc");
-	jsonrpc_onchange(info, ctx->player, player_state(ctx->player, STATE_UNKNOWN));
+	event_player_state_t event = {.playerctx = ctx->player};
+	event.state = player_state(ctx->player, STATE_UNKNOWN);
+	jsonrpc_onchange(info, PLAYER_EVENT_CHANGE, &event);
 	errno = 0;
 
 	while (sock > 0)

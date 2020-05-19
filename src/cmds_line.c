@@ -215,9 +215,16 @@ static int _display(void *arg, int id, const char *url, const char *info, const 
 	printf("player: media %d => %s\n", id, url);
 }
 
-void cmds_line_onchange(void *arg, player_ctx_t *player, state_t state)
+void cmds_line_onchange(void *arg, event_t event, void *eventarg)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t*)arg;
+
+	if (event != PLAYER_EVENT_CHANGE)
+		return;
+
+	event_player_state_t *data = (event_player_state_t *)eventarg;
+	const player_ctx_t *player = data->playerctx;
+	int state = data->state;
 
 	switch (state)
 	{
@@ -239,9 +246,10 @@ void cmds_line_onchange(void *arg, player_ctx_t *player, state_t state)
 	default:
 		dbg("cmd line onchange");
 	}
-	int id = player_mediaid(player);
+	int id = player_mediaid(ctx->player);
 	media_t *media = player_media(ctx->player);
-	media->ops->find(media->ctx, id, _display, ctx);
+	if (media != NULL)
+		media->ops->find(media->ctx, id, _display, ctx);
 }
 
 static cmds_ctx_t *cmds_line_init(player_ctx_t *player, void *arg)

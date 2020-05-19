@@ -50,17 +50,9 @@
 #define dbg(...)
 #endif
 
-#define player_dbg(...)
+#define player_dbg dbg
 
 typedef struct player_event_s player_event_t;
-struct player_event_s
-{
-	int id;
-	player_event_type_t type;
-	player_event_cb_t cb;
-	void *ctx;
-	player_event_t *next;
-};
 
 struct player_ctx_s
 {
@@ -70,7 +62,7 @@ struct player_ctx_s
 	media_t *media;
 	media_t *nextmedia;
 	state_t state;
-	player_event_t *events;
+	event_listener_t *listeners;
 
 	src_t *src;
 	src_t *nextsrc;
@@ -151,39 +143,36 @@ void player_destroy(player_ctx_t *ctx)
 
 void player_removeevent(player_ctx_t *ctx, int id)
 {
-	player_event_t *event = ctx->events;
-	if (event->id == id)
+	event_listener_t *listener = ctx->listeners;
+	if (listener->id == id)
 	{
-		ctx->events = event->next;
-		free(event);
+		ctx->listeners = listener->next;
+		free(listener);
 		return;
 	}
-	while (event != NULL)
+	while (listener != NULL)
 	{
-		player_event_t *next = event->next;
+		event_listener_t *next = listener->next;
 		if (next != NULL && next->id == id)
 		{
-			event->next = next->next;
+			listener->next = next->next;
 			free(next);
 			return;
 		}
-		event = event->next;
+		listener = listener->next;
 	}
 }
 
-int player_onchange(player_ctx_t *ctx, player_event_cb_t callback, void *cbctx, char *name)
+int player_onchange(player_ctx_t *ctx, event_listener_cb_t callback, void *cbctx, char *name)
 {
-	player_event_t *event = calloc(1, sizeof(*event));
-	if (ctx->events != NULL)
-		event->id = ctx->events->id + 1;
-	else
-		event->id = 0;
-	event->cb = callback;
-	event->ctx = cbctx;
-	event->type = EVENT_ONCHANGE;
-	event->next = ctx->events;
-	ctx->events = event;
-	return event->id;
+	event_listener_t *listener = calloc(1, sizeof(*listener));
+	if (ctx->listeners != NULL)
+		listener->id = ctx->listeners->id + 1;
+	listener->cb = callback;
+	listener->arg = cbctx;
+	listener->next = ctx->listeners;
+	ctx->listeners = listener;
+	return listener->id;
 }
 
 state_t player_state(player_ctx_t *ctx, state_t state)
@@ -449,10 +438,11 @@ int player_run(player_ctx_t *ctx)
 		/******************
 		 * event manager  *
 		 ******************/
-		player_event_t *it = ctx->events;
+		event_player_state_t event = {.playerctx = ctx, .state = ctx->state};
+		event_listener_t *it = ctx->listeners;
 		while (it != NULL)
 		{
-			it->cb(it->ctx, ctx, ctx->state);
+			it->cb(it->arg, PLAYER_EVENT_CHANGE, &event);
 			it = it->next;
 		}
 	}

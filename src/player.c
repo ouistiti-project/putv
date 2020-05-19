@@ -229,9 +229,10 @@ int player_waiton(player_ctx_t *ctx, int state)
 	return 1;
 }
 
-static void _player_new_es(player_ctx_t *ctx, const src_t *src, void *eventarg)
+static void _player_new_es(player_ctx_t *ctx, void *eventarg)
 {
 	event_new_es_t *event_data = (event_new_es_t *)eventarg;
+	const src_t *src = event_data->src;
 	warn("player: decoder build");
 	event_data->decoder = decoder_build(ctx, event_data->mime);
 	if (event_data->decoder == NULL)
@@ -243,7 +244,7 @@ static void _player_new_es(player_ctx_t *ctx, const src_t *src, void *eventarg)
 	}
 }
 
-static void _player_decode_es(player_ctx_t *ctx, const src_t *src, void *eventarg)
+static void _player_decode_es(player_ctx_t *ctx, void *eventarg)
 {
 	event_decode_es_t *event_data = (event_decode_es_t *)eventarg;
 	if (event_data->decoder != NULL && ctx->noutstreams < MAX_ESTREAM)
@@ -258,16 +259,16 @@ static void _player_decode_es(player_ctx_t *ctx, const src_t *src, void *eventar
 	}
 }
 
-static void _player_listener(void *arg, const src_t *src, event_t event, void *eventarg)
+static void _player_listener(void *arg, event_t event, void *eventarg)
 {
 	player_ctx_t *ctx = (player_ctx_t *)arg;
 	switch (event)
 	{
 		case SRC_EVENT_NEW_ES:
-			_player_new_es(ctx, src, eventarg);
+			_player_new_es(ctx, eventarg);
 		break;
 		case SRC_EVENT_DECODE_ES:
-			_player_decode_es(ctx, src, eventarg);
+			_player_decode_es(ctx, eventarg);
 		break;
 	}
 }
@@ -287,7 +288,6 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 			free(ctx->nextsrc);
 			ctx->nextsrc = NULL;
 		}
-
 		ctx->nextsrc = src;
 
 		if (src->ops->eventlistener)
@@ -298,10 +298,10 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 		}
 		else
 		{
-			const event_new_es_t event_new = {.pid = 0, .mime = mime, .jitte = JITTE_LOW};
-			_player_listener(ctx, src, SRC_EVENT_NEW_ES, (void *)&event_new);
-			const event_decode_es_t event_decode = {.pid = 0, .decoder = event_new.decoder};
-			_player_listener(ctx, src, SRC_EVENT_DECODE_ES, (void *)&event_decode);
+			const event_new_es_t event_new = {.pid = 0, .src = src, .mime = mime, .jitte = JITTE_LOW};
+			_player_listener(ctx, SRC_EVENT_NEW_ES, (void *)&event_new);
+			const event_decode_es_t event_decode = {.pid = 0, .src = src, .decoder = event_new.decoder};
+			_player_listener(ctx, SRC_EVENT_DECODE_ES, (void *)&event_decode);
 		}
 		return 0;
 	}

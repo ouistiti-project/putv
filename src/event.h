@@ -14,6 +14,7 @@ typedef struct event_new_es_s event_new_es_t;
 struct event_new_es_s
 {
 	uint32_t pid;
+	const src_t *src;
 	const char * mime;
 	jitte_t jitte;
 	decoder_t *decoder;
@@ -24,10 +25,11 @@ typedef struct event_decode_es_s event_decode_es_t;
 struct event_decode_es_s
 {
 	uint32_t pid;
+	const src_t *src;
 	decoder_t *decoder;
 };
 
-typedef void (*event_listener_cb_t)(void *arg, const src_t *src, event_t event, void *data);
+typedef void (*event_listener_cb_t)(void *arg, event_t event, void *data);
 
 typedef struct event_listener_s event_listener_t;
 struct event_listener_s

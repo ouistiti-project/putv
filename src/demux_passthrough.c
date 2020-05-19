@@ -80,16 +80,16 @@ static jitter_t *demux_jitter(src_ctx_t *ctx, jitte_t jitte)
 
 static int demux_run(src_ctx_t *ctx)
 {
-	event_new_es_t event = {.pid = 0, .mime = ctx->mime, .jitte = JITTE_HIGH};
-	event_decode_es_t event_decode = {0};
-	event_listener_t *listener = ctx->listener;
 	const src_t src = { .ops = demux_passthrough, .ctx = ctx};
+	event_new_es_t event = {.pid = 0, .src = &src, .mime = ctx->mime, .jitte = JITTE_HIGH};
+	event_decode_es_t event_decode = {.src = &src};
+	event_listener_t *listener = ctx->listener;
 	while (listener)
 	{
-		listener->cb(listener->arg, &src, SRC_EVENT_NEW_ES, (void *)&event);
+		listener->cb(listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
 		event_decode.pid = event.pid;
 		event_decode.decoder = event.decoder;
-		listener->cb(listener->arg, &src, SRC_EVENT_DECODE_ES, (void *)&event_decode);
+		listener->cb(listener->arg, SRC_EVENT_DECODE_ES, (void *)&event_decode);
 		listener = listener->next;
 	}
 	return 0;
@@ -148,12 +148,12 @@ static void demux_destroy(src_ctx_t *ctx)
 {
 	if (ctx->estream != NULL)
 	{
-		event_end_es_t event = {.pid = 0, .decoder = ctx->estream};
-		event_listener_t *listener = ctx->listener;
 		const src_t src = { .ops = demux_passthrough, .ctx = ctx};
+		event_end_es_t event = {.pid = 0, .src = &src, .decoder = ctx->estream};
+		event_listener_t *listener = ctx->listener;
 		while (listener)
 		{
-			listener->cb(listener->arg, &src, SRC_EVENT_END_ES, (void *)&event);
+			listener->cb(listener->arg, SRC_EVENT_END_ES, (void *)&event);
 			listener = listener->next;
 		}
 		ctx->estream->ops->destroy(ctx->estream->ctx);

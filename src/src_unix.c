@@ -191,12 +191,12 @@ static void *src_thread(void *arg)
 	}
 	dbg("sink: thread end");
 	ctx->out->ops->flush(ctx->out->ctx);
-	event_end_es_t event = {.pid = 0, .decoder = ctx->estream};
-	event_listener_t *listener = ctx->listener;
 	const src_t src = { .ops = src_unix, .ctx = ctx};
+	event_end_es_t event = {.pid = 0, .src = &src, .decoder = ctx->estream};
+	event_listener_t *listener = ctx->listener;
 	while (listener)
 	{
-		listener->cb(listener->arg, &src, SRC_EVENT_END_ES, (void *)&event);
+		listener->cb(listener->arg, SRC_EVENT_END_ES, (void *)&event);
 		listener = listener->next;
 	}
 	return NULL;
@@ -204,16 +204,16 @@ static void *src_thread(void *arg)
 
 static int src_run(src_ctx_t *ctx)
 {
-	event_new_es_t event = {.pid = 0, .mime = ctx->mime, .jitte = JITTE_MID};
-	event_decode_es_t event_decode = {0};
-	event_listener_t *listener = ctx->listener;
 	const src_t src = { .ops = src_unix, .ctx = ctx};
+	event_new_es_t event = {.pid = 0, .src = &src, .mime = ctx->mime, .jitte = JITTE_MID};
+	event_decode_es_t event_decode = {.src = &src};
+	event_listener_t *listener = ctx->listener;
 	while (listener)
 	{
-		listener->cb(listener->arg, &src, SRC_EVENT_NEW_ES, (void *)&event);
+		listener->cb(listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
 		event_decode.pid = event.pid;
 		event_decode.decoder = event.decoder;
-		listener->cb(listener->arg, &src, SRC_EVENT_DECODE_ES, (void *)&event_decode);
+		listener->cb(listener->arg, SRC_EVENT_DECODE_ES, (void *)&event_decode);
 		listener = listener->next;
 	}
 	pthread_create(&ctx->thread, NULL, src_thread, ctx);

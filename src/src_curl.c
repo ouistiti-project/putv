@@ -166,12 +166,12 @@ static void *src_thread(void *arg)
 	}
 	dbg("src: end of stream");
 	ctx->out->ops->flush(ctx->out->ctx);
-	event_end_es_t event = {.pid = ctx->pid, .decoder = ctx->estream};
-	event_listener_t *listener = ctx->listener;
 	const src_t src = { .ops = src_curl, .ctx = ctx};
+	event_end_es_t event = {.pid = ctx->pid, .src = &src, .decoder = ctx->estream};
+	event_listener_t *listener = ctx->listener;
 	while (listener)
 	{
-		listener->cb(listener->arg, &src, SRC_EVENT_END_ES, (void *)&event);
+		listener->cb(listener->arg, SRC_EVENT_END_ES, (void *)&event);
 		listener = listener->next;
 	}
 	return 0;
@@ -191,12 +191,12 @@ static int src_prepare(src_ctx_t *ctx)
 	pthread_cond_broadcast(&ctx->cond);
 	pthread_mutex_unlock(&ctx->mutex);
 
-	event_new_es_t event = {.pid = ctx->pid, .mime = ctx->mime, .jitte = JITTE_HIGH};
-	event_listener_t *listener = ctx->listener;
 	const src_t src = { .ops = src_curl, .ctx = ctx};
+	event_new_es_t event = {.pid = ctx->pid, .src = &src, .mime = ctx->mime, .jitte = JITTE_HIGH};
+	event_listener_t *listener = ctx->listener;
 	while (listener)
 	{
-		listener->cb(listener->arg, &src, SRC_EVENT_NEW_ES, (void *)&event);
+		listener->cb(listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
 		listener = listener->next;
 	}
 	pthread_mutex_lock(&ctx->mutex);
@@ -213,12 +213,12 @@ static int src_run(src_ctx_t *ctx)
 	ctx->state = SRC_RUN;
 	pthread_cond_broadcast(&ctx->cond);
 	pthread_mutex_unlock(&ctx->mutex);
-	event_decode_es_t event = {.pid = ctx->pid, .decoder = ctx->estream};
-	event_listener_t *listener = ctx->listener;
 	const src_t src = { .ops = src_curl, .ctx = ctx};
+	event_decode_es_t event = {.pid = ctx->pid, .src = &src, .decoder = ctx->estream};
+	event_listener_t *listener = ctx->listener;
 	while (listener)
 	{
-		listener->cb(listener->arg, &src, SRC_EVENT_DECODE_ES, (void *)&event);
+		listener->cb(listener->arg, SRC_EVENT_DECODE_ES, (void *)&event);
 		listener = listener->next;
 	}
 	return 0;

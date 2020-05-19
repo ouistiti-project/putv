@@ -1100,7 +1100,7 @@ static int jsonrpc_command(thread_info_t *info)
 	ctx->info = info;
 
 	warn("json socket connection");
-	int onchangeid = player_onchange(ctx->player, jsonrpc_onchange, (void *)info, "jsonrpc");
+	int onchangeid = player_eventlistener(ctx->player, jsonrpc_onchange, (void *)info, "jsonrpc");
 	event_player_state_t event = {.playerctx = ctx->player};
 	event.state = player_state(ctx->player, STATE_UNKNOWN);
 	jsonrpc_onchange(info, PLAYER_EVENT_CHANGE, &event);

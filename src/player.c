@@ -163,7 +163,7 @@ void player_removeevent(player_ctx_t *ctx, int id)
 	}
 }
 
-int player_onchange(player_ctx_t *ctx, event_listener_cb_t callback, void *cbctx, char *name)
+int player_eventlistener(player_ctx_t *ctx, event_listener_cb_t callback, void *cbctx, char *name)
 {
 	event_listener_t *listener = calloc(1, sizeof(*listener));
 	if (ctx->listeners != NULL)

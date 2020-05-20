@@ -329,14 +329,6 @@ static void *src_thread(void *arg)
 #endif
 	while (ctx->state != STATE_ERROR)
 	{
-		if (player_waiton(ctx->player, STATE_PAUSE) < 0)
-		{
-			if (player_state(ctx->player, STATE_UNKNOWN) == STATE_ERROR)
-			{
-				ctx->state = STATE_ERROR;
-				continue;
-			}
-		}
 		unsigned char *buff = ctx->out->ops->pull(ctx->out->ctx);
 		if (buff == NULL)
 		{

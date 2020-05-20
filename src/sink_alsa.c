@@ -459,30 +459,37 @@ static void *sink_thread(void *arg)
 		usleep(LATENCE_MS * 1000);
 	while (ctx->state != STATE_ERROR)
 	{
-		if (player_waiton(ctx->player, STATE_PAUSE) < 0)
+		int state = player_state(ctx->player, STATE_UNKNOWN);
+		while (state != STATE_PLAY)
 		{
-			if (player_state(ctx->player, STATE_UNKNOWN) == STATE_ERROR)
+			ret = player_waiton(ctx->player, state);
+			if (ret < 0)
 			{
 				snd_pcm_drain(ctx->playback_handle);
 				ctx->state = STATE_ERROR;
-				continue;
+				return NULL;
 			}
-		}
-		if (player_state(ctx->player, STATE_UNKNOWN) == STATE_STOP)
-		{
-			snd_pcm_drain(ctx->playback_handle);
-			player_waiton(ctx->player, STATE_STOP);
-			/**
-			 * alsa plays noise. but after to restart, the data are not available.
-			 * alsa must wait then before to restart really
-			 */
-			while (ctx->in->ops->empty(ctx->in->ctx))
+			state = player_state(ctx->player, STATE_UNKNOWN);
+			switch (state)
 			{
-				sched_yield();
-				usleep(LATENCE_MS * 1000);
+				case STATE_STOP:
+					snd_pcm_drain(ctx->playback_handle);
+				break;
+				case STATE_PLAY:
+					/**
+					 * alsa plays noise. but after to restart, the data are not available.
+					 * alsa must wait then before to restart really
+					 */
+					while (ctx->in->ops->empty(ctx->in->ctx))
+					{
+						sched_yield();
+						usleep(LATENCE_MS * 1000);
+					}
+					snd_pcm_prepare(ctx->playback_handle);
+				break;
+				case STATE_CHANGE:
+				break;
 			}
-			dbg("sink: continue %d", player_state(ctx->player, STATE_UNKNOWN));
-			snd_pcm_prepare(ctx->playback_handle);
 		}
 
 		unsigned char *buff = NULL;
@@ -502,6 +509,8 @@ static void *sink_thread(void *arg)
 		if (!ctx->in->ops->empty(ctx->in->ctx))
 		{
 			buff = ctx->in->ops->peer(ctx->in->ctx, NULL);
+			if (buff == NULL)
+				continue;
 			length = ctx->in->ops->length(ctx->in->ctx);
 			_alsa_checksamplerate(ctx);
 		}

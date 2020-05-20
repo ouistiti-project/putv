@@ -205,9 +205,7 @@ int player_mediaid(player_ctx_t *ctx)
 
 int player_waiton(player_ctx_t *ctx, int state)
 {
-	if (ctx->state == STATE_CHANGE ||
-//		ctx->state == STATE_STOP ||
-		ctx->state == STATE_ERROR)
+	if (ctx->state == STATE_ERROR)
 		return -1;
 	if (ctx->state != state && state != STATE_UNKNOWN)
 		return 0;
@@ -425,30 +423,29 @@ int player_run(player_ctx_t *ctx)
 	if (ctx->noutstreams == 0)
 		return -1;
 
-	int last_state = STATE_STOP;
+	int last_state = ctx->state & ~STATE_PAUSE_MASK;
 	warn("player: running");
 	while (last_state != STATE_ERROR)
 	{
 		pthread_mutex_lock(&ctx->mutex);
-		while (last_state == ctx->state)
+		while (last_state == (ctx->state & ~STATE_PAUSE_MASK))
 		{
 			pthread_cond_wait(&ctx->cond_int, &ctx->mutex);
-			if (last_state == STATE_PAUSE && ctx->state == STATE_PLAY)
-			{
-				last_state = ctx->state;
+			if (last_state == (ctx->state & ~STATE_PAUSE_MASK))
 				pthread_cond_broadcast(&ctx->cond);
-			}
 		}
 
-		player_dbg("player: state %d => %d", last_state, ctx->state);
-		last_state = ctx->state;
 		pthread_mutex_unlock(&ctx->mutex);
 
-		ctx->state = _player_stateengine(ctx, last_state);
-
-		player_dbg("player: state end %d => %d", last_state, ctx->state);
-		if (last_state != ctx->state)
+		if (last_state != (ctx->state & ~STATE_PAUSE_MASK))
 			pthread_cond_broadcast(&ctx->cond);
+		last_state = ctx->state & ~STATE_PAUSE_MASK;
+
+		ctx->state = _player_stateengine(ctx, ctx->state & ~STATE_PAUSE_MASK);
+
+		if (last_state != (ctx->state & ~STATE_PAUSE_MASK))
+			pthread_cond_broadcast(&ctx->cond);
+		last_state = ctx->state & ~STATE_PAUSE_MASK;
 
 		/******************
 		 * event manager  *
@@ -460,6 +457,9 @@ int player_run(player_ctx_t *ctx)
 			it->cb(it->arg, PLAYER_EVENT_CHANGE, &event);
 			it = it->next;
 		}
+
+		if (last_state != (ctx->state & ~STATE_PAUSE_MASK))
+			pthread_cond_broadcast(&ctx->cond);
 	}
 	return 0;
 }

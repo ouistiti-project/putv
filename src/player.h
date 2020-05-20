@@ -1,6 +1,8 @@
 #ifndef __PLAYER_H__
 #define __PLAYER_H__
 
+#define STATE_PAUSE_MASK 0x8000
+
 #include "event.h"
 
 typedef enum
@@ -8,9 +10,9 @@ typedef enum
 	STATE_UNKNOWN,
 	STATE_STOP,
 	STATE_PLAY,
-	STATE_PAUSE,
 	STATE_CHANGE,
 	STATE_ERROR,
+	STATE_PAUSE = STATE_PLAY | STATE_PAUSE_MASK,
 } state_t;
 
 typedef enum

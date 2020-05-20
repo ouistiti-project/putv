@@ -129,7 +129,7 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 				dirfd = open(pw->pw_dir, O_DIRECTORY);
 			}
 			fd = openat(dirfd, path, O_RDONLY);
-			dbg("open %s %d", path ,fd);
+			src_dbg("open %s %d", path ,fd);
 			if (dirfd != AT_FDCWD)
 				close(dirfd);
 		}
@@ -151,7 +151,7 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 
 static int src_prepare(src_ctx_t *ctx)
 {
-	dbg("src: prepare");
+	src_dbg("src: prepare");
 	const src_t src = { .ops = src_file, .ctx = ctx};
 	event_new_es_t event = {.pid = ctx->pid, .src = &src, .mime = ctx->mime, .jitte = JITTE_LOW};
 	event_listener_t *listener = ctx->listener;
@@ -208,7 +208,7 @@ static int src_attach(src_ctx_t *ctx, long index, decoder_t *decoder)
 		return -1;
 	ctx->estream = decoder;
 	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx, JITTE_LOW);
-	dbg("src: add producter to %s", ctx->out->ctx->name);
+	src_dbg("src: add producter to %s", ctx->out->ctx->name);
 	ctx->out->ctx->produce = (produce_t)src_read;
 	ctx->out->ctx->producter = (void *)ctx;
 }

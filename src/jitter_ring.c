@@ -158,20 +158,22 @@ static unsigned char *jitter_pull(jitter_ctx_t *jitter)
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
 
 	pthread_mutex_lock(&private->mutex);
-
+	int state = private->state;
 	while ((private->in != NULL) &&
-		((private->level + jitter->size) > (jitter->size * jitter->count)))
+		((private->level + jitter->size) > (jitter->size * jitter->count)) &&
+		state == private->state)
 	{
-		if (private->state == JITTER_FLUSH)
-		{
-			pthread_mutex_unlock(&private->mutex);
-			return NULL;
-		}
 		jitter_dbg("jitter %s pull block on %p (%d/%ld)", jitter->name, private->in, private->level, (jitter->size * jitter->count));
 		pthread_cond_wait(&private->condpush, &private->mutex);
 	}
+	unsigned char *ret = NULL;
+	if ((private->state == JITTER_RUNNING || private->state == JITTER_FILLING) &&
+		((private->level + jitter->size) > (jitter->size * jitter->count)))
+	{
+		ret = private->in;
+	}
 	pthread_mutex_unlock(&private->mutex);
-	return private->in;
+	return ret;
 }
 
 static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)

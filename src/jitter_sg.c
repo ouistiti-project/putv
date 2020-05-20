@@ -195,13 +195,9 @@ static unsigned char *jitter_pull(jitter_ctx_t *jitter)
 	pthread_mutex_lock(&private->mutex);
 	if (private->state == JITTER_STOP)
 		_jitter_init(jitter);
-	while (private->in->state != SCATTER_FREE)
+	int state = private->state;
+	while (private->in->state != SCATTER_FREE && state == private->state)
 	{
-		if (private->state == JITTER_FLUSH || private->state == JITTER_STOP)
-		{
-			pthread_mutex_unlock(&private->mutex);
-			return NULL;
-		}
 		/**
 		 * The scatter gather is full and we has to wait that the consumer
 		 * free some buffer.
@@ -209,11 +205,19 @@ static unsigned char *jitter_pull(jitter_ctx_t *jitter)
 
 		jitter_dbg("jitter %s pull block on %p %d", jitter->name, private->in, private->state);
 		pthread_cond_wait(&private->condpush, &private->mutex);
+
 	}
-	private->in->state = SCATTER_PULL;
+	unsigned char *ret= NULL;
+	if (private->state != JITTER_FLUSH &&
+		private->state != JITTER_STOP &&
+		private->in->state == SCATTER_FREE)
+	{
+		private->in->state = SCATTER_PULL;
+		ret = private->in->data;
+	}
 	pthread_mutex_unlock(&private->mutex);
 	jitter_dbg("jitter %s pull %p", jitter->name, private->in);
-	return private->in->data;
+	return ret;
 }
 
 static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
@@ -533,6 +537,8 @@ static void jitter_reset(jitter_ctx_t *jitter)
 static int jitter_empty(jitter_ctx_t *jitter)
 {
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
+	if (private->state == JITTER_FILLING)
+		return 1;
 	return (private->out->state != SCATTER_READY);
 }
 

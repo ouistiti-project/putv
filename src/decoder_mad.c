@@ -139,11 +139,6 @@ enum mad_flow output(void *data,
 	decoder_ctx_t *ctx = (decoder_ctx_t *)data;
 	filter_audio_t audio;
 
-	if (player_waiton(ctx->player, STATE_PAUSE) < 0)
-	{
-		return MAD_FLOW_STOP;
-	}
-
 	/* pcm->samplerate contains the sampling frequency */
 
 #ifdef DEBUG
@@ -421,6 +416,8 @@ static const char *mad_mime(decoder_ctx_t *ctx)
 
 static void mad_destroy(decoder_ctx_t *ctx)
 {
+	if (ctx->out)
+		ctx->out->ops->flush(ctx->out->ctx);
 	if (ctx->thread > 0)
 		pthread_join(ctx->thread, NULL);
 	/* release the decoder */

@@ -144,10 +144,6 @@ output(const FLAC__StreamDecoder *decoder,
 	decoder_ctx_t *ctx = (decoder_ctx_t *)data;
 	filter_audio_t audio;
 
-	if (player_waiton(ctx->player, STATE_PAUSE) < 0)
-	{
-		return FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
-	}
 	/* pcm->samplerate contains the sampling frequency */
 
 	audio.samplerate = FLAC__stream_decoder_get_sample_rate(decoder);
@@ -298,6 +294,8 @@ static const char *decoder_mime(decoder_ctx_t *ctx)
 
 static void decoder_destroy(decoder_ctx_t *ctx)
 {
+	if (ctx->out)
+		ctx->out->ops->flush(ctx->out->ctx);
 	if (ctx->thread > 0)
 		pthread_join(ctx->thread, NULL);
 	/* release the decoder */

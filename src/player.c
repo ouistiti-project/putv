@@ -423,7 +423,7 @@ int player_run(player_ctx_t *ctx)
 	if (ctx->noutstreams == 0)
 		return -1;
 
-	int last_state = ctx->state & ~STATE_PAUSE_MASK;
+	int last_state = STATE_STOP;
 	warn("player: running");
 	while (last_state != STATE_ERROR)
 	{

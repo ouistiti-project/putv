@@ -52,7 +52,7 @@
 
 #define player_dbg dbg
 
-typedef struct player_event_s player_event_t;
+static void _player_autonext(void *arg, event_t event, void *eventarg);
 
 struct player_ctx_s
 {
@@ -83,6 +83,7 @@ player_ctx_t *player_init(const char *filtername)
 	pthread_cond_init(&ctx->cond_int, NULL);
 	ctx->state = STATE_STOP;
 	ctx->filtername = filtername;
+	player_eventlistener(ctx, _player_autonext, ctx, "player");
 	return ctx;
 }
 
@@ -312,6 +313,56 @@ int player_subscribe(player_ctx_t *ctx, estream_t type, jitter_t *encoder_jitter
 	return 0;
 }
 
+static void _player_autonext(void *arg, event_t event, void *eventarg)
+{
+	player_ctx_t *ctx = (player_ctx_t *)arg;
+	if (event != PLAYER_EVENT_CHANGE)
+		return;
+	event_player_state_t *data = (event_player_state_t *)eventarg;
+
+	if (data->state != STATE_PLAY)
+		return;
+	/**
+	 * first check if a new media is requested
+	 */
+	if (ctx->media != ctx->nextmedia)
+	{
+		if (ctx->media)
+		{
+			ctx->media->ops->destroy(ctx->media->ctx);
+			free(ctx->media);
+		}
+		ctx->media = ctx->nextmedia;
+	}
+	if (ctx->media == NULL)
+	{
+		err("media not available");
+		player_state(ctx, STATE_STOP);
+		return;
+	}
+
+	if (ctx->media->ops->next)
+	{
+		ctx->media->ops->next(ctx->media->ctx);
+	}
+	else if (ctx->media->ops->end)
+		ctx->media->ops->end(ctx->media->ctx);
+
+	/**
+	 * media will call _player_play
+	 * and this one will set ctx->nextsrc
+	 */
+	ctx->media->ops->play(ctx->media->ctx, _player_play, ctx);
+
+	/**
+	 * there isn't any stream in the player
+	 * the new one is on nextsrc, then player pass on CHANGE
+	 * to switch nextsrc to src
+	 */
+	if (ctx->src == NULL)
+		player_state(ctx, STATE_CHANGE);
+}
+
 static int _player_stateengine(player_ctx_t *ctx, int state)
 {
 	int i;
@@ -364,42 +415,6 @@ static int _player_stateengine(player_ctx_t *ctx, int state)
 			{
 				state = STATE_STOP;
 			}
-		break;
-		case STATE_PLAY:
-			/**
-			 * first check if a new media is requested
-			 */
-			if (ctx->media != ctx->nextmedia)
-			{
-				if (ctx->media)
-				{
-					ctx->media->ops->destroy(ctx->media->ctx);
-					free(ctx->media);
-				}
-				ctx->media = ctx->nextmedia;
-			}
-			if (ctx->media == NULL)
-			{
-				err("media not available");
-				state = STATE_STOP;
-				break;
-			}
-
-			if (ctx->media->ops->next)
-			{
-				ctx->media->ops->next(ctx->media->ctx);
-			}
-			else if (ctx->media->ops->end)
-				ctx->media->ops->end(ctx->media->ctx);
-
-			ctx->media->ops->play(ctx->media->ctx, _player_play, ctx);
-			/**
-			 * there isn't any stream in the player
-			 * the new one is on nextsrc, then player pass on CHANGE
-			 * to switch nextsrc to src
-			 */
-			if (ctx->src == NULL)
-				state = STATE_CHANGE;
 		break;
 	}
 	return state;

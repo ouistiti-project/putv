@@ -637,7 +637,7 @@ char *media_fillinfo(const char *url, const char *mime)
 	}
 #endif
 	char coverpath[PATH_MAX];
-	strcpy(coverpath, url);
+	strcpy(coverpath, path);
 	char *dname = strrchr(coverpath, '/');
 	if (strlen(dname) >= 8)
 	{
@@ -646,6 +646,7 @@ char *media_fillinfo(const char *url, const char *mime)
 		else
 			dname++;
 		strcpy(dname, "cover.jpg");
+
 		if (!access(coverpath, R_OK))
 		{
 			json_t *value;

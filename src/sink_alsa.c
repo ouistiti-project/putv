@@ -494,27 +494,21 @@ static void *sink_thread(void *arg)
 
 		unsigned char *buff = NULL;
 		int length = 0;
+#ifdef SINK_ALSA_NOISE
 		ret = snd_pcm_wait(ctx->playback_handle, 1000);
 		if (ret == -EPIPE)
 		{
-			warn("pcm recover");
-			ret = snd_pcm_recover(ctx->playback_handle, ret, 0);
 			/**
 			* This must never occure, the udp src needs to know
 			* how many PCM missing.
 			*/
 			err("alsa: pcm wait error %s", snd_strerror(ret));
-			break;
+			warn("pcm recover");
+			ret = snd_pcm_recover(ctx->playback_handle, ret, 0);
+			player_state(ctx->player, STATE_STOP);
+			continue;
 		}
-		if (!ctx->in->ops->empty(ctx->in->ctx))
-		{
-			buff = ctx->in->ops->peer(ctx->in->ctx, NULL);
-			if (buff == NULL)
-				continue;
-			length = ctx->in->ops->length(ctx->in->ctx);
-			_alsa_checksamplerate(ctx);
-		}
-		else
+		if (ctx->in->ops->empty(ctx->in->ctx))
 		{
 			snd_pcm_sframes_t samples;
 			snd_pcm_delay(ctx->playback_handle, &samples);
@@ -530,6 +524,15 @@ static void *sink_thread(void *arg)
 			length = ctx->buffersize;
 			buff = ctx->noise;
 			ctx->noisecnt ++;
+		}
+		else
+#endif
+		{
+			buff = ctx->in->ops->peer(ctx->in->ctx, NULL);
+			if (buff == NULL)
+				continue;
+			length = ctx->in->ops->length(ctx->in->ctx);
+			_alsa_checksamplerate(ctx);
 		}
 		//snd_pcm_mmap_begin
 		ret = snd_pcm_writei(ctx->playback_handle, buff, length / divider);

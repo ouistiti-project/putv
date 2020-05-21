@@ -459,39 +459,6 @@ static void *sink_thread(void *arg)
 		usleep(LATENCE_MS * 1000);
 	while (ctx->state != STATE_ERROR)
 	{
-		int state = player_state(ctx->player, STATE_UNKNOWN);
-		while (state != STATE_PLAY)
-		{
-			ret = player_waiton(ctx->player, state);
-			if (ret < 0)
-			{
-				snd_pcm_drain(ctx->playback_handle);
-				ctx->state = STATE_ERROR;
-				return NULL;
-			}
-			state = player_state(ctx->player, STATE_UNKNOWN);
-			switch (state)
-			{
-				case STATE_STOP:
-					snd_pcm_drain(ctx->playback_handle);
-				break;
-				case STATE_PLAY:
-					/**
-					 * alsa plays noise. but after to restart, the data are not available.
-					 * alsa must wait then before to restart really
-					 */
-					while (ctx->in->ops->empty(ctx->in->ctx))
-					{
-						sched_yield();
-						usleep(LATENCE_MS * 1000);
-					}
-					snd_pcm_prepare(ctx->playback_handle);
-				break;
-				case STATE_CHANGE:
-				break;
-			}
-		}
-
 		unsigned char *buff = NULL;
 		int length = 0;
 #ifdef SINK_ALSA_NOISE

@@ -176,6 +176,15 @@ int player_eventlistener(player_ctx_t *ctx, event_listener_cb_t callback, void *
 	return listener->id;
 }
 
+int player_mediaid(player_ctx_t *ctx)
+{
+	if (ctx->src != NULL)
+	{
+		return ctx->src->mediaid;
+	}
+	return -1;
+}
+
 state_t player_state(player_ctx_t *ctx, state_t state)
 {
 	if ((state != STATE_UNKNOWN) && ctx->state != state)
@@ -194,15 +203,6 @@ state_t player_state(player_ctx_t *ctx, state_t state)
 	return ctx->state;
 }
 
-int player_mediaid(player_ctx_t *ctx)
-{
-	if (ctx->src != NULL)
-	{
-		return ctx->src->mediaid;
-	}
-	return -1;
-}
-
 int player_waiton(player_ctx_t *ctx, int state)
 {
 	if (ctx->state == STATE_ERROR)
@@ -210,9 +210,12 @@ int player_waiton(player_ctx_t *ctx, int state)
 	if (ctx->state != state && state != STATE_UNKNOWN)
 		return 0;
 	pthread_mutex_lock(&ctx->mutex);
+	do
 	{
+		dbg("player: waiton %d", state);
 		pthread_cond_wait(&ctx->cond, &ctx->mutex);
-	} while (ctx->state == state);
+	}
+	while (ctx->state == state);
 	pthread_mutex_unlock(&ctx->mutex);
 	return 1;
 }

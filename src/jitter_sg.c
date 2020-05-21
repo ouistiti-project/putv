@@ -195,15 +195,16 @@ static unsigned char *jitter_pull(jitter_ctx_t *jitter)
 	pthread_mutex_lock(&private->mutex);
 	if (private->state == JITTER_STOP)
 		_jitter_init(jitter);
-	int state = private->state;
-	while (private->in->state != SCATTER_FREE && state == private->state)
+	while (private->in->state != SCATTER_FREE)
 	{
+		if (private->state == JITTER_FLUSH)
+			break;
 		/**
 		 * The scatter gather is full and we has to wait that the consumer
 		 * free some buffer.
 		 */
 
-		jitter_dbg("jitter %s pull block on %p %d", jitter->name, private->in, private->state);
+		jitter_dbg("jitter %s pull block on %p %d %d", jitter->name, private->in, private->state, private->level);
 		pthread_cond_wait(&private->condpush, &private->mutex);
 
 	}
@@ -448,32 +449,16 @@ static void jitter_pop(jitter_ctx_t *jitter, size_t len)
 	private->out->state = SCATTER_FREE;
 	private->level--;
 	private->out = private->out->next;
-	pthread_mutex_unlock(&private->mutex);
-	if (private->state == JITTER_RUNNING)
-	{
-		/**
-		 * The producer requests more buffer to the producer.
-		 */
-		pthread_cond_broadcast(&private->condpush);
-	}
 	if (private->level == 0 && jitter->thredhold > 0)
 	{
-		/**
-		 * if the jitter is flushing, the input is in stand by.
-		 * When the output completes to empty the buffer, it should
-		 * wait new data from the input. Then it should send
-		 * event to the input.
-		 */
-		if (private->state == JITTER_FLUSH)
-		{
-			pthread_cond_broadcast(&private->condpush);
-		}
 		/**
 		 * The producer empties the jitter. It requests to the producer
 		 * to fill buffers ans to reach the thredhold.
 		 */
 		private->state = JITTER_FILLING;
 	}
+	pthread_mutex_unlock(&private->mutex);
+	pthread_cond_broadcast(&private->condpush);
 }
 
 /**

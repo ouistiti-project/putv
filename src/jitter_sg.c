@@ -81,6 +81,7 @@ struct jitter_private_s
 		JITTER_FLUSH,
 		JITTER_COMPLETE,
 	} state;
+	int pause;
 };
 
 static unsigned char *jitter_pull(jitter_ctx_t *jitter);
@@ -385,8 +386,9 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter, void **beat)
 		}
 	}
 	pthread_mutex_lock(&private->mutex);
-	while ((private->state == JITTER_FILLING) &&
-			(private->out->state != SCATTER_READY))
+	while (((private->state == JITTER_FILLING) ||
+			(private->out->state != SCATTER_READY)) ||
+			private->pause)
 	{
 		/**
 		 * The scatter gather is empty and the producer fills.
@@ -527,6 +529,22 @@ static int jitter_empty(jitter_ctx_t *jitter)
 	return (private->out->state != SCATTER_READY);
 }
 
+static void jitter_pause(jitter_ctx_t *jitter, int enable)
+{
+	jitter_private_t *private = (jitter_private_t *)jitter->private;
+	pthread_mutex_lock(&private->mutex);
+	private->pause = enable;
+	if ((private->state == JITTER_FLUSH) && !private->pause)
+	{
+		if (private->level > jitter->thredhold)
+			private->state = JITTER_RUNNING;
+		else
+			private->state = JITTER_FILLING;
+	}
+	pthread_mutex_unlock(&private->mutex);
+	pthread_cond_broadcast(&private->condpeer);
+}
+
 static const jitter_ops_t *jitter_scattergather = &(jitter_ops_t)
 {
 	.heartbeat = jitter_heartbeat,
@@ -539,4 +557,5 @@ static const jitter_ops_t *jitter_scattergather = &(jitter_ops_t)
 	.flush = jitter_flush,
 	.length = jitter_length,
 	.empty = jitter_empty,
+	.pause = jitter_pause,
 };

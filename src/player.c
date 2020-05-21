@@ -398,6 +398,8 @@ static int _player_stateengine(player_ctx_t *ctx, int state)
 			}
 			ctx->src = ctx->nextsrc;
 			ctx->nextsrc = NULL;
+			for (i = 0; i < ctx->noutstreams; i++)
+				ctx->outstream[i]->ops->pause(ctx->outstream[i]->ctx, 0);
 
 			if (ctx->src != NULL)
 			{
@@ -433,18 +435,15 @@ int player_run(player_ctx_t *ctx)
 			pthread_cond_wait(&ctx->cond_int, &ctx->mutex);
 			if (last_state == (ctx->state & ~STATE_PAUSE_MASK))
 				pthread_cond_broadcast(&ctx->cond);
+			int i;
+			for (i = 0; i < ctx->noutstreams; i++)
+				ctx->outstream[i]->ops->pause(ctx->outstream[i]->ctx, (ctx->state & STATE_PAUSE_MASK));
 		}
 
 		pthread_mutex_unlock(&ctx->mutex);
 
-		if (last_state != (ctx->state & ~STATE_PAUSE_MASK))
-			pthread_cond_broadcast(&ctx->cond);
-		last_state = ctx->state & ~STATE_PAUSE_MASK;
-
 		ctx->state = _player_stateengine(ctx, ctx->state & ~STATE_PAUSE_MASK);
 
-		if (last_state != (ctx->state & ~STATE_PAUSE_MASK))
-			pthread_cond_broadcast(&ctx->cond);
 		last_state = ctx->state & ~STATE_PAUSE_MASK;
 
 		/******************

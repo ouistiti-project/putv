@@ -75,6 +75,7 @@ struct jitter_private_s
 		JITTER_OVERFLOW,
 		JITTER_FLUSH,
 	} state;
+	int pause;
 };
 
 static const jitter_ops_t *jitter_ringbuffer;
@@ -308,7 +309,10 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter, void **beat)
 	/**
 	 * The checking of produce should be useless, but it's a secure addon
 	 */
-	while (private->state == JITTER_FILLING && private->in != NULL && jitter->produce == NULL)
+	while (((private->state == JITTER_FILLING) &&
+			(private->in != NULL) &&
+			(jitter->produce == NULL)) ||
+			private->pause)
 	{
 		dbg("jitter %s peer block on %p (%d/%ld * %d, %d)", jitter->name, private->out, private->level, jitter->size, jitter->count, private->state);
 		jitter_dbg("jitter %s peer block on %p %p %d", jitter->name, private->in, private->out + jitter->size, private->in <= private->out + jitter->size);
@@ -429,4 +433,5 @@ static const jitter_ops_t *jitter_ringbuffer = &(jitter_ops_t)
 	.flush = jitter_flush,
 	.length = jitter_length,
 	.empty = jitter_empty,
+	.pause = jitter_pause,
 };

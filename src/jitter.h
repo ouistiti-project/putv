@@ -42,7 +42,7 @@ struct jitter_ops_s
 	void (*flush)(jitter_ctx_t *);
 	size_t (*length)(jitter_ctx_t*);
 	int (*empty)(jitter_ctx_t *);
-	int (*wait)(jitter_ctx_t *);
+	void (*pause)(jitter_ctx_t *jitter, int enable);
 };
 
 typedef enum jitter_format_e

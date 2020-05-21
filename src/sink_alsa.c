@@ -509,9 +509,8 @@ static void *sink_thread(void *arg)
 			warn("pcm recover");
 			ret = snd_pcm_recover(ctx->playback_handle, ret, 0);
 		}
-		if (buff != ctx->noise)
-			ctx->in->ops->pop(ctx->in->ctx, ret * divider);
-		else
+#ifdef SINK_ALSA_NOISE
+		if (buff == ctx->noise)
 		{
 			int i = 0;
 			char *tmp;
@@ -521,6 +520,9 @@ static void *sink_thread(void *arg)
 				*tmp = (char)random();
 			}
 		}
+		else
+#endif
+			ctx->in->ops->pop(ctx->in->ctx, ret * divider);
 		if (ret < 0)
 		{
 			ctx->state = STATE_ERROR;

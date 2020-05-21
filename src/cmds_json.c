@@ -1070,7 +1070,7 @@ static int _jsonrpc_sendresponse(thread_info_t *info, json_t *request)
 	 */
 	if (response != NULL)
 	{
-		dbg("cmds: send response %s", json_dumps(response, JSONRPC_DEBUG_FORMAT ));
+		cmds_dbg("cmds: send response %s", json_dumps(response, JSONRPC_DEBUG_FORMAT ));
 #ifdef JSONRPC_LARGEPACKET
 		json_dump_callback(response, _cmds_send, info, JSONRPC_DEBUG_FORMAT);
 		if (ctx->buff_snd.length > 0)
@@ -1139,7 +1139,7 @@ static int jsonrpc_command(thread_info_t *info)
 				request = json_load_callback(_cmds_recv, info, flags, &error);
 				if (request != NULL)
 				{
-					dbg("cmds: new request %s", json_dumps(request, JSONRPC_DEBUG_FORMAT ));
+					cmds_dbg("cmds: new request %s", json_dumps(request, JSONRPC_DEBUG_FORMAT ));
 					pthread_mutex_lock(&ctx->mutex);
 					_jsonrpc_sendresponse(info, request);
 					pthread_mutex_unlock(&ctx->mutex);

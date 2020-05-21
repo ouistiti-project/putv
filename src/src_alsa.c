@@ -205,16 +205,6 @@ static void *src_thread(void *arg)
 	unsigned char *buff = NULL;
 	while (ctx->state != STATE_ERROR)
 	{
-		if (player_waiton(ctx->player, STATE_PAUSE) < 0)
-		{
-			if (player_state(ctx->player, STATE_UNKNOWN) == STATE_ERROR)
-			{
-				snd_pcm_drain(ctx->handle);
-				ctx->state = STATE_ERROR;
-				continue;
-			}
-		}
-
 		ret = 0;
 		if (buff == NULL)
 		{

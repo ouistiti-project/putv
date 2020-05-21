@@ -120,11 +120,6 @@ static void *alsa_thread(void *arg)
 	/* start decoding */
 	while (ctx->state != STATE_ERROR)
 	{
-		if (player_waiton(ctx->player, STATE_PAUSE) < 0)
-		{
-			if (player_state(ctx->player, STATE_UNKNOWN) == STATE_ERROR)
-				ctx->state = STATE_ERROR;
-		}
 		unsigned char *buff = ctx->in->ops->peer(ctx->in->ctx, NULL);
 		dbg("sink: play %ld", ctx->in->ctx->size);
 		ret = pcm_writei(ctx->playback_handle, buff, ctx->in->ctx->size);

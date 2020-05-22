@@ -47,6 +47,12 @@ struct json_request_list_s
 	int id;
 };
 
+typedef enum eventsmask_e eventsmask_t;
+enum eventsmask_e
+{
+	ONCHANGE = 0x01,
+};
+
 typedef struct cmds_ctx_s cmds_ctx_t;
 struct cmds_ctx_s
 {
@@ -59,6 +65,7 @@ struct cmds_ctx_s
 	pthread_mutex_t mutex;
 	thread_info_t *info;
 	json_request_list_t *requests;
+	unsigned int eventsmask;
 	int run;
 };
 #define CMDS_CTX
@@ -1026,14 +1033,15 @@ static void jsonrpc_onchange(void * userctx, event_t event, void *eventarg)
 
 	if (event != PLAYER_EVENT_CHANGE)
 		return;
+	ctx->eventsmask |= ONCHANGE;
+	pthread_cond_broadcast(&ctx->cond);
+}
 
-	event_player_state_t *data = (event_player_state_t *)eventarg;
-	const player_ctx_t *player = data->playerctx;
-	int state = data->state;
-
+static int jsonrpc_sendevent(cmds_ctx_t *ctx, thread_info_t *info, const char *event)
+{
 	pthread_mutex_lock(&ctx->mutex);
 #ifdef JSONRPC_LARGEPACKET
-	json_t *notification = jsonrpc_jrequest("onchange", method_table, (void *)ctx, NULL);
+	json_t *notification = jsonrpc_jrequest(event, method_table, (void *)ctx, NULL);
 	if (notification)
 	{
 		int sock = info->sock;
@@ -1105,7 +1113,7 @@ static void *_cmds_json_pthreadsend(void *arg)
 	while (ctx->run)
 	{
 		pthread_mutex_lock(&ctx->mutex);
-		while (ctx->requests == NULL)
+		while (ctx->requests == NULL && ctx->eventsmask == 0)
 		{
 			pthread_cond_wait(&ctx->cond, &ctx->mutex);
 		}
@@ -1121,6 +1129,19 @@ static void *_cmds_json_pthreadsend(void *arg)
 			pthread_mutex_unlock(&ctx->mutex);
 			free(request);
 		}
+		while (ctx->eventsmask != 0)
+		{
+			if ((ctx->eventsmask & ONCHANGE) == ONCHANGE)
+			{
+				thread_info_t *info = ctx->info;
+				while (info)
+				{
+					jsonrpc_sendevent(ctx, info, "onchange");
+					info = info->next;
+				}
+				ctx->eventsmask &= ~ONCHANGE;
+			}
+		}
 	}
 	return NULL;
 }
@@ -1130,7 +1151,8 @@ static int jsonrpc_command(thread_info_t *info)
 	int ret = 0;
 	int sock = info->sock;
 	cmds_ctx_t *ctx = info->userctx;
-	ctx->info = info;
+	if (ctx->info == NULL)
+		ctx->info = info;
 
 	warn("json socket connection");
 	int onchangeid = player_eventlistener(ctx->player, jsonrpc_onchange, (void *)info, "jsonrpc");
@@ -1191,6 +1213,8 @@ static int jsonrpc_command(thread_info_t *info)
 				else if (errno != EAGAIN)
 				{
 					warn("json socket closed %d", errno);
+					if (ctx->info == info)
+						ctx->info = info->next;
 					unixserver_remove(info);
 					sock = 0;
 				}

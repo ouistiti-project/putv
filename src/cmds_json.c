@@ -38,15 +38,28 @@
 #include "unix_server.h"
 #include "player.h"
 #include "jsonrpc.h"
+typedef struct json_request_list_s json_request_list_t;
+struct json_request_list_s
+{
+	json_request_list_t *next;
+	json_t *request;
+	thread_info_t *info;
+	int id;
+};
+
 typedef struct cmds_ctx_s cmds_ctx_t;
 struct cmds_ctx_s
 {
 	player_ctx_t *player;
 	sink_t *sink;
 	const char *socketpath;
-	pthread_t thread;
+	pthread_t threadrecv;
+	pthread_t threadsend;
+	pthread_cond_t cond;
 	pthread_mutex_t mutex;
 	thread_info_t *info;
+	json_request_list_t *requests;
+	int run;
 };
 #define CMDS_CTX
 #include "cmds.h"
@@ -1058,13 +1071,10 @@ static int _jsonrpc_sendresponse(thread_info_t *info, json_t *request)
 	cmds_ctx_t *ctx = info->userctx;
 	json_t *response = jsonrpc_jresponse(request, method_table, ctx);
 
-	/**
-	 * The json callback may send an event before the answer.
-	 * Use lock before jresonse may generate double lock
-	 */
 	if (response != NULL)
 	{
 		cmds_dbg("cmds: send response %s", json_dumps(response, JSONRPC_DEBUG_FORMAT ));
+		pthread_mutex_lock(&ctx->mutex);
 #ifdef JSONRPC_LARGEPACKET
 		json_dump_callback(response, _cmds_send, info, JSONRPC_DEBUG_FORMAT);
 		if (info->buff_snd.length > 0)
@@ -1082,8 +1092,37 @@ static int _jsonrpc_sendresponse(thread_info_t *info, json_t *request)
 #endif
 		fsync(sock);
 		json_decref(response);
+		pthread_mutex_unlock(&ctx->mutex);
 	}
 	json_decref(request);
+	return 0;
+}
+
+static void *_cmds_json_pthreadsend(void *arg)
+{
+	cmds_ctx_t *ctx = (cmds_ctx_t *)arg;
+
+	while (ctx->run)
+	{
+		pthread_mutex_lock(&ctx->mutex);
+		while (ctx->requests == NULL)
+		{
+			pthread_cond_wait(&ctx->cond, &ctx->mutex);
+		}
+		pthread_mutex_unlock(&ctx->mutex);
+		while (ctx->requests != NULL)
+		{
+			pthread_mutex_lock(&ctx->mutex);
+			json_request_list_t *request = ctx->requests;
+			pthread_mutex_unlock(&ctx->mutex);
+			_jsonrpc_sendresponse(request->info, request->request);
+			pthread_mutex_lock(&ctx->mutex);
+			ctx->requests = ctx->requests->next;
+			pthread_mutex_unlock(&ctx->mutex);
+			free(request);
+		}
+	}
+	return NULL;
 }
 
 static int jsonrpc_command(thread_info_t *info)
@@ -1135,8 +1174,19 @@ static int jsonrpc_command(thread_info_t *info)
 				{
 					cmds_dbg("cmds: new request %s", json_dumps(request, JSONRPC_DEBUG_FORMAT ));
 					pthread_mutex_lock(&ctx->mutex);
-					_jsonrpc_sendresponse(info, request);
+					json_request_list_t *entry = calloc(1, sizeof(*entry));
+					if (ctx->requests == NULL)
+						ctx->requests = entry;
+					else
+					{
+						json_request_list_t *it = ctx->requests;
+						while (it->next != NULL) it = it->next;
+						it->next = entry;
+					}
+					entry->info = info;
+					entry->request = request;
 					pthread_mutex_unlock(&ctx->mutex);
+					pthread_cond_broadcast(&ctx->cond);
 				}
 				else if (errno != EAGAIN)
 				{
@@ -1157,11 +1207,12 @@ static cmds_ctx_t *cmds_json_init(player_ctx_t *player, void *arg)
 	ctx = calloc(1, sizeof(*ctx));
 	ctx->player = player;
 	ctx->socketpath = (const char *)arg;
+	pthread_cond_init(&ctx->cond, NULL);
 	pthread_mutex_init(&ctx->mutex, NULL);
 	return ctx;
 }
 
-static void *_cmds_json_pthread(void *arg)
+static void *_cmds_json_pthreadrecv(void *arg)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)arg;
 
@@ -1173,7 +1224,9 @@ static void *_cmds_json_pthread(void *arg)
 static int cmds_json_run(cmds_ctx_t *ctx, sink_t *sink)
 {
 	ctx->sink = sink;
-	pthread_create(&ctx->thread, NULL, _cmds_json_pthread, (void *)ctx);
+	ctx->run = 1;
+	pthread_create(&ctx->threadrecv, NULL, _cmds_json_pthreadrecv, (void *)ctx);
+	pthread_create(&ctx->threadsend, NULL, _cmds_json_pthreadsend, (void *)ctx);
 	return 0;
 }
 
@@ -1182,7 +1235,11 @@ static void cmds_json_destroy(cmds_ctx_t *ctx)
 	if (ctx->info)
 		unixserver_kill(ctx->info);
 	ctx->info = NULL;
-	pthread_join(ctx->thread, NULL);
+	pthread_join(ctx->threadrecv, NULL);
+	ctx->run = 0;
+	pthread_cond_broadcast(&ctx->cond);
+	pthread_join(ctx->threadsend, NULL);
+	pthread_cond_destroy(&ctx->cond);
 	pthread_mutex_destroy(&ctx->mutex);
 	free(ctx);
 }

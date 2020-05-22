@@ -67,6 +67,7 @@ struct cmds_ctx_s
 	json_request_list_t *requests;
 	unsigned int eventsmask;
 	int run;
+	int onchangeid;
 };
 #define CMDS_CTX
 #include "cmds.h"
@@ -1028,13 +1029,15 @@ static size_t _cmds_recv(void *buff, size_t size, void *userctx)
 
 static void jsonrpc_onchange(void * userctx, event_t event, void *eventarg)
 {
-	thread_info_t *info = (thread_info_t *)userctx;
-	cmds_ctx_t *ctx = info->userctx;
+	cmds_ctx_t *ctx = (cmds_ctx_t *)userctx;
 
-	if (event != PLAYER_EVENT_CHANGE)
-		return;
-	ctx->eventsmask |= ONCHANGE;
-	pthread_cond_broadcast(&ctx->cond);
+	switch (event)
+	{
+		case PLAYER_EVENT_CHANGE:
+			ctx->eventsmask |= ONCHANGE;
+			pthread_cond_broadcast(&ctx->cond);
+		break;
+	}
 }
 
 static int jsonrpc_sendevent(cmds_ctx_t *ctx, thread_info_t *info, const char *event)
@@ -1155,7 +1158,6 @@ static int jsonrpc_command(thread_info_t *info)
 		ctx->info = info;
 
 	warn("json socket connection");
-	int onchangeid = player_eventlistener(ctx->player, jsonrpc_onchange, (void *)info, "jsonrpc");
 	event_player_state_t event = {.playerctx = ctx->player};
 	event.state = player_state(ctx->player, STATE_UNKNOWN);
 	jsonrpc_onchange(info, PLAYER_EVENT_CHANGE, &event);
@@ -1221,7 +1223,6 @@ static int jsonrpc_command(thread_info_t *info)
 			} while (request != NULL);
 		}
 	}
-	player_removeevent(ctx->player, onchangeid);
 	return ret;
 }
 
@@ -1249,6 +1250,7 @@ static int cmds_json_run(cmds_ctx_t *ctx, sink_t *sink)
 {
 	ctx->sink = sink;
 	ctx->run = 1;
+	ctx->onchangeid = player_eventlistener(ctx->player, jsonrpc_onchange, (void *)ctx, "jsonrpc");
 	pthread_create(&ctx->threadrecv, NULL, _cmds_json_pthreadrecv, (void *)ctx);
 	pthread_create(&ctx->threadsend, NULL, _cmds_json_pthreadsend, (void *)ctx);
 	return 0;
@@ -1258,6 +1260,8 @@ static void cmds_json_destroy(cmds_ctx_t *ctx)
 {
 	if (ctx->info)
 		unixserver_kill(ctx->info);
+	player_removeevent(ctx->player, ctx->onchangeid);
+	ctx->onchangeid = 0;
 	ctx->info = NULL;
 	pthread_join(ctx->threadrecv, NULL);
 	ctx->run = 0;

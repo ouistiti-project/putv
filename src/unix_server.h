@@ -2,10 +2,17 @@
 #define __UNIX8SERVER_H__
 
 typedef struct thread_server_s thread_server_t;
+
+#define DATA_LENGTH 1200
 typedef struct thread_info_s thread_info_t;
 struct thread_info_s
 {
 	int sock;
+	struct
+	{
+		char data[DATA_LENGTH];
+		int length;
+	} buff_snd, buff_recv;
 	void *userctx;
 	thread_server_t *server;
 	thread_info_t *next;

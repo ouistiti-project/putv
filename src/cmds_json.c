@@ -38,7 +38,6 @@
 #include "unix_server.h"
 #include "player.h"
 #include "jsonrpc.h"
-#define DATA_LENGTH 1200
 typedef struct cmds_ctx_s cmds_ctx_t;
 struct cmds_ctx_s
 {
@@ -48,11 +47,6 @@ struct cmds_ctx_s
 	pthread_t thread;
 	pthread_mutex_t mutex;
 	thread_info_t *info;
-	struct
-	{
-		char data[DATA_LENGTH];
-		int length;
-	} buff_snd, buff_recv;
 };
 #define CMDS_CTX
 #include "cmds.h"
@@ -958,20 +952,20 @@ static int _cmds_send(const char *buff, size_t size, void *userctx)
 	cmds_ctx_t *ctx = info->userctx;
 	int sock = info->sock;
 	int ret = size;
-	if (ctx->buff_snd.length + size + 1 > sizeof(ctx->buff_snd.data))
+	if (info->buff_snd.length + size + 1 > sizeof(info->buff_snd.data))
 	{
-		if (ctx->buff_snd.length != 0)
+		if (info->buff_snd.length != 0)
 		{
-			ret = send(sock, ctx->buff_snd.data, ctx->buff_snd.length, MSG_DONTWAIT | MSG_NOSIGNAL);
-			cmds_dbg("cmds: send %d/%d: %s", ret, ctx->buff_snd.length, ctx->buff_snd.data);
+			ret = send(sock, info->buff_snd.data, info->buff_snd.length, MSG_DONTWAIT | MSG_NOSIGNAL);
+			cmds_dbg("cmds: send %d/%d: %s", ret, info->buff_snd.length, info->buff_snd.data);
 		}
 		else
 			dbg("cmds: try to send empty buffer");
-		ctx->buff_snd.length = 0;
+		info->buff_snd.length = 0;
 	}
-	memcpy(ctx->buff_snd.data + ctx->buff_snd.length, buff, size);
-	ctx->buff_snd.length += size;
-	ctx->buff_snd.data[ctx->buff_snd.length] = 0;
+	memcpy(info->buff_snd.data + info->buff_snd.length, buff, size);
+	info->buff_snd.length += size;
+	info->buff_snd.data[info->buff_snd.length] = 0;
 	return (ret > 0)?0:-1;
 }
 #endif
@@ -983,11 +977,11 @@ static size_t _cmds_recv(void *buff, size_t size, void *userctx)
 	int sock = info->sock;
 	size_t ret = -1;
 
-	if (ctx->buff_recv.length > 0)
+	if (info->buff_recv.length > 0)
 	{
-		memcpy(buff, ctx->buff_recv.data, ctx->buff_recv.length);
-		ret = ctx->buff_recv.length;
-		ctx->buff_recv.length = 0;
+		memcpy(buff, info->buff_recv.data, info->buff_recv.length);
+		ret = info->buff_recv.length;
+		info->buff_recv.length = 0;
 	}
 	else
 	{
@@ -999,16 +993,16 @@ static size_t _cmds_recv(void *buff, size_t size, void *userctx)
 		{
 			ret = strlen(buff) + 1;
 		}
-		else
-		{
-			err("cmds: json recv error %s", strerror(errno));
-		}
 		if (length > 0 && length > ret)
 		{
-			ctx->buff_recv.length = length - ret;
-			memcpy(ctx->buff_recv.data, buff + ret, ctx->buff_recv.length);
+			info->buff_recv.length = length - ret;
+			memcpy(info->buff_recv.data, buff + ret, info->buff_recv.length);
 		}
 	}
+	if (ret > 0)
+		dbg("cmds recv data %.*s", (int)ret, (char *)buff);
+	else
+		err("cmds: json recv error %s", strerror(errno));
 	return ret;
 }
 
@@ -1031,12 +1025,12 @@ static void jsonrpc_onchange(void * userctx, event_t event, void *eventarg)
 	{
 		int sock = info->sock;
 		json_dump_callback(notification, _cmds_send, info, JSONRPC_DEBUG_FORMAT);
-		if (ctx->buff_snd.length > 0)
+		if (info->buff_snd.length > 0)
 		{
-			int ret = send(sock, ctx->buff_snd.data, ctx->buff_snd.length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
-			cmds_dbg("cmds: send %d/%d: %s", ret, ctx->buff_snd.length + 1, ctx->buff_snd.data);
+			int ret = send(sock, info->buff_snd.data, info->buff_snd.length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
+			cmds_dbg("cmds: send %d/%d: %s", ret, info->buff_snd.length + 1, info->buff_snd.data);
 		}
-		ctx->buff_snd.length = 0;
+		info->buff_snd.length = 0;
 		fsync(sock);
 		json_decref(notification);
 	}
@@ -1073,14 +1067,14 @@ static int _jsonrpc_sendresponse(thread_info_t *info, json_t *request)
 		cmds_dbg("cmds: send response %s", json_dumps(response, JSONRPC_DEBUG_FORMAT ));
 #ifdef JSONRPC_LARGEPACKET
 		json_dump_callback(response, _cmds_send, info, JSONRPC_DEBUG_FORMAT);
-		if (ctx->buff_snd.length > 0)
+		if (info->buff_snd.length > 0)
 		{
-			ctx->buff_snd.data[ctx->buff_snd.length] = 0;
-			int ret = send(sock, ctx->buff_snd.data, ctx->buff_snd.length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
-			cmds_dbg("cmds: send %d/%d: %s", ret, ctx->buff_snd.length + 1, ctx->buff_snd.data);
+			info->buff_snd.data[info->buff_snd.length] = 0;
+			int ret = send(sock, info->buff_snd.data, info->buff_snd.length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
+			cmds_dbg("cmds: send %d/%d: %s", ret, info->buff_snd.length + 1, info->buff_snd.data);
 			fsync(sock);
 		}
-		ctx->buff_snd.length = 0;
+		info->buff_snd.length = 0;
 #else
 		char *buff = json_dumps(response, JSONRPC_DEBUG_FORMAT );
 		ret = send(sock, buff, strlen(buff), MSG_NOSIGNAL);

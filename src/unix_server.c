@@ -39,6 +39,14 @@
 #include "player.h"
 #include "unix_server.h"
 
+#define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
+#define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
+#ifdef DEBUG
+#define dbg(format, ...) fprintf(stderr, "\x1B[32m"format"\x1B[0m\n",  ##__VA_ARGS__)
+#else
+#define dbg(...)
+#endif
+
 typedef struct thread_server_s
 {
 	void *ctx;
@@ -60,10 +68,16 @@ int start(client_routine_t service, thread_info_t *info)
 void unixserver_remove(thread_info_t *info)
 {
 	thread_info_t *it = &info->server->firstinfo;
+	dbg("unix_server: remove socket %d", info->sock);
+	if (it == NULL)
+	{
+		err("the list must be never empty when removing");
+		return;
+	}
 	/**
 	 * firstinfo is an empty client socket
 	 */
-	while (info != it->next) it = it->next;
+	while (it != NULL && info != it->next) it = it->next;
 	if (it != NULL)
 		it->next = info->next;
 	close(info->sock);

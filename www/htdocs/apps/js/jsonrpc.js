@@ -101,7 +101,7 @@ class JsonRPC{
 					func.call(this,data.params);
 				}
 				else
-					console.log("method "+data.method + "not connected to "+typeof(func));
+					console.log("method "+data.method + " not connected to "+typeof(func));
 			}
 			if (typeof(this.onmessage) == "function")
 				this.onmessage.call(this, data);

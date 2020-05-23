@@ -63,7 +63,7 @@ playerlist = function(result)
 					if (escapingname == undefined)
 						escapingname = "unknown";
 
-					elem = $("<a class='list-group-item' href='#' data-type='"+table[i].sources[0].mime+"' id='item-"+table[i].id+"' data-id='"+table[i].id+"' data-href=\""+escapingname+"\" ></a>");
+					elem = $("<a class='list-group-item media' href='#' data-type='"+table[i].sources[0].mime+"' id='item-"+table[i].id+"' data-id='"+table[i].id+"' data-href=\""+escapingname+"\" ></a>");
 					$(elem).html("<span class='title'>"+escapingname+"</span> - <span class='artist'>"+info.artist+"</span>");
 					var j;
 					for (j in options)
@@ -72,6 +72,10 @@ playerlist = function(result)
 							$(elem).append(deletemenu);
 					}
 					$(playlist).append(elem);
+					elem.on('click', function (event)
+					{
+						this.send("setnext", {id:$(event.currentTarget).data('id')});
+					}.bind(this));
 				}
 			}
 			if (table[i].id == this.currentid)
@@ -106,6 +110,16 @@ playerlist = function(result)
 		}
 	}
 };
+
+playersetnext = function(result)
+{
+	var next = result.next;
+	$('.media').removeClass('disabled');
+	if (next != undefined)
+	{
+		$('#item-'+next).addClass('disabled');
+	}
+}
 
 create_player = function (config)
 {
@@ -151,6 +165,7 @@ create_player = function (config)
 				}
 			}
 		}
+		playersetnext.call(this, result);
 		if (result.options != undefined)
 		{
 			for (option in result.options)
@@ -213,6 +228,9 @@ create_player = function (config)
 			case "next":
 				$('#next').removeClass('hidden');
 				player.next = playerstate.bind(player);
+			break;
+			case "setnext":
+				player.setnext = playersetnext.bind(player);
 			break;
 			case "status":
 				player.status = player.onchange.bind(player);

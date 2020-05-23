@@ -112,6 +112,7 @@ create_player = function (config)
 	var player = new JsonRPC(config.player);
 	player.onopen = function ()
 	{
+		$('#connect').addClass('hidden');
 		player.send('capabilities', null);
 	}.bind(player);
 	player.onchange = function(result)
@@ -142,7 +143,9 @@ create_player = function (config)
 				{
 					$(elem).removeClass("hidden");
 					if ($(elem).is("img"))
-						$(elem).attr("src", g_imgbase + result.info[info]);
+					{
+						$(elem).attr("src", g_imgbase + escape(result.info[info]));
+					}
 					else
 						$(elem).text(result.info[info]);
 				}
@@ -166,24 +169,23 @@ create_player = function (config)
 		}
 	}.bind(player);
 	player.options = function(result)
-		{
-			$('#random').removeClass('btn-primary');
-			if (result.random == true)
-				$('#random').addClass('btn-primary');
-			$('#repeat').removeClass('btn-primary');
-			if (result.loop == true)
-				$('#repeat').addClass('btn-primary');
-		}.bind(player);
+	{
+		$('#random').removeClass('btn-primary');
+		if (result.random == true)
+			$('#random').addClass('btn-primary');
+		$('#repeat').removeClass('btn-primary');
+		if (result.loop == true)
+			$('#repeat').addClass('btn-primary');
+	}.bind(player);
 	player.volume = function(result)
-		{
-			$('#volumebar').data('level',result.level);
-			$('#volumebar').attr('aria-valuenow',result.level).css('width', result.level+"%");
-			if ($('#volume').css('display') == 'none')
-				$('#volume').fadeIn( 400 ).delay( 1200 ).slideUp( 300 );
-		}.bind(player);
+	{
+		$('#volumebar').data('level',result.level);
+		$('#volumebar').attr('aria-valuenow',result.level).css('width', result.level+"%");
+		if ($('#volume').css('display') == 'none')
+			$('#volume').fadeIn( 400 ).delay( 1200 ).slideUp( 300 );
+	}.bind(player);
 	player.capabilities = function(result)
 	{
-		initIHM();
 		var event;
 		for (event in result.events)
 		{
@@ -201,19 +203,20 @@ create_player = function (config)
 			{
 			case "pause":
 				$('#playpause').removeClass('hidden');
-				player.play = playerstate
-				player.pause = playerstate;
+				player.play = playerstate.bind(player);
+				player.pause = playerstate.bind(player);
 			break;
 			case "stop":
 				$('#stop').removeClass('hidden');
-				player.stop = playerstate;
+				player.stop = playerstate.bind(player);
 			break;
 			case "next":
 				$('#next').removeClass('hidden');
-				player.next = playerstate;
+				player.next = playerstate.bind(player);
 			break;
 			case "status":
-				player.status = playerstate;
+				player.status = player.onchange.bind(player);
+				player.send("status", null);
 			break;
 			case "options":
 				for (param in result.actions[action].params)
@@ -244,7 +247,7 @@ create_player = function (config)
 			break;
 			case "list":
 				$('#PlayList').removeClass('hidden');
-				player.list = playerlist;
+				player.list = playerlist.bind(player);
 			break;
 			case "volume":
 				$('#volume_down').removeClass('hidden');
@@ -253,7 +256,11 @@ create_player = function (config)
 			}
 		}
 	}.bind(player);
-
+	player.onclose = function()
+	{
+		initIHM();
+		$('#connect').removeClass('hidden');
+	}
 	$('#playpause').on('click', function (event)
 		{
 			if (player.state == "play")
@@ -359,6 +366,11 @@ $(document).ready(function()
 	xhr.withCredentials = true;
 	xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
 	xhr.send();
+});
+
+window.addEventListener('unload', function(event) {
+	if (g_player != undefined)
+		g_player.close();
 });
 		</script>
 	</head>

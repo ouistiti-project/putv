@@ -37,7 +37,7 @@ class JsonRPC{
 		if (this.timer)
 			clearTimeout(this.timer);
 		this.websocket=new WebSocket(this.urlsocket);
-		
+
 		this.websocket.onopen = function(evt) {
 			this.wsready = true;
 			if (typeof(this.onopen) == "function")
@@ -46,11 +46,16 @@ class JsonRPC{
 		this.websocket.onmessage = this.receive.bind(this);
 		this.websocket.onerror = function(evt)
 		{
-			console.log("error: "+evt.error);
 			this.string = "";
 			this.cnt = 0;
 		}.bind(this);
-		this.websocket.onclose = this.reconnect.bind(this);
+		this.websocket.onclose = function(evt)
+		{
+			console.log("socket close: "+evt.toString());
+			this.reconnect.bind(this);
+			if (typeof(this.onclose) == "function")
+				this.onclose.call(this);
+		}.bind(this);
 		this.runRPC = function(string)
 		{
 			var data;
@@ -58,7 +63,9 @@ class JsonRPC{
 				data = JSON.parse(string);
 			}
 			catch(error) {
-				alert(error);
+				console.log("recv: "+string);
+				console.log(error);
+				return;
 			}
 			if (data.id != undefined)
 			{
@@ -67,10 +74,13 @@ class JsonRPC{
 					data.method = this.cmds[data.id].method;
 					data.request = this.cmds[data.id];
 				}
+				else
+					console.log("method id  "+data.id + "not found");
 				this.cmds[data.id] = undefined;
 			}
 			if (data.error)
 			{
+				console.log("response error  "+data.error);
 				if (typeof(this.onerror) == "function")
 					this.onerror.call(this, data.error, data.request);
 			}
@@ -81,28 +91,37 @@ class JsonRPC{
 				this.respond = undefined;
 				var func = loadSymbol(data.method, this);
 				if (data.result && typeof(func) == "function")
+				{
+					console.log("response "+data.method);
 					func.call(this,data.result);
-				if (data.params && typeof(func) == "function")
+				}
+				else if (data.params && typeof(func) == "function")
+				{
+					console.log("notification "+data.method);
 					func.call(this,data.params);
+				}
+				else
+					console.log("method "+data.method + "not connected to "+typeof(func));
 			}
 			if (typeof(this.onmessage) == "function")
 				this.onmessage.call(this, data);
 		}.bind(this);
 	}
 
-	receive(evt)
+	receive_old(evt)
 	{
 		var start = 0;
 		if (this.cnt > 0)
 			start = 1;
-		console.log("receive 1"+ this.cnt +" : "+this.string);
-		console.log("receive 2"+ this.cnt +" : "+evt.data);
+		//console.log("receive 1"+ this.cnt +" : "+this.string);
+		//console.log("receive 2"+ this.cnt +" : "+evt.data);
+		console.log("receive : "+evt.data);
 		var i;
 		for (i = 0; i < evt.data.length; i++)
 		{
 			if (evt.data[i] == '\'')
 			{
-				this.string += '\\\\';				
+				this.string += '\\\\';
 			}
 			if (start == 1)
 				this.string += evt.data[i];
@@ -123,11 +142,16 @@ class JsonRPC{
 					start = 0;
 					var string = this.string;
 					this.string = "";
-					console.log("recv "+this.cnt+" : "+evt.data);
+					//console.log("recv "+this.cnt+" : "+evt.data);
 					this.runRPC(string);
 				}
 			}
 		}
+	}
+	receive(evt)
+	{
+		//console.log("receive : "+evt.data);
+		this.runRPC(evt.data);
 	}
 
 	reconnect()
@@ -153,6 +177,7 @@ class JsonRPC{
 
 	send(method, params, respond)
 	{
+		console.log("send "+method);
 		this.respond = respond;
 		var request = new Object();
 		request.jsonrpc = "2.0";
@@ -161,7 +186,16 @@ class JsonRPC{
 		if (typeof(params) == "object")
 			request.params = params;
 		else
-			request.params = JSON.parse(params);
+		{
+			try {
+				request.params = JSON.parse(params);
+			}
+			catch(error) {
+				console.log("params: "+params);
+				console.log(error);
+				return;
+			}
+		}
 		request.id = this.id;
 
 		if (this.wsready)

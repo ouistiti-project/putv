@@ -46,13 +46,12 @@
 #include "client_json.h"
 #include "output_module.h"
 
-#define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
-#define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
-#ifdef DEBUG
-#define dbg(format, ...) fprintf(stderr, "\x1B[32m"format"\x1B[0m\n",  ##__VA_ARGS__)
-#else
-#define dbg(...)
-#endif
+extern void Log_info(const char *category, const char *format, ...);
+extern void Log_error(const char *category, const char *format, ...);
+
+#define err(format, ...) Log_error("output_putv", format, ##__VA_ARGS__)
+#define warn(format, ...) Log_info("output_putv", format, ##__VA_ARGS__)
+#define dbg(format, ...) Log_info("output_putv", format, ##__VA_ARGS__)
 
 #define QUOTE(str) #str
 #define EXPAND_AND_QUOTE(str) QUOTE(str)

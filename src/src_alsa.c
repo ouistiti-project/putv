@@ -205,16 +205,6 @@ static void *src_thread(void *arg)
 	unsigned char *buff = NULL;
 	while (ctx->state != STATE_ERROR)
 	{
-		if (player_waiton(ctx->player, STATE_PAUSE) < 0)
-		{
-			if (player_state(ctx->player, STATE_UNKNOWN) == STATE_ERROR)
-			{
-				snd_pcm_drain(ctx->handle);
-				ctx->state = STATE_ERROR;
-				continue;
-			}
-		}
-
 		ret = 0;
 		if (buff == NULL)
 		{
@@ -274,17 +264,26 @@ static void *src_thread(void *arg)
 		free(buff2);
 	}
 	dbg("src: thread end");
+	ctx->out->ops->flush(ctx->out->ctx);
+	const src_t src = { .ops = src_alsa, .ctx = ctx};
+	event_end_es_t event = {.pid = ctx->pid, .src = &src, .decoder = ctx->estream};
+	event_listener_t *listener = ctx->listener;
+	while (listener)
+	{
+		listener->cb(listener->arg, SRC_EVENT_END_ES, (void *)&event);
+		listener = listener->next;
+	}
 	return NULL;
 }
 
 static int src_prepare(src_ctx_t *ctx)
 {
-	event_new_es_t event = {.pid = ctx->pid, .mime = mime_audiopcm, .jitte = JITTE_LOW};
-	event_listener_t *listener = ctx->listener;
 	const src_t src = { .ops = src_alsa, .ctx = ctx};
+	event_new_es_t event = {.pid = ctx->pid, .src = &src, .mime = mime_audiopcm, .jitte = JITTE_LOW};
+	event_listener_t *listener = ctx->listener;
 	while (listener)
 	{
-		listener->cb(listener->arg, &src, SRC_EVENT_NEW_ES, (void *)&event);
+		listener->cb(listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
 		listener = listener->next;
 	}
 
@@ -335,12 +334,12 @@ static int src_prepare(src_ctx_t *ctx)
 
 static int src_run(src_ctx_t *ctx)
 {
-	event_decode_es_t event_decode = {.pid = ctx->pid, .decoder = ctx->estream};
-	event_listener_t *listener = ctx->listener;
 	const src_t src = { .ops = src_alsa, .ctx = ctx};
+	event_decode_es_t event_decode = {.pid = ctx->pid, .src = &src, .decoder = ctx->estream};
+	event_listener_t *listener = ctx->listener;
 	while (listener)
 	{
-		listener->cb(listener->arg, &src, SRC_EVENT_DECODE_ES, (void *)&event_decode);
+		listener->cb(listener->arg, SRC_EVENT_DECODE_ES, (void *)&event_decode);
 		listener = listener->next;
 	}
 	pthread_create(&ctx->thread, NULL, src_thread, ctx);

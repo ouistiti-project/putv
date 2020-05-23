@@ -197,7 +197,7 @@ static int process_cmdline(int argc, char **argv)
 	while (1) {
 		int option_index = 0;
 
-		c = getopt_long (argc, argv, "I:p:u:f:o:p:d",
+		c = getopt_long (argc, argv, "I:p:u:f:o:P:d",
 			long_options, &option_index);
 
 		/* Detect the end of the options. */

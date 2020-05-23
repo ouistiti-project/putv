@@ -87,6 +87,17 @@ static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 	src_dbg("src: read %d %d", ctx->fd, ret);
 	if (ret < 0)
 		err("src file %d error: %s", ctx->fd, strerror(errno));
+	if (ret == 0)
+	{
+		const src_t src = { .ops = src_file, .ctx = ctx};
+		event_end_es_t event = {.pid = ctx->pid, .src = &src, .decoder = ctx->estream};
+		event_listener_t *listener = ctx->listener;
+		while (listener)
+		{
+			listener->cb(listener->arg, SRC_EVENT_END_ES, (void *)&event);
+			listener = listener->next;
+		}
+	}
 	return ret;
 }
 
@@ -118,7 +129,7 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 				dirfd = open(pw->pw_dir, O_DIRECTORY);
 			}
 			fd = openat(dirfd, path, O_RDONLY);
-			dbg("open %s %d", path ,fd);
+			src_dbg("open %s %d", path ,fd);
 			if (dirfd != AT_FDCWD)
 				close(dirfd);
 		}
@@ -140,13 +151,13 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 
 static int src_prepare(src_ctx_t *ctx)
 {
-	dbg("src: prepare");
-	event_new_es_t event = {.pid = ctx->pid, .mime = ctx->mime, .jitte = JITTE_LOW};
-	event_listener_t *listener = ctx->listener;
+	src_dbg("src: prepare");
 	const src_t src = { .ops = src_file, .ctx = ctx};
+	event_new_es_t event = {.pid = ctx->pid, .src = &src, .mime = ctx->mime, .jitte = JITTE_LOW};
+	event_listener_t *listener = ctx->listener;
 	while (listener)
 	{
-		listener->cb(listener->arg, &src, SRC_EVENT_NEW_ES, (void *)&event);
+		listener->cb(listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
 		listener = listener->next;
 	}
 	/**
@@ -157,12 +168,12 @@ static int src_prepare(src_ctx_t *ctx)
 static int src_run(src_ctx_t *ctx)
 {
 	dbg("src: run");
-	event_decode_es_t event_decode = {.pid = ctx->pid, .decoder = ctx->estream};
-	event_listener_t *listener = ctx->listener;
 	const src_t src = { .ops = src_file, .ctx = ctx};
+	event_decode_es_t event = {.pid = ctx->pid, .src = &src, .decoder = ctx->estream};
+	event_listener_t *listener = ctx->listener;
 	while (listener)
 	{
-		listener->cb(listener->arg, &src, SRC_EVENT_DECODE_ES, (void *)&event_decode);
+		listener->cb(listener->arg, SRC_EVENT_DECODE_ES, (void *)&event);
 		listener = listener->next;
 	}
 	/**
@@ -197,7 +208,7 @@ static int src_attach(src_ctx_t *ctx, long index, decoder_t *decoder)
 		return -1;
 	ctx->estream = decoder;
 	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx, JITTE_LOW);
-	dbg("src: add producter to %s", ctx->out->ctx->name);
+	src_dbg("src: add producter to %s", ctx->out->ctx->name);
 	ctx->out->ctx->produce = (produce_t)src_read;
 	ctx->out->ctx->producter = (void *)ctx;
 }

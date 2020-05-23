@@ -1,14 +1,18 @@
 #ifndef __PLAYER_H__
 #define __PLAYER_H__
 
+#define STATE_PAUSE_MASK 0x8000
+
+#include "event.h"
+
 typedef enum
 {
 	STATE_UNKNOWN,
 	STATE_STOP,
 	STATE_PLAY,
-	STATE_PAUSE,
 	STATE_CHANGE,
 	STATE_ERROR,
+	STATE_PAUSE = STATE_PLAY | STATE_PAUSE_MASK,
 } state_t;
 
 typedef enum
@@ -32,7 +36,6 @@ typedef struct media_s media_t;
 typedef struct filter_s filter_t;
 
 typedef struct player_ctx_s player_ctx_t;
-typedef void (*player_event_cb_t)(void *ctx, player_ctx_t *, state_t);
 
 player_ctx_t *player_init();
 int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop, int now);
@@ -44,9 +47,11 @@ int player_waiton(player_ctx_t *ctx, int state);
 state_t player_state(player_ctx_t *ctx, state_t state);
 void player_next(player_ctx_t *ctx);
 void player_removeevent(player_ctx_t *ctx, int id);
-int player_onchange(player_ctx_t *ctx, player_event_cb_t callback, void *cbctx, char *name);
+int player_eventlistener(player_ctx_t *ctx, event_listener_cb_t callback, void *cbctx, char *name);
 int player_mediaid(player_ctx_t *ctx);
 const char *player_filtername(player_ctx_t *ctx);
 const src_t *player_source(player_ctx_t *ctx);
+
+int player_play(void* arg, int id, const char *url, const char *info, const char *mime);
 
 #endif

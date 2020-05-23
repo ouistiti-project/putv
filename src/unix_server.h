@@ -2,6 +2,7 @@
 #define __UNIX8SERVER_H__
 
 typedef struct thread_server_s thread_server_t;
+
 typedef struct thread_info_s thread_info_t;
 struct thread_info_s
 {

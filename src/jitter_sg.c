@@ -81,6 +81,7 @@ struct jitter_private_s
 		JITTER_FLUSH,
 		JITTER_COMPLETE,
 	} state;
+	int pause;
 };
 
 static unsigned char *jitter_pull(jitter_ctx_t *jitter);
@@ -197,23 +198,28 @@ static unsigned char *jitter_pull(jitter_ctx_t *jitter)
 		_jitter_init(jitter);
 	while (private->in->state != SCATTER_FREE)
 	{
-		if (private->state == JITTER_FLUSH || private->state == JITTER_STOP)
-		{
-			pthread_mutex_unlock(&private->mutex);
-			return NULL;
-		}
+		if (private->state == JITTER_FLUSH)
+			break;
 		/**
 		 * The scatter gather is full and we has to wait that the consumer
 		 * free some buffer.
 		 */
 
-		jitter_dbg("jitter %s pull block on %p %d", jitter->name, private->in, private->state);
+		jitter_dbg("jitter %s pull block on %p %d %d", jitter->name, private->in, private->state, private->level);
 		pthread_cond_wait(&private->condpush, &private->mutex);
+
 	}
-	private->in->state = SCATTER_PULL;
+	unsigned char *ret= NULL;
+	if (private->state != JITTER_FLUSH &&
+		private->state != JITTER_STOP &&
+		private->in->state == SCATTER_FREE)
+	{
+		private->in->state = SCATTER_PULL;
+		ret = private->in->data;
+	}
 	pthread_mutex_unlock(&private->mutex);
 	jitter_dbg("jitter %s pull %p", jitter->name, private->in);
-	return private->in->data;
+	return ret;
 }
 
 static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
@@ -380,8 +386,9 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter, void **beat)
 		}
 	}
 	pthread_mutex_lock(&private->mutex);
-	while ((private->state == JITTER_FILLING) &&
-			(private->out->state != SCATTER_READY))
+	while (((private->state == JITTER_FILLING) ||
+			(private->out->state != SCATTER_READY)) ||
+			private->pause)
 	{
 		/**
 		 * The scatter gather is empty and the producer fills.
@@ -444,32 +451,16 @@ static void jitter_pop(jitter_ctx_t *jitter, size_t len)
 	private->out->state = SCATTER_FREE;
 	private->level--;
 	private->out = private->out->next;
-	pthread_mutex_unlock(&private->mutex);
-	if (private->state == JITTER_RUNNING)
-	{
-		/**
-		 * The producer requests more buffer to the producer.
-		 */
-		pthread_cond_broadcast(&private->condpush);
-	}
 	if (private->level == 0 && jitter->thredhold > 0)
 	{
-		/**
-		 * if the jitter is flushing, the input is in stand by.
-		 * When the output completes to empty the buffer, it should
-		 * wait new data from the input. Then it should send
-		 * event to the input.
-		 */
-		if (private->state == JITTER_FLUSH)
-		{
-			pthread_cond_broadcast(&private->condpush);
-		}
 		/**
 		 * The producer empties the jitter. It requests to the producer
 		 * to fill buffers ans to reach the thredhold.
 		 */
 		private->state = JITTER_FILLING;
 	}
+	pthread_mutex_unlock(&private->mutex);
+	pthread_cond_broadcast(&private->condpush);
 }
 
 /**
@@ -533,7 +524,25 @@ static void jitter_reset(jitter_ctx_t *jitter)
 static int jitter_empty(jitter_ctx_t *jitter)
 {
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
+	if (private->state == JITTER_FILLING)
+		return 1;
 	return (private->out->state != SCATTER_READY);
+}
+
+static void jitter_pause(jitter_ctx_t *jitter, int enable)
+{
+	jitter_private_t *private = (jitter_private_t *)jitter->private;
+	pthread_mutex_lock(&private->mutex);
+	private->pause = enable;
+	if ((private->state == JITTER_FLUSH) && !private->pause)
+	{
+		if (private->level > jitter->thredhold)
+			private->state = JITTER_RUNNING;
+		else
+			private->state = JITTER_FILLING;
+	}
+	pthread_mutex_unlock(&private->mutex);
+	pthread_cond_broadcast(&private->condpeer);
 }
 
 static const jitter_ops_t *jitter_scattergather = &(jitter_ops_t)
@@ -548,4 +557,5 @@ static const jitter_ops_t *jitter_scattergather = &(jitter_ops_t)
 	.flush = jitter_flush,
 	.length = jitter_length,
 	.empty = jitter_empty,
+	.pause = jitter_pause,
 };

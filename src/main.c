@@ -77,9 +77,10 @@ static void _autostart(union sigval arg)
 	player_ctx_t *player = (player_ctx_t *)arg.sival_ptr;
 	if (player_state(player, STATE_UNKNOWN) != STATE_PLAY)
 		player_state(player, STATE_PLAY);
+	usleep(100 * 1000);
 	if (player_mediaid(player) < 0)
 	{
-		struct itimerspec timer = {{5, 0}, {5, 0}};
+		struct itimerspec timer = {{0, 0}, {5, 0}};
 		timer_settime(timerid, 0, &timer,NULL);
 	}
 	else
@@ -222,27 +223,6 @@ int main(int argc, char **argv)
 	player_ctx_t *player = player_init(filtername);
 	player_change(player, mediapath, ((mode & RANDOM) == RANDOM), ((mode & LOOP) == LOOP), 1);
 
-	if (mode & AUTOSTART)
-	{
-		player_state(player, STATE_PLAY);
-#ifdef USE_TIMER
-		if (player_mediaid(player) < 0)
-		{
-			int ret;
-			struct sigevent event;
-			event.sigev_notify = SIGEV_THREAD;
-			event.sigev_value.sival_ptr = player;
-			event.sigev_notify_function = _autostart;
-			event.sigev_notify_attributes = NULL;
-			ret = timer_create(CLOCK_REALTIME, &event, &timerid);
-
-			struct itimerspec timer = {{5, 0}, {5, 0}};
-			ret = timer_settime(timerid, 0, &timer,NULL);
-
-		}
-#endif
-	}
-
 	uid_t pw_uid = getuid();
 	gid_t pw_gid = getgid();
 	if (user != NULL)
@@ -371,6 +351,27 @@ int main(int argc, char **argv)
 		 * the sink must to run before to start the encoder
 		 */
 		sink->ops->run(sink->ctx);
+
+		if (mode & AUTOSTART)
+		{
+			dbg("autostart");
+#ifdef USE_TIMER
+			if (player_mediaid(player) < 0)
+			{
+				int ret;
+				struct sigevent event;
+				event.sigev_notify = SIGEV_THREAD;
+				event.sigev_value.sival_ptr = player;
+				event.sigev_notify_function = _autostart;
+				event.sigev_notify_attributes = NULL;
+				ret = timer_create(CLOCK_REALTIME, &event, &timerid);
+
+				struct itimerspec timer = {{0, 0}, {0, 100 * 1000}};
+				ret = timer_settime(timerid, 0, &timer,NULL);
+			}
+#endif
+		}
+
 		run_player(player, sink);
 
 		sink->ops->destroy(sink->ctx);

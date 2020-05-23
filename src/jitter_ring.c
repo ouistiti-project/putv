@@ -75,6 +75,7 @@ struct jitter_private_s
 		JITTER_OVERFLOW,
 		JITTER_FLUSH,
 	} state;
+	int pause;
 };
 
 static const jitter_ops_t *jitter_ringbuffer;
@@ -158,20 +159,23 @@ static unsigned char *jitter_pull(jitter_ctx_t *jitter)
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
 
 	pthread_mutex_lock(&private->mutex);
-
+	int state = private->state;
 	while ((private->in != NULL) &&
 		((private->level + jitter->size) > (jitter->size * jitter->count)))
 	{
 		if (private->state == JITTER_FLUSH)
-		{
-			pthread_mutex_unlock(&private->mutex);
-			return NULL;
-		}
+			break;
 		jitter_dbg("jitter %s pull block on %p (%d/%ld)", jitter->name, private->in, private->level, (jitter->size * jitter->count));
 		pthread_cond_wait(&private->condpush, &private->mutex);
 	}
+	unsigned char *ret = NULL;
+	if ((private->state == JITTER_RUNNING || private->state == JITTER_FILLING) &&
+		((private->level + jitter->size) > (jitter->size * jitter->count)))
+	{
+		ret = private->in;
+	}
 	pthread_mutex_unlock(&private->mutex);
-	return private->in;
+	return ret;
 }
 
 static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
@@ -305,7 +309,10 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter, void **beat)
 	/**
 	 * The checking of produce should be useless, but it's a secure addon
 	 */
-	while (private->state == JITTER_FILLING && private->in != NULL && jitter->produce == NULL)
+	while (((private->state == JITTER_FILLING) &&
+			(private->in != NULL) &&
+			(jitter->produce == NULL)) ||
+			private->pause)
 	{
 		dbg("jitter %s peer block on %p (%d/%ld * %d, %d)", jitter->name, private->out, private->level, jitter->size, jitter->count, private->state);
 		jitter_dbg("jitter %s peer block on %p %p %d", jitter->name, private->in, private->out + jitter->size, private->in <= private->out + jitter->size);
@@ -403,6 +410,17 @@ static int jitter_empty(jitter_ctx_t *jitter)
 		(private->out + jitter->size) > private->in);
 }
 
+static void jitter_pause(jitter_ctx_t *jitter, int enable)
+{
+	jitter_private_t *private = (jitter_private_t *)jitter->private;
+	pthread_mutex_lock(&private->mutex);
+	private->pause = enable;
+	if ((private->state == JITTER_FLUSH) && !private->pause)
+		private->state = JITTER_FILLING;
+	pthread_mutex_unlock(&private->mutex);
+	pthread_cond_broadcast(&private->condpeer);
+}
+
 static const jitter_ops_t *jitter_ringbuffer = &(jitter_ops_t)
 {
 	.heartbeat = jitter_heartbeat,
@@ -415,4 +433,5 @@ static const jitter_ops_t *jitter_ringbuffer = &(jitter_ops_t)
 	.flush = jitter_flush,
 	.length = jitter_length,
 	.empty = jitter_empty,
+	.pause = jitter_pause,
 };

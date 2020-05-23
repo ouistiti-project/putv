@@ -329,14 +329,6 @@ static void *src_thread(void *arg)
 #endif
 	while (ctx->state != STATE_ERROR)
 	{
-		if (player_waiton(ctx->player, STATE_PAUSE) < 0)
-		{
-			if (player_state(ctx->player, STATE_UNKNOWN) == STATE_ERROR)
-			{
-				ctx->state = STATE_ERROR;
-				continue;
-			}
-		}
 		unsigned char *buff = ctx->out->ops->pull(ctx->out->ctx);
 		if (buff == NULL)
 		{
@@ -350,6 +342,17 @@ static void *src_thread(void *arg)
 		}
 	}
 	dbg("src: thread end");
+	ctx->out->ops->flush(ctx->out->ctx);
+#ifndef DEMUX_PASSTHROUGH
+	const src_t src = { .ops = src_udp, .ctx = ctx};
+	event_end_es_t event = {.pid = ctx->pid, .src = &src, .decoder = ctx->estream};
+	event_listener_t *listener = ctx->listener;
+	while (listener)
+	{
+		listener->cb(listener->arg, SRC_EVENT_END_ES, (void *)&event);
+		listener = listener->next;
+	}
+#endif
 	return NULL;
 }
 #endif
@@ -360,16 +363,16 @@ static int src_run(src_ctx_t *ctx)
 	ctx->out = ctx->demux->ops->jitter(ctx->demux->ctx, JITTE_HIGH);
 	ctx->demux->ops->run(ctx->demux->ctx);
 #else
-	event_new_es_t event = {.pid = 0, .mime = ctx->mime, .jitte = JITTE_HIGH};
-	event_decode_es_t event_decode = {0};
-	event_listener_t *listener = ctx->listener;
 	const src_t src = { .ops = src_udp, .ctx = ctx};
+	event_new_es_t event = {.pid = 0, .src = &src, .mime = ctx->mime, .jitte = JITTE_HIGH};
+	event_decode_es_t event_decode = {.src = &src};
+	event_listener_t *listener = ctx->listener;
 	while (listener)
 	{
-		listener->cb(listener->arg, &src, SRC_EVENT_NEW_ES, (void *)&event);
+		listener->cb(listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
 		event_decode.pid = event.pid;
 		event_decode.decoder = event.decoder;
-		listener->cb(listener->arg, &src, SRC_EVENT_DECODE_ES, (void *)&event_decode);
+		listener->cb(listener->arg, SRC_EVENT_DECODE_ES, (void *)&event_decode);
 		listener = listener->next;
 	}
 #endif

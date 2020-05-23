@@ -276,8 +276,8 @@ int client_cmd(client_data_t *data, char * cmd)
 	if (buffer == NULL)
 		return -1;
 	int pid = data->pid;
+	client_dbg("client: send %s", buffer);
 	ret = send(data->sock, buffer, strlen(buffer) + 1, MSG_NOSIGNAL);
-	client_dbg("send %s", buffer);
 	if (data->options & OPTION_ASYNC)
 		return 0;
 	return pid;
@@ -443,38 +443,55 @@ int media_list(client_data_t *data, client_event_prototype_t proto, void *protod
 #ifdef JSONRPC_LARGEPACKET
 static size_t recv_cb(void *buffer, size_t len, void *arg)
 {
+	int ret;
 	client_data_t *data = (client_data_t *)arg;
-	int ret = recv(data->sock, buffer, len, MSG_NOSIGNAL);
-	if ((strlen(buffer) + 1) < ret)
+	if (data->message == NULL)
 	{
-		err("two messages in ONE");
+		ret = recv(data->sock, buffer, len, MSG_NOSIGNAL);
+		if (ret == 0)
+			data->run = 0;
+	}
+	else
+	{
+		ret = data->messagelen;
+		memcpy(buffer, data->message, data->messagelen);
+		free(data->message);
+		data->message = NULL;
+	}
+	int length = strlen(buffer);
+	if ((length + 1) < ret)
+	{
+		err("client: two messages in ONE");
 		/**
 		 * disable the last command, the response may be lost
 		 * TODO
 		 * store the second message and call again the json parser.
 		 */
 		data->pid = 0;
-		client_dbg("recv %ld/%d" , strlen(buffer), ret);
+		client_dbg("client: recv %ld/%d" , strlen(buffer), ret);
+		data->message = malloc(ret - length - 1);
+		memcpy(data->message, buffer + length + 1, ret - length - 1);
+		data->messagelen = ret - length - 1;
 	}
-	client_dbg("recv %s", (char *)buffer);
-	if (ret > 0)
+	client_dbg("client: recv %d %s", ret, (char *)buffer);
+	if (ret >= 0)
 		((char*)buffer)[ret] = 0;
 	else
-		ret = -1;
-	return ret;
+		length = -1;
+	return length;
 }
 #endif
 
 int client_loop(client_data_t *data)
 {
-	int run = 1;
 	client_event_t *event = data->events;
 	while (event)
 	{
 //		jsonrpc_request("subscribe");
 		event = event->next;
 	}
-	while (data->sock > 0  && run)
+	data->run = 1;
+	while (data->sock > 0  && data->run)
 	{
 		fd_set rfds;
 		int maxfd = data->sock;
@@ -485,15 +502,19 @@ int client_loop(client_data_t *data)
 		if (ret > 0 && FD_ISSET(data->sock, &rfds))
 		{
 #ifdef JSONRPC_LARGEPACKET
-			json_error_t error;
-			json_t *response = json_load_callback(recv_cb, (void *)data, JSON_DISABLE_EOF_CHECK, &error);
-			if (response != NULL)
-				jsonrpc_jresponse(response, table, data);
-			else
+			do
 			{
-				err("receive mal formated json %s", error.text);
-				run = 0;
-			}
+				json_error_t error;
+				json_t *response = json_load_callback(recv_cb, (void *)data, JSON_DISABLE_EOF_CHECK, &error);
+				if (response != NULL)
+				{
+					jsonrpc_jresponse(response, table, data);
+				}
+				else
+				{
+					err("client: receive mal formated json %s", error.text);
+				}
+			} while (data->message != NULL);
 #else
 			int len;
 			ret = ioctl(data->sock, FIONREAD, &len);
@@ -503,11 +524,9 @@ int client_loop(client_data_t *data)
 			if (ret > 0)
 				jsonrpc_handler(buffer, strlen(buffer), table, data);
 			if (ret == 0)
-				run = 0;
+				data->run = 0;
 #endif
 		}
-		if (ret < 0)
-			run = 0;
 	}
 	pthread_cond_destroy(&data->cond);
 	pthread_mutex_destroy(&data->mutex);

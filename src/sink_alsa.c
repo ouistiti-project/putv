@@ -459,53 +459,23 @@ static void *sink_thread(void *arg)
 		usleep(LATENCE_MS * 1000);
 	while (ctx->state != STATE_ERROR)
 	{
-		if (player_waiton(ctx->player, STATE_PAUSE) < 0)
-		{
-			if (player_state(ctx->player, STATE_UNKNOWN) == STATE_ERROR)
-			{
-				snd_pcm_drain(ctx->playback_handle);
-				ctx->state = STATE_ERROR;
-				continue;
-			}
-		}
-		if (player_state(ctx->player, STATE_UNKNOWN) == STATE_STOP)
-		{
-			snd_pcm_drain(ctx->playback_handle);
-			player_waiton(ctx->player, STATE_STOP);
-			/**
-			 * alsa plays noise. but after to restart, the data are not available.
-			 * alsa must wait then before to restart really
-			 */
-			while (ctx->in->ops->empty(ctx->in->ctx))
-			{
-				sched_yield();
-				usleep(LATENCE_MS * 1000);
-			}
-			dbg("sink: continue %d", player_state(ctx->player, STATE_UNKNOWN));
-			snd_pcm_prepare(ctx->playback_handle);
-		}
-
 		unsigned char *buff = NULL;
 		int length = 0;
+#ifdef SINK_ALSA_NOISE
 		ret = snd_pcm_wait(ctx->playback_handle, 1000);
 		if (ret == -EPIPE)
 		{
-			warn("pcm recover");
-			ret = snd_pcm_recover(ctx->playback_handle, ret, 0);
 			/**
 			* This must never occure, the udp src needs to know
 			* how many PCM missing.
 			*/
 			err("alsa: pcm wait error %s", snd_strerror(ret));
-			break;
+			warn("pcm recover");
+			ret = snd_pcm_recover(ctx->playback_handle, ret, 0);
+			player_state(ctx->player, STATE_STOP);
+			continue;
 		}
-		if (!ctx->in->ops->empty(ctx->in->ctx))
-		{
-			buff = ctx->in->ops->peer(ctx->in->ctx, NULL);
-			length = ctx->in->ops->length(ctx->in->ctx);
-			_alsa_checksamplerate(ctx);
-		}
-		else
+		if (ctx->in->ops->empty(ctx->in->ctx))
 		{
 			snd_pcm_sframes_t samples;
 			snd_pcm_delay(ctx->playback_handle, &samples);
@@ -522,6 +492,15 @@ static void *sink_thread(void *arg)
 			buff = ctx->noise;
 			ctx->noisecnt ++;
 		}
+		else
+#endif
+		{
+			buff = ctx->in->ops->peer(ctx->in->ctx, NULL);
+			if (buff == NULL)
+				continue;
+			length = ctx->in->ops->length(ctx->in->ctx);
+			_alsa_checksamplerate(ctx);
+		}
 		//snd_pcm_mmap_begin
 		ret = snd_pcm_writei(ctx->playback_handle, buff, length / divider);
 		sink_dbg("sink  alsa : write %d/%d %d/%d %d", ret * divider, length, ret, length / divider, divider);
@@ -530,9 +509,8 @@ static void *sink_thread(void *arg)
 			warn("pcm recover");
 			ret = snd_pcm_recover(ctx->playback_handle, ret, 0);
 		}
-		if (buff != ctx->noise)
-			ctx->in->ops->pop(ctx->in->ctx, ret * divider);
-		else
+#ifdef SINK_ALSA_NOISE
+		if (buff == ctx->noise)
 		{
 			int i = 0;
 			char *tmp;
@@ -542,6 +520,9 @@ static void *sink_thread(void *arg)
 				*tmp = (char)random();
 			}
 		}
+		else
+#endif
+			ctx->in->ops->pop(ctx->in->ctx, ret * divider);
 		if (ret < 0)
 		{
 			ctx->state = STATE_ERROR;

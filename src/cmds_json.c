@@ -344,10 +344,7 @@ static int method_play(json_t *json_params, json_t **result, void *userdata)
 	int ret = -1;
 	cmds_dbg("cmds: play");
 
-	player_state(ctx->player, STATE_PLAY);
-
-	int state = player_state(ctx->player, STATE_UNKNOWN);
-	switch (state)
+	switch (player_state(ctx->player, STATE_PLAY))
 	{
 	case STATE_STOP:
 		*result = jsonrpc_error_object_predefined(JSONRPC_INTERNAL_ERROR, json_pack("{ss}", "state", str_stop));
@@ -422,26 +419,52 @@ static int method_next(json_t *json_params, json_t **result, void *userdata)
 	cmds_dbg("cmds: next");
 
 	player_next(ctx->player);
-	const char *state = NULL;
 	switch (player_state(ctx->player, STATE_UNKNOWN))
 	{
 	case STATE_STOP:
-		state = str_stop;
-		*result = json_pack("{ss}", "state", state);
+		*result = json_pack("{ss}", "state", str_stop);
 		ret = 0;
 	break;
 	case STATE_PLAY:
 	case STATE_CHANGE:
-		state = str_play;
-		*result = json_pack("{ss}", "state", state);
+		*result = json_pack("{ss}", "state", str_play);
 		ret = 0;
 	break;
 	case STATE_PAUSE:
-		state = str_pause;
-		*result = json_pack("{ss}", "state", state);
+		*result = json_pack("{ss}", "state", str_pause);
 		ret = 0;
 	break;
 	default:
+		*result = jsonrpc_error_object_predefined(JSONRPC_INVALID_PARAMS, json_string("player state error"));
+	}
+	return ret;
+}
+
+static int method_setnext(json_t *json_params, json_t **result, void *userdata)
+{
+	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
+	media_t *media = player_media(ctx->player);
+	int ret = -1;
+	int id = 0;
+	cmds_dbg("cmds: setnext");
+
+	if (json_is_object(json_params))
+	{
+		id = json_integer_value(json_object_get(json_params, "id"));
+	}
+	dbg("set next id %d", id);
+	if (media->ops->find != NULL)
+	{
+		ret = media->ops->find(media->ctx, id, player_play, ctx->player);
+		ret -= 1;
+	}
+	if (ret == 0)
+	{
+		*result = json_pack("{si}", "next", id);
+		ret = 0;
+	}
+	else
+	{
 		*result = jsonrpc_error_object_predefined(JSONRPC_INVALID_PARAMS, json_string("player state error"));
 	}
 	return ret;
@@ -806,6 +829,17 @@ static int method_capabilities(json_t *json_params, json_t **result, void *userd
 		json_object_set(action, "params", params);
 		json_array_append(actions, action);
 	}
+	if (media->ops->find != NULL)
+	{
+		action = json_object();
+		value = json_string("setnext");
+		json_object_set(action, "method", value);
+		params = json_array();
+		value = json_string("id");
+		json_array_append(params, value);
+		json_object_set(action, "params", params);
+		json_array_append(actions, action);
+	}
 	if (media->ops->insert != NULL)
 	{
 		action = json_object();
@@ -959,6 +993,7 @@ static struct jsonrpc_method_entry_t method_table[] = {
 	{ 'r', "pause", method_pause, "" },
 	{ 'r', "stop", method_stop, "" },
 	{ 'r', "next", method_next, "" },
+	{ 'r', "setnext", method_setnext, "o" },
 	{ 'r', "list", method_list, "o" },
 	{ 'r', "append", method_append, "[]" },
 	{ 'r', "remove", method_remove, "o" },
@@ -1014,7 +1049,7 @@ static size_t _cmds_recv(void *buff, size_t size, void *userctx)
 	size = recv(sock,
 		buff, size, MSG_DONTWAIT | MSG_NOSIGNAL);
 
-	dbg("cmds: recv data %d", size);
+	dbg("cmds: recv data %ld", size);
 	cmds_dbg("cmds: recv data %.*s", (int)size, (char *)buff);
 	return size;
 }

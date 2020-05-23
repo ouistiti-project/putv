@@ -52,4 +52,6 @@ int player_mediaid(player_ctx_t *ctx);
 const char *player_filtername(player_ctx_t *ctx);
 const src_t *player_source(player_ctx_t *ctx);
 
+int player_play(void* arg, int id, const char *url, const char *info, const char *mime);
+
 #endif

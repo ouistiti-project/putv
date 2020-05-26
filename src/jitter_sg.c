@@ -252,6 +252,8 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 	}
 	else
 	{
+		if (len < jitter->size)
+			warn("jitter: scatter not full");
 		pthread_mutex_lock(&private->mutex);
 		private->in->len = len;
 		private->in->beat = beat;

@@ -170,9 +170,13 @@ static unsigned char *jitter_pull(jitter_ctx_t *jitter)
 	}
 	unsigned char *ret = NULL;
 	if ((private->state == JITTER_RUNNING || private->state == JITTER_FILLING) &&
-		((private->level + jitter->size) > (jitter->size * jitter->count)))
+		((private->level + jitter->size) <= (jitter->size * jitter->count)))
 	{
 		ret = private->in;
+	}
+	else
+	{
+		warn("jitter: %s pull ring state: %d, level %d on %ld", jitter->name, private->state, private->level, jitter->count * jitter->size);
 	}
 	pthread_mutex_unlock(&private->mutex);
 	return ret;
@@ -213,10 +217,13 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 		pthread_mutex_lock(&private->mutex);
 		len = jitter->consume(jitter->consumer,
 			private->out, len);
+		warn("jitter: %s consume %ld", jitter->name, len);
 		if (len > 0)
 		{
-			private->out = private->in;
 			private->level -= len;
+			if (private->in != NULL)
+				private->in -= len;
+			private->out = private->in;
 		}
 		else
 		{

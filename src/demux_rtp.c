@@ -120,17 +120,8 @@ static demux_ctx_t *demux_init(player_ctx_t *player, const char *protocol, const
 	ctx->mime = utils_mime2mime(mime);
 	demux_profile_t *profile = NULL;
 
-	profile = calloc(1, sizeof(*profile));
-	profile->pt = 14;
-	profile->mime = mime_audiomp3;
-	profile->next = ctx->profiles;
-	ctx->profiles = profile;
-
-	profile = calloc(1, sizeof(*profile));
-	profile->pt = 11;
-	profile->mime = mime_audiopcm;
-	profile->next = ctx->profiles;
-	ctx->profiles = profile;
+	demux_rtp_addprofile(ctx, 14, mime_audiomp3);
+	demux_rtp_addprofile(ctx, 11, mime_audiopcm);
 
 	return ctx;
 }
@@ -158,6 +149,17 @@ static const char *demux_profile(demux_ctx_t *ctx, char pt)
 	if (profile == NULL)
 		return mime_octetstream;
 	return profile->mime;
+}
+
+void demux_rtp_addprofile(demux_ctx_t *ctx, char pt, const char *mime)
+{
+	demux_profile_t *profile = NULL;
+
+	profile = calloc(1, sizeof(*profile));
+	profile->pt = pt;
+	profile->mime = mime;
+	profile->next = ctx->profiles;
+	ctx->profiles = profile;
 }
 
 static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)

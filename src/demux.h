@@ -19,4 +19,5 @@ demux_t *demux_build(player_ctx_t *player, const char *url, const char *mime);
 extern const demux_ops_t *demux_rtp;
 extern const demux_ops_t *demux_mpegts;
 extern const demux_ops_t *demux_passthrough;
+
 #endif

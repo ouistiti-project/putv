@@ -67,6 +67,14 @@ struct demux_out_s
 	demux_out_t *next;
 };
 
+typedef struct demux_profile_s demux_profile_t;
+struct demux_profile_s
+{
+	const char *mime;
+	demux_profile_t *next;
+	char pt;
+};
+
 typedef struct demux_ctx_s demux_ctx_t;
 typedef struct demux_ctx_s src_ctx_t;
 struct demux_ctx_s
@@ -81,6 +89,7 @@ struct demux_ctx_s
 	const char *mime;
 	pthread_t thread;
 	event_listener_t *listener;
+	demux_profile_t *profiles;
 };
 #define SRC_CTX
 #define DEMUX_CTX
@@ -109,6 +118,20 @@ static demux_ctx_t *demux_init(player_ctx_t *player, const char *protocol, const
 {
 	demux_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->mime = utils_mime2mime(mime);
+	demux_profile_t *profile = NULL;
+
+	profile = calloc(1, sizeof(*profile));
+	profile->pt = 14;
+	profile->mime = mime_audiomp3;
+	profile->next = ctx->profiles;
+	ctx->profiles = profile;
+
+	profile = calloc(1, sizeof(*profile));
+	profile->pt = 11;
+	profile->mime = mime_audiopcm;
+	profile->next = ctx->profiles;
+	ctx->profiles = profile;
+
 	return ctx;
 }
 
@@ -126,6 +149,15 @@ static jitter_t *demux_jitter(demux_ctx_t *ctx, jitte_t jitte)
 		ctx->jitte = jitte;
 	}
 	return ctx->in;
+}
+
+static const char *demux_profile(demux_ctx_t *ctx, char pt)
+{
+	demux_profile_t *profile = ctx->profiles;
+	while (profile != NULL && profile->pt != pt) profile = profile->next;
+	if (profile == NULL)
+		return mime_octetstream;
+	return profile->mime;
 }
 
 static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
@@ -155,14 +187,7 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 		out->ssrc = header->ssrc;
 		out->cc = header->b.cc;
 		out->mime = mime_octetstream;
-		if (header->b.pt == 14)
-		{
-			out->mime = mime_audiomp3;
-		}
-		if (header->b.pt == 11)
-		{
-			out->mime = mime_audiopcm;
-		}
+		out->mime = demux_profile(ctx, header->b.pt);
 		out->next = ctx->out;
 		ctx->out = out;
 		warn("demux: new  rtp substream %d %s", out->ssrc, out->mime);
@@ -435,6 +460,13 @@ static void demux_destroy(demux_ctx_t *ctx)
 		event_listener_t *next = listener->next;
 		free(listener);
 		listener = next;
+	}
+	demux_profile_t *profile = ctx->profiles;
+	while (profile != NULL)
+	{
+		demux_profile_t *next = profile->next;
+		free(profile);
+		profile = next;
 	}
 	free(ctx);
 }

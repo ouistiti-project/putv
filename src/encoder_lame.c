@@ -139,7 +139,7 @@ static encoder_ctx_t *encoder_init(player_ctx_t *player)
 	ctx->samplesize = sizeof(signed short);
 
 	encoder_lame_init(ctx);
-#ifdef LAME_DUMP
+#ifdef ENCODER_DUMP
 	ctx->dumpfd = open("lame_dump.mp3", O_RDWR | O_CREAT, 0644);
 #endif
 	/**
@@ -222,7 +222,7 @@ static void *lame_thread(void *arg)
 			ret = lame_encode_buffer_interleaved(ctx->encoder,
 					(short int *)ctx->inbuffer, inlength,
 					ctx->outbuffer, ctx->out->ctx->size);
-#ifdef LAME_DUMP
+#ifdef ENCODER_DUMP
 			if (ctx->dumpfd > 0 && ret > 0)
 			{
 				write(ctx->dumpfd, ctx->outbuffer, ret);
@@ -296,7 +296,7 @@ static const char *encoder_mime(encoder_ctx_t *encoder)
 
 static void encoder_destroy(encoder_ctx_t *ctx)
 {
-#ifdef LAME_DUMP
+#ifdef ENCODER_DUMP
 	if (ctx->dumpfd > 0)
 		close(ctx->dumpfd);
 #endif

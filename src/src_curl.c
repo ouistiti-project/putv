@@ -313,5 +313,4 @@ const src_ops_t *src_curl = &(src_ops_t)
 	.attach = src_attach,
 	.estream = src_estream,
 	.destroy = src_destroy,
-	.mime = NULL,
 };

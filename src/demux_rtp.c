@@ -267,6 +267,16 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 		while (ctx->seqnum < header->b.seqnum)
 		{
 #if 0
+			/*
+			 * generate missing data
+			 * this code is not correct:
+			 * it is impossible to generate a good stream for the decoder
+			 * and if they are missing, they are yet old too,
+			 * it is useless to generate them.
+			 * it is more efficient to count the missing PCM and
+			 * remove from the encoder the same number of PCM, who generated
+			 * during previous hole of data.
+			 */
 			if (out->data == NULL)
 				out->data = out->jitter->ops->pull(out->jitter->ctx);
 			memset(out->data, 0, out->jitter->ctx->size);
@@ -380,8 +390,6 @@ static int demux_run(demux_ctx_t *ctx)
 
 static const char *demux_mime(demux_ctx_t *ctx, int index)
 {
-	if (ctx->mime)
-		return ctx->mime;
 	demux_out_t *out = ctx->out;
 	while (out != NULL && index > 0)
 	{
@@ -390,13 +398,7 @@ static const char *demux_mime(demux_ctx_t *ctx, int index)
 	}
 	if (ctx->out != NULL)
 		return ctx->out->mime;
-#ifdef DECODER_MAD
-	return mime_audiomp3;
-#elif defined(DECODER_FLAC)
-	return mime_audioflac;
-#else
-	return mime_audiopcm;
-#endif
+	return ctx->mime;
 }
 
 static void demux_eventlistener(demux_ctx_t *ctx, event_listener_cb_t cb, void *arg)
@@ -480,9 +482,9 @@ const demux_ops_t *demux_rtp = &(demux_ops_t)
 	.init = demux_init,
 	.jitter = demux_jitter,
 	.run = demux_run,
+	.mime = demux_mime,
 	.eventlistener = demux_eventlistener,
 	.attach = demux_attach,
 	.estream = demux_estream,
-	.mime = demux_mime,
 	.destroy = demux_destroy,
 };

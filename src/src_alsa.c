@@ -413,5 +413,4 @@ const src_ops_t *src_alsa = &(src_ops_t)
 	.attach = src_attach,
 	.estream = src_estream,
 	.destroy = src_destroy,
-	.mime = src_mime,
 };

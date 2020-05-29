@@ -218,6 +218,13 @@ static decoder_t *src_estream(src_ctx_t *ctx, long index)
 	return ctx->estream;
 }
 
+const char *src_mime(src_ctx_t *ctx, int index)
+{
+	if (index > 0)
+		return NULL;
+	return ctx->mime;
+}
+
 static void src_destroy(src_ctx_t *ctx)
 {
 	if (ctx->estream != NULL)
@@ -244,5 +251,5 @@ const src_ops_t *src_file = &(src_ops_t)
 	.attach = src_attach,
 	.estream = src_estream,
 	.destroy = src_destroy,
-	.mime = NULL,
+	.mime = src_mime,
 };

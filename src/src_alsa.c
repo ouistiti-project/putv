@@ -47,9 +47,13 @@ struct src_ctx_s
 	pthread_t thread;
 	jitter_t *out;
 	state_t state;
+
 	unsigned int samplerate;
 	int samplesize;
 	int nchannels;
+	snd_pcm_format_t format;
+	unsigned long periodsize;
+
 	filter_t filter;
 	decoder_t *estream;
 	long pid;
@@ -69,6 +73,8 @@ struct src_ctx_s
 #endif
 
 #define src_dbg(...)
+
+#define LATENCY 10
 
 static int _pcm_open(src_ctx_t *ctx, snd_pcm_format_t pcm_format, unsigned int rate, unsigned long *size)
 {
@@ -145,10 +151,15 @@ static int _pcm_open(src_ctx_t *ctx, snd_pcm_format_t pcm_format, unsigned int r
 	if (size)
 		*size = periodsize;
 
-	ctx->samplerate = rate;
-
 error:
 	snd_pcm_hw_params_free(hw_params);
+
+	if (ret < 0)
+	{
+		err("src: pcm error %s", strerror(errno));
+	}
+	else
+		ret = snd_pcm_prepare(ctx->handle);
 	return ret;
 }
 
@@ -166,12 +177,10 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 	const char *soundcard;
 	src_ctx_t *ctx = NULL;
 
-	if (strstr(url, "://") != NULL)
+	soundcard = strstr(url, "://");
+	if (soundcard != NULL)
 	{
-		soundcard = strstr(url, "pcm://");
-		if (soundcard == NULL)
-			return NULL;
-		soundcard += 6;
+		soundcard += 3;
 	}
 	else
 	{
@@ -180,7 +189,7 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 
 	int ret;
 	snd_pcm_t *handle;
-	ret = snd_pcm_open(&handle, soundcard, SND_PCM_STREAM_CAPTURE, ctx->pid);
+	ret = snd_pcm_open(&handle, soundcard, SND_PCM_STREAM_CAPTURE, 0);
 
 	if (ret == 0)
 	{
@@ -189,6 +198,11 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 		ctx->player = player;
 		ctx->handle = handle;
 		dbg("src: %s", src_alsa->name);
+		ctx->format = SND_PCM_FORMAT_S24_LE;
+		ctx->samplesize = 4;
+		ctx->nchannels = 2;
+		ctx->samplerate = 48000;
+		ctx->periodsize = LATENCY * 1000 / ctx->samplerate;
 	}
 	return ctx;
 }
@@ -197,8 +211,10 @@ static void *src_thread(void *arg)
 {
 	int ret;
 	src_ctx_t *ctx = (src_ctx_t *)arg;
+
+
 	int divider = ctx->samplesize * ctx->nchannels;
-	unsigned long size = ctx->out->ctx->size / divider;
+	unsigned long size = ctx->periodsize * divider;
 
 	snd_pcm_start(ctx->handle);
 	/* start decoding */
@@ -283,53 +299,12 @@ static int src_prepare(src_ctx_t *ctx)
 	event_listener_t *listener = ctx->listener;
 	while (listener)
 	{
+		err("new es event");
 		listener->cb(listener->arg, SRC_EVENT_NEW_ES, (void *)&event);
 		listener = listener->next;
 	}
-
-	snd_pcm_format_t pcm_format;
-	switch (ctx->out->format)
-	{
-		case PCM_32bits_LE_stereo:
-			pcm_format = SND_PCM_FORMAT_S32_LE;
-			ctx->samplesize = 4;
-			ctx->nchannels = 2;
-		break;
-		case PCM_24bits4_LE_stereo:
-			pcm_format = SND_PCM_FORMAT_S24_LE;
-			ctx->samplesize = 4;
-			ctx->nchannels = 2;
-		break;
-		case PCM_24bits3_LE_stereo:
-			pcm_format = SND_PCM_FORMAT_S24_LE;
-			ctx->samplesize = 3;
-			ctx->nchannels = 2;
-		break;
-		case PCM_16bits_LE_stereo:
-			pcm_format = SND_PCM_FORMAT_S16_LE;
-			ctx->samplesize = 2;
-			ctx->nchannels = 2;
-		break;
-		case PCM_16bits_LE_mono:
-			pcm_format = SND_PCM_FORMAT_S16_LE;
-			ctx->samplesize = 2;
-			ctx->nchannels = 1;
-		break;
-		default:
-			dbg("src alsa: format error %d",  ctx->out->format);
-	}
-	if (ctx->out->ctx->frequence == 0)
-		ctx->out->ctx->frequence = 48000;
-
-	unsigned long size = ctx->out->ctx->size / (ctx->samplesize * ctx->nchannels);
-	int ret = _pcm_open(ctx, pcm_format, ctx->out->ctx->frequence, &size);
-	if (ret < 0)
-	{
-		err("src: pcm error %s", strerror(errno));
-	}
-	else
-		ret = snd_pcm_prepare(ctx->handle);
-	return ret;
+	_pcm_open(ctx, ctx->format, ctx->samplerate, &ctx->periodsize);
+	return 0;
 }
 
 static int src_run(src_ctx_t *ctx)
@@ -379,6 +354,8 @@ static int src_attach(src_ctx_t *ctx, long index, decoder_t *decoder)
 		return -1;
 	ctx->estream = decoder;
 	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx, JITTE_LOW);
+
+	return 0;
 }
 
 static decoder_t *src_estream(src_ctx_t *ctx, long index)
@@ -406,10 +383,11 @@ static void src_destroy(src_ctx_t *ctx)
 const src_ops_t *src_alsa = &(src_ops_t)
 {
 	.name = "alsa",
-	.protocol = "pcm://",
+	.protocol = "pcm://|alsa://",
 	.init = src_init,
 	.run = src_run,
 	.eventlistener = src_eventlistener,
+	.prepare = src_prepare,
 	.attach = src_attach,
 	.estream = src_estream,
 	.destroy = src_destroy,

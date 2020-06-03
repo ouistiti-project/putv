@@ -1212,7 +1212,7 @@ static int jsonrpc_command(thread_info_t *info)
 	warn("cmds: json socket connection");
 	event_player_state_t event = {.playerctx = ctx->player};
 	event.state = player_state(ctx->player, STATE_UNKNOWN);
-	jsonrpc_onchange(info, PLAYER_EVENT_CHANGE, &event);
+	jsonrpc_onchange(ctx, PLAYER_EVENT_CHANGE, &event);
 	errno = 0;
 	int run = 1;
 

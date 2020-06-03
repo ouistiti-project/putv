@@ -1100,13 +1100,11 @@ static int _jsonrpc_sendresponse(thread_info_t *info, json_t *request)
 
 	if (response != NULL)
 	{
-		pthread_mutex_lock(&ctx->mutex);
 		char *buff = json_dumps(response, JSONRPC_DEBUG_FORMAT );
 		cmds_dbg("cmds: send response %s", buff);
 		ret = send(sock, buff, strlen(buff) + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
 		dbg("cmds: send %d", ret);
 		fsync(sock);
-		pthread_mutex_unlock(&ctx->mutex);
 		json_decref(response);
 	}
 	else
@@ -1154,7 +1152,6 @@ static void *_cmds_json_pthreadsend(void *arg)
 		{
 			pthread_cond_wait(&ctx->cond, &ctx->mutex);
 		}
-		pthread_mutex_unlock(&ctx->mutex);
 		while (ctx->requests != NULL)
 		{
 			json_request_list_t *request = ctx->requests;
@@ -1162,7 +1159,6 @@ static void *_cmds_json_pthreadsend(void *arg)
 			if (_jsonrpc_sendresponse(request->info, request->request) < 0)
 			{
 				_cmds_json_removeinfo(ctx, request->info);
-				pthread_mutex_unlock(&ctx->mutex);
 				free(request);
 				continue;
 			}
@@ -1176,19 +1172,16 @@ static void *_cmds_json_pthreadsend(void *arg)
 				while (info)
 				{
 					thread_info_t *next = info->next;
-					pthread_mutex_lock(&ctx->mutex);
 					if (jsonrpc_sendevent(ctx, info, "onchange") < 0)
 					{
 						_cmds_json_removeinfo(ctx, info);
 					}
-					pthread_mutex_unlock(&ctx->mutex);
 					info = next;
 				}
-				pthread_mutex_lock(&ctx->mutex);
 				ctx->eventsmask &= ~ONCHANGE;
-				pthread_mutex_unlock(&ctx->mutex);
 			}
 		}
+		pthread_mutex_unlock(&ctx->mutex);
 	}
 	warn("cmds: leave thread send");
 	return NULL;

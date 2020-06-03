@@ -178,7 +178,7 @@ static int method_list(json_t *json_params, json_t **result, void *userdata)
 	int count = media->ops->count(media->ctx);
 	int nbitems = MAX_ITEMS;
 	nbitems = (count < nbitems)? count:nbitems;
-	dbg("cmds: list");
+	cmds_dbg("cmds: list");
 
 	if (media->ops->list == NULL)
 	{
@@ -298,7 +298,7 @@ static int method_append(json_t *json_params, json_t **result, void *userdata)
 			if (json_is_string(value))
 			{
 				const char *str = json_string_value(value);
-				dbg("cmds: append %s", str);
+				cmds_dbg("cmds: append %s", str);
 				ret = append_cb(media->ctx, str, "", NULL);
 			}
 			else if (json_is_object(value))
@@ -446,13 +446,12 @@ static int method_setnext(json_t *json_params, json_t **result, void *userdata)
 	media_t *media = player_media(ctx->player);
 	int ret = -1;
 	int id = 0;
-	cmds_dbg("cmds: setnext");
 
 	if (json_is_object(json_params))
 	{
 		id = json_integer_value(json_object_get(json_params, "id"));
 	}
-	dbg("set next id %d", id);
+	cmds_dbg("cmds: setnext id %d", id);
 	if (media->ops->find != NULL)
 	{
 		ret = media->ops->find(media->ctx, id, player_play, ctx->player);
@@ -587,7 +586,7 @@ static int method_change(json_t *json_params, json_t **result, void *userdata)
 
 static int method_onchange(json_t *json_params, json_t **result, void *userdata)
 {
-	dbg("cmds: onchange");
+	cmds_dbg("cmds: onchange");
 	int ret;
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 	media_t *media = player_media(ctx->player);
@@ -636,7 +635,7 @@ static int method_onchange(json_t *json_params, json_t **result, void *userdata)
 
 static int method_status(json_t *json_params, json_t **result, void *userdata)
 {
-	dbg("cmds: status");
+	cmds_dbg("cmds: status");
 	return method_onchange(json_params, result, userdata);
 }
 
@@ -1081,7 +1080,7 @@ static int jsonrpc_sendevent(cmds_ctx_t *ctx, thread_info_t *info, const char *e
 		int sock = info->sock;
 		cmds_dbg("cmds: send notification %s", message);
 		ret = send(sock, message, length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
-		dbg("cmds: send %d", ret);
+		cmds_dbg("cmds: send %d", ret);
 		fsync(sock);
 		json_decref(notification);
 	}
@@ -1103,7 +1102,7 @@ static int _jsonrpc_sendresponse(thread_info_t *info, json_t *request)
 		char *buff = json_dumps(response, JSONRPC_DEBUG_FORMAT );
 		cmds_dbg("cmds: send response %s", buff);
 		ret = send(sock, buff, strlen(buff) + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
-		dbg("cmds: send %d", ret);
+		cmds_dbg("cmds: send %d", ret);
 		fsync(sock);
 		json_decref(response);
 	}
@@ -1227,7 +1226,7 @@ static int jsonrpc_command(thread_info_t *info)
 		if (ctx->info == NULL)
 			break;
 
-		dbg("cmds: recv wait");
+		cmds_dbg("cmds: recv wait");
 		ret = poll(poll_set, numfds, -1);
 		if (poll_set[0].revents & POLLHUP)
 		{
@@ -1237,13 +1236,12 @@ static int jsonrpc_command(thread_info_t *info)
 			run = 0;
 			break;
 		}
-		dbg("cmds: recv ready");
+		cmds_dbg("cmds: recv ready");
 
 		json_t *request = NULL;
 		json_error_t error;
 		int flags = JSON_DISABLE_EOF_CHECK;
 		//int flags = 0;
-		dbg("try to recv");
 		request = json_load_callback(_cmds_recv, info, flags, &error);
 		if (request != NULL)
 		{
@@ -1251,7 +1249,6 @@ static int jsonrpc_command(thread_info_t *info)
 			json_request_list_t *entry = calloc(1, sizeof(*entry));
 			entry->info = info;
 			entry->request = request;
-			dbg("recv request");
 			pthread_mutex_lock(&ctx->mutex);
 			if (ctx->requests == NULL)
 				ctx->requests = entry;
@@ -1262,7 +1259,6 @@ static int jsonrpc_command(thread_info_t *info)
 				it->next = entry;
 			}
 			pthread_mutex_unlock(&ctx->mutex);
-			dbg("request ready");
 			pthread_cond_broadcast(&ctx->cond);
 		}
 		else

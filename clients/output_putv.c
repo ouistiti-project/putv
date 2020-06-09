@@ -204,13 +204,12 @@ int inotifyfd;
 static void *_check_socket(void *arg)
 {
 	gmrenderer_ctx_t *ctx = (gmrenderer_ctx_t *)arg;
-	char *socketpath;
-	socketpath = malloc(strlen(ctx->root) + 1 + strlen(ctx->name) + 1);
-	sprintf(socketpath, "%s/%s", ctx->root, ctx->name);
 
-	if (!access(socketpath, R_OK | W_OK))
+	if (!access(ctx->socketpath, R_OK | W_OK))
 	{
-		return NULL;
+		client_unix(gmrenderer_ctx->socketpath, &gmrenderer_ctx->client);
+		client_async(&gmrenderer_ctx->client, 1);
+		client_eventlistener(&gmrenderer_ctx->client, "onchange", gmrenderer_checkstate, gmrenderer_ctx);
 	}
 	while (1)
 	{
@@ -231,9 +230,11 @@ static void *_check_socket(void *arg)
 			{
 				if (event->mask & IN_CREATE)
 				{
-					if (!access(socketpath, R_OK | W_OK))
+					if (!access(ctx->socketpath, R_OK | W_OK))
 					{
-						return NULL;
+						client_unix(gmrenderer_ctx->socketpath, &gmrenderer_ctx->client);
+						client_async(&gmrenderer_ctx->client, 1);
+						client_eventlistener(&gmrenderer_ctx->client, "onchange", gmrenderer_checkstate, gmrenderer_ctx);
 					}
 				}
 #if 0
@@ -249,7 +250,6 @@ static void *_check_socket(void *arg)
 			i += EVENT_SIZE + event->len;
 		}
 	}
-	free(socketpath);
 }
 #endif
 
@@ -262,25 +262,29 @@ output_putv_init(void)
 	const char *putv = getenv("PUTV");
 	if (putv != NULL)
 		gmrenderer_ctx->name = putv;
-#ifdef USE_INOTIFY
-	inotifyfd = inotify_init();
-	int dirfd = inotify_add_watch(inotifyfd, gmrenderer_ctx->root,
-					IN_MODIFY | IN_CREATE | IN_DELETE);
-	_check_socket((void *)gmrenderer_ctx);
-#else
+	gmrenderer_ctx->current_id = -1;
+
 	int len = strlen(gmrenderer_ctx->root) + 1;
 	len += strlen(gmrenderer_ctx->name) + 1;
 	gmrenderer_ctx->socketpath = malloc(len);
 	sprintf(gmrenderer_ctx->socketpath, "%s/%s", gmrenderer_ctx->root, gmrenderer_ctx->name);
 	dbg("socket path %s", gmrenderer_ctx->socketpath);
+
+#if 0
+//#ifdef USE_INOTIFY
+	inotifyfd = inotify_init();
+	int dirfd = inotify_add_watch(inotifyfd, gmrenderer_ctx->root,
+					IN_MODIFY | IN_CREATE | IN_DELETE);
+	pthread_t thread;
+	pthread_create(&thread, NULL, (__start_routine_t)_check_socket, (void *)&gmrenderer_ctx);
+#else
 	if (access(gmrenderer_ctx->socketpath, R_OK | W_OK))
 		return -1;
-#endif
-	gmrenderer_ctx->current_id = -1;
 	client_unix(gmrenderer_ctx->socketpath, &gmrenderer_ctx->client);
 	client_async(&gmrenderer_ctx->client, 1);
-
 	client_eventlistener(&gmrenderer_ctx->client, "onchange", gmrenderer_checkstate, gmrenderer_ctx);
+#endif
+
 	return 0;
 }
 
@@ -320,7 +324,6 @@ static int
 output_putv_play(output_transition_cb_t callback)
 {
 	gmrenderer_ctx->transition_cb = callback;
-	gmrenderer_ctx->current_id = -1;
 	dbg("UPnP: play");
 	client_play(&gmrenderer_ctx->client, gmrenderer_checkstate, gmrenderer_ctx);
 	return 0;

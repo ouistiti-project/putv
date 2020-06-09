@@ -85,6 +85,14 @@ define PUTV_INSTALL_TARGET_CMDS
 		$(TARGET_DIR)/etc/setting.d/gmrender.sh
 endef
 
+define PUTV_INSTALL_GPIOD_CMDS
+	$(INSTALL) -D -m 644 $(PUTV_PKGDIR)/gpiod.conf \
+		$(TARGET_DIR)/etc/gpiod/rules.d/putv.conf
+endef
+ifeq ($(BR2_PACKAGE_GPIOD),y)
+PUTV_POST_INSTALL_TARGET_HOOKS+=PUTV_INSTALL_GPIOD_CMDS
+endif
+
 define PUTV_INSTALL_INIT_SYSV
 	ln -sf /etc/setting.d/putv.sh $(TARGET_DIR)/etc/init.d/S50putv
 	ln -sf /etc/setting.d/gmrender.sh $(TARGET_DIR)/etc/init.d/S51gmrender

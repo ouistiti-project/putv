@@ -24,6 +24,11 @@ client() {
 start() {
   printf "Starting ouiradio: "
 
+  MEDIA_DIR=$(echo ${MEDIA} | grep "file:\/\/" | sed 's,^file\:\/\/,,g')
+  if [ -n ${MEDIA_DIR} ] && [ ! -d ${MEDIA_DIR} ]; then
+    mkdir -p ${MEDIA_DIR}
+    mount ${MEDIA_DIR}
+  fi
   OPTIONS="${OPTIONS} -m ${MEDIA}"
   OPTIONS="${OPTIONS} -a -l -r"
 #  OPTIONS="${OPTIONS} -a -r"
@@ -47,6 +52,9 @@ stop() {
 
   printf "Stopping ouiradio: "
   ${DAEMON} ${OPTIONS} -K
+  if [ -e ${RUNDIR}/${DAEMON}.pid ]; then
+	rm ${RUNDIR}/${DAEMON}.pid
+  fi
   echo "OK"
 }
 restart() {
@@ -64,6 +72,7 @@ case "$1" in
     ;;
   start)
     client
+    # check gpiod to start or not
     if [ ! -e ${RUNDIR}/gpiod.pid ]; then
       start
     fi

@@ -50,5 +50,6 @@ struct event_listener_s
 	void *arg;
 	event_listener_t *next;
 	int id;
+	const char *name;
 };
 #endif

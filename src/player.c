@@ -129,7 +129,11 @@ void player_next(player_ctx_t *ctx)
 
 media_t *player_media(player_ctx_t *ctx)
 {
-	return ctx->media;
+	media_t *media;
+	pthread_mutex_lock(&ctx->mutex);
+	media = ctx->media;
+	pthread_mutex_unlock(&ctx->mutex);
+	return media;
 }
 
 void player_destroy(player_ctx_t *ctx)
@@ -171,6 +175,7 @@ int player_eventlistener(player_ctx_t *ctx, event_listener_cb_t callback, void *
 		listener->id = ctx->listeners->id + 1;
 	listener->cb = callback;
 	listener->arg = cbctx;
+	listener->name = name;
 	listener->next = ctx->listeners;
 	ctx->listeners = listener;
 	return listener->id;
@@ -333,13 +338,16 @@ static void _player_autonext(void *arg, event_t event, void *eventarg)
 	 */
 	if (ctx->media != ctx->nextmedia)
 	{
+		pthread_mutex_lock(&ctx->mutex);
 		if (ctx->media)
 		{
 			ctx->media->ops->destroy(ctx->media->ctx);
 			free(ctx->media);
 		}
 		ctx->media = ctx->nextmedia;
+		pthread_mutex_unlock(&ctx->mutex);
 	}
+
 	if (ctx->media == NULL)
 	{
 		err("media not available");
@@ -461,6 +469,7 @@ int player_run(player_ctx_t *ctx)
 		event_listener_t *it = ctx->listeners;
 		while (it != NULL)
 		{
+			dbg("player: event change to %d (%s)", it->id, it->name);
 			it->cb(it->arg, PLAYER_EVENT_CHANGE, &event);
 			it = it->next;
 		}

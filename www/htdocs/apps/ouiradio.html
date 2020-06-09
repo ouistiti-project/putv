@@ -126,7 +126,7 @@ create_player = function (config)
 	var player = new JsonRPC(config.player);
 	player.onopen = function ()
 	{
-		$('#connect').addClass('hidden');
+		$('#connect').addClass('hidden').removeClass('disabled');
 		player.send('capabilities', null);
 	}.bind(player);
 	player.onchange = function(result)
@@ -277,7 +277,7 @@ create_player = function (config)
 	player.onclose = function()
 	{
 		initIHM();
-		$('#connect').removeClass('hidden');
+		$('#connect').removeClass('hidden').removeClass('disabled');
 	}
 	$('#playpause').on('click', function (event)
 		{
@@ -384,6 +384,16 @@ $(document).ready(function()
 	xhr.withCredentials = true;
 	xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
 	xhr.send();
+
+	$('#connect').on('click', function (event)
+		{
+			if (g_player != undefined)
+			{
+				$('#connect').addClass('disabled');
+				g_player.connect();
+			}
+		});
+
 });
 
 window.addEventListener('unload', function(event) {
@@ -405,10 +415,14 @@ window.addEventListener('unload', function(event) {
 					</ul>
 				</div>
 				<div class="nav navbar-form navbar-header">
-					<div class="input-group col-md-4 col-xs-6 col-xs-offset-3 col-md-offset-0">
+					<div class="col-md-4 col-xs-6">
 						<div class="input-group-btn">
+							<button type="button" class="action-btn btn btn-lg btn-default" id='connect' aria-expanded="false">
+								<span class="sr-only">Connect</span>
+								<span>Connect</span>
+							</button>
 							<button type="button" class="action-btn btn btn-lg btn-default" id='stop' aria-expanded="false">
-								<span class="sr-only">Play</span>
+								<span class="sr-only">Stop</span>
 								<span class="glyphicon glyphicon-stop" aria-hidden="true"></span>
 							</button>
 							<button type="button" class="action-btn btn btn-lg btn-default" id='playpause' aria-expanded="false">
@@ -421,7 +435,7 @@ window.addEventListener('unload', function(event) {
 							</button>
 						</div>
 					</div>
-					<div class="input-group col-md-6 col-xs-8 col-xs-offset-2 col-md-offset-0">
+					<div class="col-md-6 col-xs-4 ">
 						<div class="input-group-btn">
 							<button type="button" class="action-btn btn btn-lg btn-default" id='random' aria-expanded="false">
 								<span class="sr-only">Random</span>

@@ -118,47 +118,48 @@ int input_parseevent(input_ctx_t *ctx, const struct input_event *event)
 {
 	if (event->type != EV_KEY)
 	{
-		return -1;
+		return -2;
 	}
 	if (event->value != 0) // check only keyrelease event
 		return 0;
 
+	int ret = 0;
 	switch (event->code)
 	{
 	case KEY_PLAYPAUSE:
 		dbg("key KEY_PLAYPAUSE");
 		if (ctx->state == STATE_PLAY)
-			client_pause(ctx->client, input_checkstate, ctx);
+			ret = client_pause(ctx->client, input_checkstate, ctx);
 		else
-			client_play(ctx->client, input_checkstate, ctx);
+			ret = client_play(ctx->client, input_checkstate, ctx);
 	break;
 	case KEY_PLAYCD:
 	case KEY_PLAY:
 		dbg("key KEY_PLAY");
-		client_play(ctx->client, input_checkstate, ctx);
+		ret = client_play(ctx->client, input_checkstate, ctx);
 	break;
 	case KEY_PAUSECD:
 	case KEY_PAUSE:
 		dbg("key KEY_PAUSE");
-		client_pause(ctx->client, input_checkstate, ctx);
+		ret = client_pause(ctx->client, input_checkstate, ctx);
 	break;
 	case KEY_STOPCD:
 	case KEY_STOP:
 		dbg("key KEY_STOP");
-		client_stop(ctx->client, input_checkstate, ctx);
+		ret = client_stop(ctx->client, input_checkstate, ctx);
 	break;
 	case KEY_NEXTSONG:
 	case KEY_NEXT:
 		dbg("key KEY_NEXT");
-		client_next(ctx->client, input_checkstate, ctx);
+		ret = client_next(ctx->client, input_checkstate, ctx);
 	break;
 	case KEY_VOLUMEDOWN:
 		dbg("key KEY_VOLUMEDOWN");
-		client_volume(ctx->client, NULL, ctx, json_integer(-5));
+		ret = client_volume(ctx->client, NULL, ctx, json_integer(-5));
 	break;
 	case KEY_VOLUMEUP:
 		dbg("key KEY_VOLUMEUP");
-		client_volume(ctx->client, NULL, ctx, json_integer(+5));
+		ret = client_volume(ctx->client, NULL, ctx, json_integer(+5));
 	break;
 	case KEY_PROG1:
 		dbg("key KEY_PROG1");
@@ -170,7 +171,7 @@ int input_parseevent(input_ctx_t *ctx, const struct input_event *event)
 			json_t *media = json_array_get(ctx->media, i);
 			if (json_is_object(media))
 			{
-				media_change(ctx->client, NULL, ctx, media);
+				ret = media_change(ctx->client, NULL, ctx, media);
 			}
 		}
 	break;
@@ -184,14 +185,14 @@ int input_parseevent(input_ctx_t *ctx, const struct input_event *event)
 			json_t *media = json_array_get(ctx->media, i);
 			if (json_is_object(media))
 			{
-				media_change(ctx->client, NULL, ctx, media);
+				ret = media_change(ctx->client, NULL, ctx, media);
 			}
 		}
 	break;
 	default:
 		dbg("key %d", event->code);
 	}
-	return 0;
+	return ret;
 }
 
 int run_client(void *arg)
@@ -221,13 +222,14 @@ int run_client(void *arg)
 			struct libinput_event_keyboard *event_kb = libinput_event_get_keyboard_event(ievent);
 			if (event_kb)
 			{
-				warn("event %p", event_kb);
 				struct input_event event;
 				event.type = EV_KEY;
 				event.code = libinput_event_keyboard_get_key(event_kb);
 				event.value = libinput_event_keyboard_get_key_state(event_kb);
 
-				input_parseevent(ctx, &event);
+				ret = input_parseevent(ctx, &event);
+				if (ret == -1)
+					break;
 			}
 		}
 		libinput_event_destroy(ievent);
@@ -238,6 +240,7 @@ int run_client(void *arg)
 	ctx->inputfd = open(ctx->input_path, O_RDONLY);
 	while ((ctx->inputfd > 0 && ctx->run))
 	{
+		struct input_event event;
 		fd_set rfds;
 		FD_ZERO(&rfds);
 		FD_SET(ctx->inputfd, &rfds);
@@ -245,15 +248,20 @@ int run_client(void *arg)
 		int ret = select(maxfd + 1, &rfds, NULL, NULL, NULL);
 		if (ret > 0 && FD_ISSET(ctx->inputfd, &rfds))
 		{
-			struct input_event event;
 			ret = read(ctx->inputfd, &event, sizeof(event));
-			input_parseevent(ctx, &event);
+		}
+		if (ret > 0)
+		{
+			ret = input_parseevent(ctx, &event);
+			if (ret == -2)
+				ret = 0;
 		}
 		if (ret < 0)
 			break;
 	}
 	close(ctx->inputfd);
 #endif
+	dbg("end of client");
 	pthread_join(thread, NULL);
 	return 0;
 }

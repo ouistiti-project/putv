@@ -418,15 +418,17 @@ static int _count_media(media_ctx_t *ctx)
 static void *_check_dir(void *arg)
 {
 	media_ctx_t *ctx = (media_ctx_t *)arg;
+	int inotifyfd = ctx->inotifyfd;
 	while (ctx->options & OPTION_INOTIFY)
 	{
 		char buffer[BUF_LEN];
 		int i = 0;
-		int length = read(ctx->inotifyfd, buffer, BUF_LEN);
+		int length = read(inotifyfd, buffer, BUF_LEN);
 
 		if (length < 0)
 		{
 			err("inotify read");
+			break;
 		}
 
 		while (i < length)
@@ -523,9 +525,9 @@ static void media_destroy(media_ctx_t *ctx)
 {
 #ifdef USE_INOTIFY
 	ctx->options &= ~OPTION_INOTIFY;
-	pthread_cancel(ctx->thread);
-	pthread_join(ctx->thread, NULL);
 	inotify_rm_watch(ctx->inotifyfd, ctx->dirfd);
+	close(ctx->inotifyfd);
+	pthread_join(ctx->thread, NULL);
 	close(ctx->inotifyfd);
 #endif
 	if (ctx->root != NULL)

@@ -237,7 +237,7 @@ static int process_cmdline(int argc, char **argv)
 			pid_file = optarg;
 		break;
 		case 'd':
-
+			daemon_mode = 1;
 		break;
 		}
 	}

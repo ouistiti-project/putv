@@ -1080,9 +1080,13 @@ static int jsonrpc_sendevent(cmds_ctx_t *ctx, thread_info_t *info, const char *e
 		int sock = info->sock;
 		cmds_dbg("cmds: send notification %s", message);
 		ret = send(sock, message, length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
-		cmds_dbg("cmds: send %d", ret);
+		dbg("cmds: send notification %d", ret);
 		fsync(sock);
 		json_decref(notification);
+	}
+	else
+	{
+		err("cmds: unkonwn event %s", event);
 	}
 	if (ret < 0)
 		err("cmd: json send error %s", strerror(errno));
@@ -1102,7 +1106,7 @@ static int _jsonrpc_sendresponse(thread_info_t *info, json_t *request)
 		char *buff = json_dumps(response, JSONRPC_DEBUG_FORMAT );
 		cmds_dbg("cmds: send response %s", buff);
 		ret = send(sock, buff, strlen(buff) + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
-		cmds_dbg("cmds: send %d", ret);
+		dbg("cmds: send response %d", ret);
 		fsync(sock);
 		json_decref(response);
 	}
@@ -1155,8 +1159,10 @@ static void *_cmds_json_pthreadsend(void *arg)
 		{
 			json_request_list_t *request = ctx->requests;
 			ctx->requests = ctx->requests->next;
-			if (_jsonrpc_sendresponse(request->info, request->request) < 0)
+			int ret = _jsonrpc_sendresponse(request->info, request->request);
+			if (ret < 0)
 			{
+				err("cmds: sendresponse error %d", ret);
 				_cmds_json_removeinfo(ctx, request->info);
 				free(request);
 				continue;
@@ -1171,8 +1177,10 @@ static void *_cmds_json_pthreadsend(void *arg)
 				while (info)
 				{
 					thread_info_t *next = info->next;
-					if (jsonrpc_sendevent(ctx, info, "onchange") < 0)
+					int ret = jsonrpc_sendevent(ctx, info, "onchange");
+					if (ret < 0)
 					{
+						err("cmds: sendevent error %d", ret);
 						_cmds_json_removeinfo(ctx, info);
 					}
 					info = next;
@@ -1219,7 +1227,7 @@ static int jsonrpc_command(thread_info_t *info)
 	memset(poll_set, 0, sizeof(poll_set));
 	int numfds = 0;
 	poll_set[0].fd = sock;
-	poll_set[0].events = POLLIN;
+	poll_set[0].events = POLLIN | POLLHUP;
 	numfds++;
 	while (run)
 	{
@@ -1231,12 +1239,14 @@ static int jsonrpc_command(thread_info_t *info)
 		if (poll_set[0].revents & POLLHUP)
 		{
 			pthread_mutex_lock(&ctx->mutex);
+			err("cmds: client hangup");
 			_cmds_json_removeinfo(ctx, info);
 			pthread_mutex_unlock(&ctx->mutex);
 			run = 0;
 			break;
 		}
 		cmds_dbg("cmds: recv ready");
+		poll_set[0].revents = 0;
 
 		json_t *request = NULL;
 		json_error_t error;
@@ -1278,6 +1288,7 @@ static cmds_ctx_t *cmds_json_init(player_ctx_t *player, void *arg)
 	ctx->socketpath = (const char *)arg;
 	pthread_cond_init(&ctx->cond, NULL);
 	pthread_mutex_init(&ctx->mutex, NULL);
+	ctx->onchangeid = player_eventlistener(ctx->player, jsonrpc_onchange, (void *)ctx, "jsonrpc");
 	return ctx;
 }
 
@@ -1293,9 +1304,8 @@ static void *_cmds_json_pthreadrecv(void *arg)
 static int cmds_json_run(cmds_ctx_t *ctx, sink_t *sink)
 {
 	ctx->sink = sink;
-	ctx->onchangeid = player_eventlistener(ctx->player, jsonrpc_onchange, (void *)ctx, "jsonrpc");
-	pthread_create(&ctx->threadsend, NULL, _cmds_json_pthreadsend, (void *)ctx);
 	pthread_create(&ctx->threadrecv, NULL, _cmds_json_pthreadrecv, (void *)ctx);
+	pthread_create(&ctx->threadsend, NULL, _cmds_json_pthreadsend, (void *)ctx);
 	return 0;
 }
 

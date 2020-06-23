@@ -251,12 +251,11 @@ static int filter_mixemono(filter_ctx_t *ctx, filter_audio_t *audio, unsigned ch
 		/**
 		 * this is not the good algo to mixe the channels
 		 */
-		long long sample;
+		long long sample = 0;
 		for (j = 0; j < audio->nchannels; j++)
 		{
-			sample += audio->samples[j][i];
+			sample += (audio->samples[j][i] / audio->nchannels);
 		}
-		sample /= audio->nchannels;
 		for (j = 0; j < ctx->nchannels; j++)
 		{
 			if (audio->regain)
@@ -371,6 +370,12 @@ filter_t *filter_build(const char *name, jitter_format_t format, sampled_t sampl
 	if (!strcmp(name, filter_pcm_right->name))
 		filter->ops = filter_pcm_right;
 #endif
-	filter->ctx = filter->ops->init(sampled, format);
+	if (filter->ops != NULL)
+		filter->ctx = filter->ops->init(sampled, format);
+	else
+	{
+		free(filter);
+		filter = NULL;
+	}
 	return filter;
 }

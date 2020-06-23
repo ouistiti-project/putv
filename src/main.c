@@ -54,6 +54,11 @@
  */
 # include <fcntl.h>
 
+/**
+ * process priority
+ */
+#include <sys/resource.h>
+
 #include "player.h"
 #include "encoder.h"
 #include "sink.h"
@@ -116,6 +121,7 @@ void help(const char *name)
 	fprintf(stderr, "%s [-R <websocketdir>][-m <media>][-o <output>][-p <pidfile>]\n", name);
 	fprintf(stderr, "\t...[-f <filtername>][-x][-D][-a][-r][-l][-L <logfile>]\n");
 	fprintf(stderr, "\t...[-d <directory>]\n");
+	fprintf(stderr, "\t...[-P [0-99]]\n");
 }
 
 #define DAEMONIZE 0x01
@@ -126,6 +132,7 @@ void help(const char *name)
 #define KILLDAEMON 0x20
 int main(int argc, char **argv)
 {
+	int priority = 0;
 	const char *mediapath = "file://"DATADIR;
 	const char *outarg = "default";
 	pthread_t thread;
@@ -141,7 +148,7 @@ int main(int argc, char **argv)
 	int opt;
 	do
 	{
-		opt = getopt(argc, argv, "R:m:o:u:p:f:hDKVxalrL:d:");
+		opt = getopt(argc, argv, "R:m:o:u:p:f:hDKVxalrL:d:P:");
 		switch (opt)
 		{
 			case 'R':
@@ -190,6 +197,9 @@ int main(int argc, char **argv)
 			case 'd':
 				cwd = optarg;
 			break;
+			case 'P':
+				priority = strtol(optarg, NULL, 10);
+			break;
 		}
 	} while(opt != -1);
 
@@ -219,6 +229,30 @@ int main(int argc, char **argv)
 
 	if (cwd != NULL)
 		chdir(cwd);
+
+	if (priority > 0)
+	{
+		int gpriority = getpriority(PRIO_PGRP, 0);
+		dbg("main: priority %d", gpriority);
+		gpriority = priority * 40 / 100;
+		gpriority -= 19;
+		dbg("main: priority %d", gpriority);
+		setpriority(PRIO_PGRP, 0, gpriority);
+#ifdef USE_REALTIME
+		int priority_limit;
+		priority_limit = sched_get_priority_max(REALTIME_SCHED);
+		if (priority > priority_limit)
+			priority = priority_limit;
+		priority_limit = sched_get_priority_min(REALTIME_SCHED);
+		if (priority < priority_limit)
+			priority = priority_limit;
+		struct sched_param params;
+		params.sched_priority = priority;
+		dbg("main: priority %d", params.sched_priority);
+		if (sched_setscheduler(0, REALTIME_SCHED, &params))
+			err("schedluder modification error %s", strerror(errno));
+#endif
+	}
 
 	player_ctx_t *player = player_init(filtername);
 	player_change(player, mediapath, ((mode & RANDOM) == RANDOM), ((mode & LOOP) == LOOP), 1);
@@ -335,11 +369,7 @@ int main(int argc, char **argv)
 			cmds[i].ops->run(cmds[i].ctx, sink);
 		}
 	}
-#ifdef USE_REALTIME
-	struct sched_param params;
-	params.sched_priority = 50;
-	sched_setscheduler(0, REALTIME_SCHED, &params);
-#endif
+
 	if (sink == NULL)
 	{
 		err("output not set");

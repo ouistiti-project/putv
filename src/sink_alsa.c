@@ -76,7 +76,6 @@ struct sink_ctx_s
 #ifdef USE_REALTIME
 // REALTIME_SCHED is set from the Makefile to SCHED_RR
 #define SINK_POLICY REALTIME_SCHED
-#define SINK_PRIORITY 65
 #endif
 
 #ifndef ALSA_MIXER
@@ -561,7 +560,11 @@ static int alsa_run(sink_ctx_t *ctx)
 	ret = pthread_attr_setschedpolicy(&attr, SINK_POLICY);
 	if (ret < 0)
 		err("setschedpolicy error %s", strerror(errno));
-	params.sched_priority = SINK_PRIORITY;
+	pthread_attr_setschedparam(&attr, &params);
+	if (params.sched_priority > sched_get_priority_min(SINK_POLICY))
+		params.sched_priority -= 1;
+	else
+		params.sched_priority = sched_get_priority_min(SINK_POLICY);
 	ret = pthread_attr_setschedparam(&attr, &params);
 	if (ret < 0)
 		err("setschedparam error %s", strerror(errno));

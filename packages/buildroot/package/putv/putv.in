@@ -1,14 +1,10 @@
 # putv config.
 
 DAEMON=totem
-MAINDAEMON=${BINDIR}/${DAEMON}
-MEDIA=file:///home/share/Musics/
-WEBSOCKETDIR=${RUNDIR}/websocket
-LOGFILE=/var/run/putv.log
-USER=www-data
+
 case $DAEMON in
   totem)
-    #OUTPUT="card0:format=24le,mixer=Master"
+    OUTPUT="default?format=24le,mixer=Master"
     ;;
   putv)
     OUTPUT="unix://${WEBSOCKETDIR}/totem.mp3"

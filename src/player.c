@@ -466,18 +466,23 @@ int player_run(player_ctx_t *ctx)
 		 * event manager  *
 		 ******************/
 		event_player_state_t event = {.playerctx = ctx, .state = ctx->state};
-		event_listener_t *it = ctx->listeners;
-		while (it != NULL)
-		{
-			dbg("player: event change to %d (%s)", it->id, it->name);
-			it->cb(it->arg, PLAYER_EVENT_CHANGE, &event);
-			it = it->next;
-		}
+		player_sendevent(ctx, PLAYER_EVENT_CHANGE, &event);
 
 		if (last_state != (ctx->state & ~STATE_PAUSE_MASK))
 			pthread_cond_broadcast(&ctx->cond);
 	}
 	return 0;
+}
+
+void player_sendevent(player_ctx_t *ctx, event_t event, void *data)
+{
+	event_listener_t *it = ctx->listeners;
+	while (it != NULL)
+	{
+		dbg("player: event %d to %d (%s)", event, it->id, it->name);
+		it->cb(it->arg, event, data);
+		it = it->next;
+	}
 }
 
 const char *player_filtername(player_ctx_t *ctx)

@@ -359,10 +359,44 @@ output_putv_seek(int64_t position_nanos)
 	return 0;
 }
 
+struct position_s
+{
+	uint32_t position;
+	uint32_t duration;
+};
+
+static int gmrenderer_getposition(void *data, json_t *params)
+{
+	dbg("putv check params %s", json_dumps(params, 0));
+	struct position_s *position = (struct position_s *)data;
+	if (json_is_object(params))
+	{
+		json_t *jduration = json_object_get(params, "duration");
+		if (json_is_integer(jduration))
+		{
+			position->duration = json_integer_value(jduration);
+			json_t *jposition = json_object_get(params, "position");
+			position->position = json_integer_value(jposition);
+
+		}
+		else
+		{
+			position->duration = 0;
+			position->position = 0;
+		}
+	}
+}
+
 static int
 output_putv_get_position(int64_t *track_duration,
 					 int64_t *track_pos)
 {
+	static struct position_s position;
+	client_async(&gmrenderer_ctx->client, 0);
+	client_getposition(&gmrenderer_ctx->client, gmrenderer_getposition, &position);
+	*track_duration = position.duration;
+	*track_pos = position.position;
+	client_async(&gmrenderer_ctx->client, 1);
 	return 0;
 }
 

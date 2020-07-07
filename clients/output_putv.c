@@ -315,9 +315,14 @@ output_putv_set_next_uri(const char *uri)
 	json_t *media = json_object();
 	json_object_set_new(media, "media", json_string(uri));
 	dbg("UPnP: set next uri %s", uri);
-	if (gmrenderer_ctx->media)
-		json_decref(gmrenderer_ctx->media);
-	gmrenderer_ctx->media = media;
+	if (media_insert(&gmrenderer_ctx->client, NULL, NULL, media) < 0)
+	{
+		if (gmrenderer_ctx->media)
+			json_decref(gmrenderer_ctx->media);
+		gmrenderer_ctx->media = media;
+	}
+	else
+		json_decref(media);
 }
 
 static int

@@ -469,6 +469,30 @@ static int method_setnext(json_t *json_params, json_t **result, void *userdata)
 	return ret;
 }
 
+static int method_getposition(json_t *json_params, json_t **result, void *userdata)
+{
+	int ret = -1;
+	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
+	const src_t *src = player_source(ctx->player);
+	decoder_t *decoder = NULL;
+	if (src != NULL)
+	{
+		decoder = src->ops->estream(src->ctx, 0);
+	}
+	if (decoder != NULL)
+	{
+		*result = json_pack("{s:i,s:i}",
+			"position", decoder->ops->position(decoder->ctx),
+			"duration", decoder->ops->duration(decoder->ctx));
+		ret = 0;
+	}
+	else
+	{
+		*result = jsonrpc_error_object_predefined(JSONRPC_INVALID_PARAMS, json_string("player state error"));
+	}
+	return ret;
+}
+
 typedef struct _display_ctx_s _display_ctx_t;
 struct _display_ctx_s
 {
@@ -906,6 +930,21 @@ static int method_capabilities(json_t *json_params, json_t **result, void *userd
 		json_object_set(action, "params", params);
 		json_array_append(actions, action);
 	}
+	const src_t *src = player_source(ctx->player);
+	decoder_t *decoder = NULL;
+	if (src != NULL)
+	{
+		decoder = src->ops->estream(src->ctx, 0);
+	}
+	if (decoder != NULL && decoder->ops->position != NULL)
+	{
+		action = json_object();
+		value = json_string("getposition");
+		json_object_set(action, "method", value);
+		params = json_array();
+		json_object_set(action, "params", params);
+		json_array_append(actions, action);
+	}
 	json_object_set(*result, "actions", actions);
 
 	json_t *input;
@@ -1001,6 +1040,7 @@ static struct jsonrpc_method_entry_t method_table[] = {
 	{ 'n', "onchange", method_onchange, "o" },
 	{ 'r', "options", method_options, "o" },
 	{ 'r', "volume", method_volume, "o" },
+	{ 'r', "getposition", method_getposition, "" },
 	{ 0, NULL },
 };
 

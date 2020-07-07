@@ -53,6 +53,9 @@ struct decoder_ctx_s
 	size_t outbufferlen;
 	filter_t *filter;
 	player_ctx_t *player;
+	uint32_t nsamples;
+	uint32_t position;
+	uint32_t duration;
 };
 #define DECODER_CTX
 #include "decoder.h"
@@ -73,6 +76,8 @@ struct decoder_ctx_s
 #define BUFFERSIZE 9000
 
 #define NBUFFER 4
+
+static void decoder_appendnsamples(decoder_ctx_t *ctx, uint32_t nsamples);
 
 static const char *jitter_name = "flac decoder";
 static decoder_ctx_t *decoder_init(player_ctx_t *player)
@@ -111,7 +116,7 @@ static jitter_t *decoder_jitter(decoder_ctx_t *ctx, jitte_t jitte)
 }
 
 static FLAC__StreamDecoderReadStatus
-input(const FLAC__StreamDecoder *decoder,
+input_cb(const FLAC__StreamDecoder *decoder,
 			FLAC__byte buffer[], size_t *bytes,
 			void *data)
 {
@@ -137,7 +142,7 @@ input(const FLAC__StreamDecoder *decoder,
 }
 
 static FLAC__StreamDecoderWriteStatus
-output(const FLAC__StreamDecoder *decoder,
+output_cb(const FLAC__StreamDecoder *decoder,
 	const FLAC__Frame *frame, const FLAC__int32 * const buffer[],
 	void *data)
 {
@@ -192,6 +197,12 @@ output(const FLAC__StreamDecoder *decoder,
 			ctx->filter->ops->run(ctx->filter->ctx, &audio,
 				ctx->outbuffer + ctx->outbufferlen,
 				ctx->out->ctx->size - ctx->outbufferlen);
+		if (ctx->nsamples == ctx->samplerate)
+		{
+			ctx->position++;
+			ctx->nsamples = 0;
+		}
+
 		ctx->outbufferlen += len;
 		if (ctx->outbufferlen >= ctx->out->ctx->size)
 		{
@@ -204,15 +215,21 @@ output(const FLAC__StreamDecoder *decoder,
 	return FLAC__STREAM_DECODER_WRITE_STATUS_CONTINUE;
 }
 
+static FLAC__StreamDecoderLengthStatus
+length_cb(const FLAC__StreamDecoder *decoder, FLAC__uint64 *stream_length, void *client_data)
+{
+	return FLAC__STREAM_DECODER_LENGTH_STATUS_UNSUPPORTED;
+}
+
 static void
-metadata(const FLAC__StreamDecoder *decoder,
+metadata_cb(const FLAC__StreamDecoder *decoder,
 	const FLAC__StreamMetadata *metadata,
 	void *data)
 {
 }
 
 static void
-error(const FLAC__StreamDecoder *decoder,
+error_cb(const FLAC__StreamDecoder *decoder,
 	FLAC__StreamDecoderErrorStatus status,
 	void *data)
 {
@@ -256,14 +273,14 @@ static int decoder_prepare(decoder_ctx_t *ctx)
 	FLAC__stream_decoder_set_metadata_ignore(ctx->decoder, FLAC__METADATA_TYPE_CUESHEET);
 	FLAC__stream_decoder_set_metadata_ignore(ctx->decoder, FLAC__METADATA_TYPE_PICTURE);
 	ret = FLAC__stream_decoder_init_stream(ctx->decoder,
-		input,
+		input_cb,
 		NULL,
 		NULL,
+		length_cb,
 		NULL,
-		NULL,
-		output,
-		metadata,
-		error,
+		output_cb,
+		metadata_cb,
+		error_cb,
 		ctx);
 	if (ret == FLAC__STREAM_DECODER_INIT_STATUS_OK)
 	{
@@ -292,6 +309,16 @@ static const char *decoder_mime(decoder_ctx_t *ctx)
 	return mime_audioflac;
 }
 
+static uint32_t decoder_position(decoder_ctx_t *ctx)
+{
+	return ctx->position;
+}
+
+static uint32_t decoder_duration(decoder_ctx_t *ctx)
+{
+	return ctx->duration;
+}
+
 static void decoder_destroy(decoder_ctx_t *ctx)
 {
 	if (ctx->out)
@@ -311,11 +338,14 @@ static void decoder_destroy(decoder_ctx_t *ctx)
 
 const decoder_ops_t *decoder_flac = &(decoder_ops_t)
 {
+	.name = "flac" ,
 	.check = decoder_check,
 	.init = decoder_init,
 	.jitter = decoder_jitter,
 	.prepare = decoder_prepare,
 	.run = decoder_run,
 	.mime = decoder_mime,
+	.position = decoder_position,
+	.duration = decoder_duration,
 	.destroy = decoder_destroy,
 };

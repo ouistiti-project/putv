@@ -392,11 +392,34 @@ output_putv_setmute(int value)
 	return 0;
 }
 
+static int output_putv_add_options(int *argc, char **argv[])
+{
+	if (*argc < 2)
+	return 0;
+	int opt;
+	do
+	{
+		opt = getopt(*argc, *argv, "R:n:");
+		switch (opt)
+		{
+		case 'R':
+			gmrenderer_ctx->root = optarg;
+		break;
+		case 'n':
+			gmrenderer_ctx->name = optarg;
+		break;
+		default:
+		break;
+		}
+	} while(opt != -1);
 
-const struct output_module putv_output = {
+	return 0;
+}
+
+struct output_module putv_output = {
     .shortname = "putv",
 	.description = "putv framework",
-	.add_goptions = NULL,
+	.add_options = output_putv_add_options,
 	.init        = output_putv_init,
 	.loop        = output_putv_loop,
 	.set_uri     = output_putv_set_uri,

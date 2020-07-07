@@ -14,6 +14,7 @@ typedef enum event_e
 	SRC_EVENT_DECODE_ES,
 	SRC_EVENT_END_ES,
 	PLAYER_EVENT_CHANGE = 10,
+	PLAYER_EVENT_POSITION,
 } event_t;
 typedef struct event_new_es_s event_new_es_t;
 struct event_new_es_s
@@ -39,6 +40,14 @@ struct event_player_state_s
 {
 	const player_ctx_t *playerctx;
 	int state;
+};
+
+typedef struct event_player_position_s event_player_position_t;
+struct event_player_position_s
+{
+	const player_ctx_t *playerctx;
+	uint32_t position;
+	uint32_t duration;
 };
 
 typedef void (*event_listener_cb_t)(void *arg, event_t event, void *data);

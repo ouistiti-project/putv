@@ -467,9 +467,17 @@ struct output_module putv_output = {
 	.set_volume  = output_putv_setvolume,
 	.get_mute  = output_putv_getmute,
 	.set_mute  = output_putv_setmute,
+	.next = NULL,
 };
 
 const struct output_module *get_module()
 {
 	return &putv_output;
+}
+
+void output_putv_initlib(void) __attribute__((constructor));
+
+void output_putv_initlib(void)
+{
+	output_append_module(&putv_output);
 }

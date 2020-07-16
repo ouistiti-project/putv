@@ -304,6 +304,12 @@ static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *arg)
 	media_dirlist_t *dir = NULL;
 	_find_mediaid_t mdata = {id, cb, arg};
 	ret = _find(ctx, 0, &dir, &mediaid, _find_mediaid, &mdata);
+	if (!(ctx->options & OPTION_RANDOM))
+	{
+		_free_medialist(ctx->current, 0);
+		ctx->current = dir;
+		ctx->mediaid = mediaid;
+	}
 	return ret? 0:1;
 }
 

@@ -697,8 +697,15 @@ static int method_options(json_t *json_params, json_t **result, void *userdata)
 			int state = json_boolean_value(value);
 			if (media->ops->random)
 			{
-				media->ops->random(media->ctx, state);
+				state = media->ops->random(media->ctx, state);
 				ret = 0;
+				if (state == OPTION_DISABLE && media->ops->find != NULL)
+				{
+					int id = player_mediaid(ctx->player);
+					id += 1;
+					ret = media->ops->find(media->ctx, id, player_play, ctx->player);
+					ret -= 1;
+				}
 			}
 			else
 			{

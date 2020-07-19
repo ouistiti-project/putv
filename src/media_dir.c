@@ -361,7 +361,6 @@ static int media_next(media_ctx_t *ctx)
 	{
 		if (ctx->count < ctx->mediaid)
 			ctx->count = ctx->mediaid;
-		ctx->mediaid = -1;
 		if (ctx->current)
 		{
 			ctx->current = _free_medialist(ctx->current, 0);
@@ -373,6 +372,8 @@ static int media_next(media_ctx_t *ctx)
 		{
 			media_next(ctx);
 		}
+		else
+			ctx->mediaid = -1;
 	}
 	return ctx->mediaid;
 }
@@ -401,7 +402,13 @@ static option_state_t media_random(media_ctx_t *ctx, option_state_t enable)
 	if (enable == OPTION_ENABLE)
 		ctx->options |= OPTION_RANDOM;
 	else if (enable == OPTION_DISABLE)
+	{
 		ctx->options &= ~OPTION_RANDOM;
+		if (ctx->mediaid != -1)
+			ctx->firstmediaid = ctx->mediaid;
+		else
+			ctx->firstmediaid = 0;
+	}
 	return (ctx->options & OPTION_RANDOM)? OPTION_ENABLE: OPTION_DISABLE;
 }
 

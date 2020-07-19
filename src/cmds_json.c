@@ -536,7 +536,7 @@ static int _display(void *arg, int id, const char *url, const char *info, const 
 
 	if (json_is_array(result))
 		json_array_append_new(result, object);
-	return 1;
+	return 0;
 }
 
 static int method_change(json_t *json_params, json_t **result, void *userdata)

@@ -176,6 +176,8 @@ static int _find_display(void *arg, media_ctx_t *ctx, int mediaid, const char *p
 
 static int _find_count(void *arg, media_ctx_t *ctx, int mediaid, const char *path, const char *mime)
 {
+	_find_mediaid_t *mdata = (_find_mediaid_t *)arg;
+	_run_cb(mdata, mediaid, path, mime);
 	return 1;
 }
 
@@ -322,7 +324,7 @@ static int media_list(media_ctx_t *ctx, media_parse_t cb, void *arg)
 	int mediaid = 0;
 	media_dirlist_t *dir = NULL;
 	_find_mediaid_t mdata = {-1, cb, arg};
-	ret = _find(ctx, 0, &dir, &mediaid, _find_mediaid, &mdata);
+	ret = _find(ctx, 0, &dir, &mediaid, _find_count, &mdata);
 	return ret;
 }
 

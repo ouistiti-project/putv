@@ -62,6 +62,7 @@ struct media_ctx_s
 	pthread_t thread;
 	media_dirlist_t *first;
 	media_dirlist_t *current;
+	pthread_mutex_t mutex;
 };
 
 struct media_dirlist_s
@@ -306,8 +307,10 @@ static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *arg)
 	ret = _find(ctx, 0, &dir, &mediaid, _find_mediaid, &mdata);
 	if (!(ctx->options & OPTION_RANDOM))
 	{
+		pthread_mutex_lock(&ctx->mutex);
 		_free_medialist(ctx->current, 0);
 		ctx->current = dir;
+		pthread_mutex_unlock(&ctx->mutex);
 		ctx->mediaid = mediaid;
 	}
 	return ret? 0:1;
@@ -339,6 +342,7 @@ static int media_next(media_ctx_t *ctx)
 {
 	int ret;
 
+	pthread_mutex_lock(&ctx->mutex);
 	if (ctx->options & OPTION_RANDOM)
 	{
 		ctx->mediaid = (random() % (ctx->count - 1));
@@ -352,9 +356,16 @@ static int media_next(media_ctx_t *ctx)
 	}
 	else
 	{
-		_find_mediaid_t data = {ctx->mediaid + 1, NULL, NULL};
+		int id;
+		media_t *media = player_media(ctx->player);
+		if (media->ctx != ctx)
+			id = -1;
+		else
+			id = player_mediaid(ctx->player);
+		_find_mediaid_t data = {id + 1, NULL, NULL};
 		ret = _find(ctx, 0, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
 	}
+	pthread_mutex_unlock(&ctx->mutex);
 	if (ctx->firstmediaid == -1)
 		ctx->firstmediaid = ctx->mediaid;
 	if (ret != 0)
@@ -518,6 +529,7 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url,...)
 		ctx->root = path;
 		ctx->mediaid = -1;
 		ctx->firstmediaid = 0;
+		pthread_mutex_init(&ctx->mutex, NULL);
 		_count_media(ctx);
 
 #ifdef USE_INOTIFY
@@ -543,6 +555,8 @@ static void media_destroy(media_ctx_t *ctx)
 	pthread_join(ctx->thread, NULL);
 	close(ctx->inotifyfd);
 #endif
+	_free_medialist(ctx->current, 0);
+	pthread_mutex_destroy(&ctx->mutex);
 	if (ctx->root != NULL)
 		free(ctx->root);
 	free(ctx);

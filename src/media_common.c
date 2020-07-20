@@ -677,7 +677,7 @@ char *media_fillinfo(const char *url, const char *mime)
 #else
 	info = json_dumps(object, 0);
 #endif
-	dbg("media info: %s", info);
+	//dbg("media info: %s", info);
 	json_decref(object);
 	return info;
 }

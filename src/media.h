@@ -11,6 +11,7 @@ extern const char const *mime_audiomp3;
 extern const char const *mime_audioflac;
 extern const char const *mime_audioalac;
 extern const char const *mime_audiopcm;
+extern const char const *mime_directory;
 
 extern const char const *str_title;
 extern const char const *str_artist;

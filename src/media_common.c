@@ -66,6 +66,7 @@ const char const *mime_audiomp3 = "audio/mp3";
 const char const *mime_audioflac = "audio/flac";
 const char const *mime_audioalac = "audio/alac";
 const char const *mime_audiopcm = "audio/pcm";
+const char const *mime_directory = "inode/directory";
 
 const char const *str_title = "title";
 const char const *str_artist = "artist";
@@ -110,6 +111,9 @@ const char *utils_getmime(const char *path)
 	if (!decoder_passthrough->check(path))
 		return decoder_passthrough->mime(NULL);
 #endif
+	struct stat statinfo;
+	if (stat(path, &statinfo) == 0 && S_ISDIR(statinfo.st_mode))
+		return mime_directory;
 	return mime_octetstream;
 }
 

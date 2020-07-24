@@ -580,7 +580,7 @@ static int method_change(json_t *json_params, json_t **result, void *userdata)
 			{
 				ret = media->ops->insert(media->ctx, str, "", NULL);
 			}
-			else
+			if (ret == -1)
 			{
 				ret = player_change(ctx->player, str, random, loop, now);
 			}

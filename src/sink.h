@@ -15,6 +15,7 @@ struct sink_ops_s
 	jitter_t *(*jitter)(sink_ctx_t *, int index);
 	int (*run)(sink_ctx_t *);
 	void (*destroy)(sink_ctx_t *);
+	const char *(*service)(sink_ctx_t *, int *port, const char **txt[]);
 
 	/**
 	 * control API

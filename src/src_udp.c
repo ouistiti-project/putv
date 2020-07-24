@@ -54,6 +54,8 @@ struct src_ctx_s
 	pthread_t thread;
 	jitter_t *out;
 	unsigned int samplerate;
+	char *host;
+	int port;
 	struct sockaddr_in saddr;
 	struct sockaddr_in6 saddr6;
 	struct sockaddr *addr;
@@ -95,36 +97,10 @@ struct src_ctx_s
  * The feature is alway possible to remember that is not a good solution.
  */
 static const char *jitter_name = "udp socket";
-static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mime)
+
+static int src_connect(src_ctx_t *ctx, const char *host, int iport)
 {
 	int count = 2;
-
-	char *protocol = NULL;
-	char *host = NULL;
-	char *port = NULL;
-	char *path = NULL;
-	char *search = NULL;
-
-	char *value = utils_parseurl(url, &protocol, &host, &port, &path, &search);
-
-	int iport = 4400;
-	if (port != NULL)
-		iport = atoi(port);
-
-	if (search != NULL)
-	{
-		mime = strstr(search, "mime=");
-		if (mime != NULL)
-		{
-			mime += 5;
-		}
-	}
-
-	if (protocol == NULL)
-		return NULL;
-	demux_t *demux = demux_build(player, protocol, mime);
-	if (demux == NULL)
-		return NULL;
 
 	int ret;
 	int af = AF_INET;
@@ -143,7 +119,7 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 	if (sock == 0)
 	{
 		err("src: udp socket error");
-		return NULL;
+		return -1;
 	}
 
 	struct sockaddr *addr = NULL;
@@ -178,6 +154,7 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 	else
 	{
 		err("src: bind error %s", strerror(errno));
+		goto err;
 	}
 
 	if ((ret == 0) && (af == AF_INET) && IN_MULTICAST(htonl(inaddr)))
@@ -191,7 +168,10 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 		ret = setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP,
 			(const void *)&imreq, sizeof(imreq));
 		if (ret < 0)
+		{
 			err("src: multicast route missing on the interface");
+			goto err;
+		}
 	}
 	else if ((ret == 0) && (af == AF_INET6) && IN6_IS_ADDR_MULTICAST(&in6addr))
 	{
@@ -203,48 +183,86 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 		// JOIN multicast group on default interface
 		ret = setsockopt(sock, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP,
 			(const void *)&imreq, sizeof(imreq));
+		if (ret < 0)
+		{
+			err("src: multicast route missing on the interface");
+			goto err;
+		}
 	}
+
+	if (af == AF_INET)
+	{
+		memset(&ctx->saddr, 0, sizeof(ctx->saddr));
+		ctx->saddr.sin_family = PF_INET;
+		ctx->saddr.sin_addr.s_addr = inaddr;
+		ctx->saddr.sin_port = htons(iport);
+		ctx->addr = (struct sockaddr*)&ctx->saddr;
+		ctx->addrlen = sizeof(ctx->saddr);
+	}
+	else
+	{
+		memset(&ctx->saddr6, 0, sizeof(ctx->saddr6));
+		ctx->saddr6.sin6_family = PF_INET6;
+		memcpy(&ctx->saddr6.sin6_addr, &in6addr, sizeof(struct in6_addr));
+		ctx->saddr6.sin6_port = htons(iport);
+		ctx->addr = (struct sockaddr*)&ctx->saddr6;
+		ctx->addrlen = sizeof(ctx->saddr6);
+	}
+	return sock;
+err:
+	close(sock);
+	return -1;
+}
+
+static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mime)
+{
+	char *protocol = NULL;
+	char *host = NULL;
+	char *port = NULL;
+	char *path = NULL;
+	char *search = NULL;
+
+	char *value = utils_parseurl(url, &protocol, &host, &port, &path, &search);
+
+	int iport = 4400;
+	if (port != NULL)
+		iport = atoi(port);
+
+	if (search != NULL)
+	{
+		mime = strstr(search, "mime=");
+		if (mime != NULL)
+		{
+			mime += 5;
+		}
+	}
+
+	if (protocol == NULL)
+		return NULL;
+
+	demux_t *demux = demux_build(player, protocol, mime);
+	if (demux == NULL)
+		return NULL;
 
 	src_ctx_t *ctx = NULL;
-	if (ret == 0)
+	ctx = calloc(1, sizeof(*ctx));
+
+	ctx->player = player;
+	if (host != NULL)
 	{
-		ctx = calloc(1, sizeof(*ctx));
-
-		if (af == AF_INET)
-		{
-			memset(&ctx->saddr, 0, sizeof(ctx->saddr));
-			ctx->saddr.sin_family = PF_INET;
-			ctx->saddr.sin_addr.s_addr = inaddr;
-			ctx->saddr.sin_port = htons(iport);
-			ctx->addr = (struct sockaddr*)&ctx->saddr;
-			ctx->addrlen = sizeof(ctx->saddr);
-		}
-		else
-		{
-			memset(&ctx->saddr6, 0, sizeof(ctx->saddr6));
-			ctx->saddr6.sin6_family = PF_INET6;
-			memcpy(&ctx->saddr6.sin6_addr, &in6addr, sizeof(struct in6_addr));
-			ctx->saddr6.sin6_port = htons(iport);
-			ctx->addr = (struct sockaddr*)&ctx->saddr6;
-			ctx->addrlen = sizeof(ctx->saddr6);
-		}
-
-		ctx->player = player;
+		int sock = src_connect(ctx, host, iport);
 		ctx->sock = sock;
+		ctx->host = strdup(host);
+		ctx->port = iport;
+	}
 #ifdef DEMUX_PASSTHROUGH
-		ctx->demux = demux;
+	ctx->demux = demux;
 #endif
-		ctx->mime = utils_mime2mime(mime);
+	ctx->mime = utils_mime2mime(mime);
 #ifdef UDP_DUMP
-		ctx->dumpfd = open("udp_dump.stream", O_RDWR | O_CREAT, 0644);
+	ctx->dumpfd = open("udp_dump.stream", O_RDWR | O_CREAT, 0644);
 #endif
-		dbg("src: %s", src_udp->name);
-	}
-	if (ctx == NULL)
-	{
-		err("src: udp error %s", strerror(errno));
-		close(sock);
-	}
+	dbg("src: %s", src_udp->name);
 
 	free(value);
 	return ctx;
@@ -308,7 +326,6 @@ static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 	return ret;
 }
 
-#ifdef UDP_THREAD
 static void *src_thread(void *arg)
 {
 	src_ctx_t *ctx = (src_ctx_t *)arg;
@@ -355,9 +372,8 @@ static void *src_thread(void *arg)
 #endif
 	return NULL;
 }
-#endif
 
-static int src_run(src_ctx_t *ctx)
+static int src_wait(src_ctx_t *ctx)
 {
 #ifdef DEMUX_PASSTHROUGH
 	ctx->out = ctx->demux->ops->jitter(ctx->demux->ctx, JITTE_HIGH);
@@ -376,7 +392,11 @@ static int src_run(src_ctx_t *ctx)
 		listener = listener->next;
 	}
 #endif
-#ifdef UDP_THREAD
+	return 0;
+}
+
+static int src_start(src_ctx_t *ctx)
+{
 #ifdef USE_REALTIME
 	int ret;
 
@@ -412,7 +432,14 @@ static int src_run(src_ctx_t *ctx)
 #else
 	pthread_create(&ctx->thread, NULL, src_thread, ctx);
 #endif
-#endif
+	return 0;
+}
+
+static int src_run(src_ctx_t *ctx)
+{
+	src_wait(ctx);
+	if (ctx->sock > 0)
+		src_start(ctx);
 	return 0;
 }
 
@@ -499,6 +526,7 @@ static void src_destroy(src_ctx_t *ctx)
 		close(ctx->dumpfd);
 #endif
 	close(ctx->sock);
+	free(ctx->host);
 	free(ctx);
 }
 

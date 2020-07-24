@@ -38,7 +38,7 @@ struct event_decode_es_s
 typedef struct event_player_state_s event_player_state_t;
 struct event_player_state_s
 {
-	const player_ctx_t *playerctx;
+	player_ctx_t *playerctx;
 	int state;
 };
 

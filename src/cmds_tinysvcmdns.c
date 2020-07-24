@@ -214,6 +214,24 @@ static cmds_ctx_t *cmds_tinysvcmdns_init(player_ctx_t *player, void *arg)
 	return ctx;
 }
 
+static void tinysvcmdns_onchange(void * userctx, event_t event, void *eventarg)
+{
+	cmds_ctx_t *ctx = (cmds_ctx_t *)userctx;
+
+	switch (event)
+	{
+		case PLAYER_EVENT_CHANGE:
+		{
+			event_player_state_t *data = (event_player_state_t *)eventarg;
+			src_t *src = player_source(data->playerctx);
+			if (src != NULL && src->ops->mdns != NULL)
+			{
+			}
+		}
+		break;
+	}
+}
+
 static int cmds_tinysvcmdns_run(cmds_ctx_t *ctx, sink_t *sink)
 {
 	if (sink->ops->service != NULL)
@@ -227,6 +245,8 @@ static int cmds_tinysvcmdns_run(cmds_ctx_t *ctx, sink_t *sink)
 									service, port, NULL, txt);
 		ctx->svc[1] = svc;
 	}
+	ctx->onchangeid = player_eventlistener(ctx->player,
+			tinysvcmdns_onchange, (void *)ctx, "tinysvcmdns");
 
 	return 0;
 }

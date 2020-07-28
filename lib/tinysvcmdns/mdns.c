@@ -47,7 +47,6 @@
 // 75 minutes for everything else.
 // https://tools.ietf.org/html/rfc6762
 
-#define DEFAULT_TTL_FOR_RECORD_WITH_HOSTNAME 120
 #define DEFAULT_TTL 4500
 
 struct name_comp {
@@ -884,7 +883,7 @@ static size_t mdns_encode_rr(uint8_t *pkt_buf, size_t pkt_len, size_t off,
 	size_t l;
 	struct rr_data_txt *txt_rec;
 	uint8_t *label;
-	int i;
+	unsigned int i;
 
 	assert(off < pkt_len);
 
@@ -979,7 +978,7 @@ size_t mdns_encode_pkt(struct mdns_pkt *answer, uint8_t *pkt_buf, size_t pkt_len
 	uint8_t *p = pkt_buf;
 	//uint8_t *e = pkt_buf + pkt_len;
 	size_t off;
-	int i;
+	unsigned int i;
 
 	assert(answer != NULL);
 	assert(pkt_len >= 12);

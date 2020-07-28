@@ -426,7 +426,8 @@ static void main_loop(struct mdnsd *svr) {
 		max_fd = svr->notify_pipe[0];
 
 	struct mdns_pkt *mdns_reply = malloc(sizeof(struct mdns_pkt));
-	memset(mdns_reply, 0, sizeof(struct mdns_pkt));
+	if (mdns_reply)
+		memset(mdns_reply, 0, sizeof(struct mdns_pkt));
 
 	while (! svr->stop_flag) {
 		FD_ZERO(&sockfd_set);
@@ -530,6 +531,7 @@ void mdnsd_set_hostname(struct mdnsd *svr, const char *hostname, uint32_t ip) {
 	a_e = rr_create_a(create_nlabel(hostname), ip);
 
 	nsec_e = rr_create(create_nlabel(hostname), RR_NSEC);
+	nsec_e->ttl = DEFAULT_TTL_FOR_RECORD_WITH_HOSTNAME; // set to 120 seconds (default is 4500)
 	rr_set_nsec(nsec_e, RR_A);
 
 	pthread_mutex_lock(&svr->data_lock);

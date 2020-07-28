@@ -618,6 +618,7 @@ static int method_onchange(json_t *json_params, json_t **result, void *userdata)
 		.ctx = ctx,
 		.result = json_object(),
 	};
+
 	int id = player_mediaid(ctx->player);
 	ret = media->ops->find(media->ctx, id, _display, &display);
 	if (ret == 1)
@@ -1201,9 +1202,11 @@ static void *_cmds_json_pthreadsend(void *arg)
 		while (ctx->requests == NULL && ctx->eventsmask == 0)
 		{
 			pthread_cond_wait(&ctx->cond, &ctx->mutex);
+			cmds_dbg("cmds: send new message");
 		}
 		while (ctx->requests != NULL)
 		{
+			cmds_dbg("cmds: send request");
 			json_request_list_t *request = ctx->requests;
 			ctx->requests = ctx->requests->next;
 			int ret = _jsonrpc_sendresponse(request->info, request->request);
@@ -1218,6 +1221,7 @@ static void *_cmds_json_pthreadsend(void *arg)
 		}
 		while (ctx->eventsmask != 0)
 		{
+			cmds_dbg("cmds: send event");
 			if ((ctx->eventsmask & ONCHANGE) == ONCHANGE)
 			{
 				thread_info_t *info = ctx->info;

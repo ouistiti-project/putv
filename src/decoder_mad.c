@@ -297,6 +297,7 @@ enum mad_flow header(void *data, struct mad_header const *header)
 
 static const char *jitter_name = "mad decoder";
 
+#if 0
 static void _decoder_listener(void *arg, const src_t *src, event_t event, void *eventarg)
 {
 	decoder_ctx_t *ctx = (decoder_ctx_t *)arg;
@@ -310,6 +311,7 @@ static void _decoder_listener(void *arg, const src_t *src, event_t event, void *
 		break;
 	}
 }
+#endif
 
 static decoder_ctx_t *_decoder_init(player_ctx_t *player)
 {
@@ -410,8 +412,8 @@ static int _decoder_check(const char *path)
 {
 	char *ext = strrchr(path, '.');
 	if (ext)
-		return strcmp(ext, ".mp3");
-	return -1;
+		return !strcmp(ext, ".mp3");
+	return 0;
 }
 
 static const char *_decoder_mime(decoder_ctx_t *ctx)

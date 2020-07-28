@@ -77,13 +77,13 @@ static int _decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 static int _decoder_check(const char *path)
 {
 	if (!strncmp(path, "pcm://", 6))
-		return 0;
+		return 1;
 	char *ext = strrchr(path, '.');
 	if (ext && !strcmp(ext, ".wav"))
-		return 0;
+		return 1;
 	if (ext && !strcmp(ext, ".pcm"))
-		return 0;
-	return 1;
+		return 1;
+	return 0;
 }
 
 static const char *_decoder_mime(decoder_ctx_t *ctx)

@@ -258,8 +258,8 @@ static int _decoder_check(const char *path)
 {
 	char *ext = strrchr(path, '.');
 	if (ext)
-		return strcmp(ext, ".flac");
-	return -1;
+		return !strcmp(ext, ".flac");
+	return 0;
 }
 
 static int _decoder_prepare(decoder_ctx_t *ctx)

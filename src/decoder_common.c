@@ -25,6 +25,7 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *****************************************************************************/
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -51,15 +52,19 @@ static const decoder_ops_t * decoderslist [10];
 decoder_t *decoder_build(player_ctx_t *player, const char *mime)
 {
 	decoder_t *decoder = NULL;
-	const decoder_ops_t *ops = decoderslist[0];
 	decoder_ctx_t *ctx = NULL;
+	const decoder_ops_t *ops = NULL;
+	int i = 0;
 	if (mime)
 	{
-		while (ops != NULL)
+		while (decoderslist[i] != NULL)
 		{
-			if (!strcmp(mime, ops->mime(NULL)))
+			if (!strcmp(mime, decoderslist[i]->mime(NULL)))
+			{
+				ops = decoderslist[i];
 				break;
-			ops++;
+			}
+			i++;
 		}
 	}
 
@@ -77,16 +82,48 @@ decoder_t *decoder_build(player_ctx_t *player, const char *mime)
 	return decoder;
 }
 
+const char *decoder_mimelist(int first)
+{
+	const char *mime = NULL;
+	static int i = 0;
+	if (first)
+		i = 0;
+	if (decoderslist[i] != NULL)
+	{
+		mime = decoderslist[i]->mime(NULL);
+		i++;
+	}
+	else
+		i = 0;
+	return mime;
+}
+
+const decoder_ops_t *decoder_check(const char *path)
+{
+	int i = 0;
+	const decoder_ops_t *ops = decoderslist[i];
+	while (ops != NULL)
+	{
+		if (ops->check(path))
+			break;
+		i++;
+		ops = decoderslist[i];
+	}
+	return ops;
+}
+
 static void _decoder_init(void) __attribute__((constructor));
 
 static void _decoder_init(void)
 {
 	const decoder_ops_t *decoders[] = {
+#ifndef DECODER_MODULES
 #ifdef DECODER_MAD
 		decoder_mad,
 #endif
 #ifdef DECODER_FLAC
 		decoder_flac,
+#endif
 #endif
 #ifdef DECODER_PASSTHROUGH
 		decoder_passthrough,
@@ -94,11 +131,10 @@ static void _decoder_init(void)
 		NULL
 	};
 
-	const decoder_ops_t *ops = decoders[0];
 	int i;
-	for (i = 0; i < 10 && ops != NULL; i++)
+	for (i = 0; i < 10 && decoders[i] != NULL; i++)
 	{
-		decoderslist[i] = ops;
-		ops ++;
+		decoderslist[i] = decoders[i];
 	}
+
 }

@@ -541,6 +541,26 @@ void mdnsd_set_hostname(struct mdnsd *svr, const char *hostname, uint32_t ip) {
 	pthread_mutex_unlock(&svr->data_lock);
 }
 
+void mdnsd_set_hostname_v6(struct mdnsd *svr, const char *hostname, struct in6_addr *addr) {
+	struct rr_entry *aaaa_e = NULL, *nsec_e = NULL;
+
+	// currently can't be called twice
+	// dont ask me what happens if the IP changes
+	assert(svr->hostname == NULL);
+
+	aaaa_e = rr_create_aaaa(create_nlabel(hostname), addr); // 120 seconds automatically
+
+	nsec_e = rr_create(create_nlabel(hostname), RR_NSEC);
+	nsec_e->ttl = DEFAULT_TTL_FOR_RECORD_WITH_HOSTNAME; // set to 120 seconds (default is 4500)
+	rr_set_nsec(nsec_e, RR_AAAA);
+
+	pthread_mutex_lock(&svr->data_lock);
+	svr->hostname = create_nlabel(hostname);
+	rr_group_add(&svr->group, aaaa_e);
+	rr_group_add(&svr->group, nsec_e);
+	pthread_mutex_unlock(&svr->data_lock);
+}
+
 void mdnsd_add_rr(struct mdnsd *svr, struct rr_entry *rr) {
 	pthread_mutex_lock(&svr->data_lock);
 	rr_group_add(&svr->group, rr);

@@ -46,29 +46,22 @@
 
 #define decoder_dbg(...)
 
+static const decoder_ops_t * decoderslist [10];
+
 decoder_t *decoder_build(player_ctx_t *player, const char *mime)
 {
 	decoder_t *decoder = NULL;
-	const decoder_ops_t *ops = NULL;
+	const decoder_ops_t *ops = decoderslist[0];
 	decoder_ctx_t *ctx = NULL;
-#ifdef DECODER_MAD
-	if (mime && !strcmp(mime, decoder_mad->mime(NULL)))
+	if (mime)
 	{
-		ops = decoder_mad;
+		while (ops != NULL)
+		{
+			if (!strcmp(mime, ops->mime(NULL)))
+				break;
+			ops++;
+		}
 	}
-#endif
-#ifdef DECODER_FLAC
-	if (mime && !strcmp(mime, decoder_flac->mime(NULL)))
-	{
-		ops = decoder_flac;
-	}
-#endif
-#ifdef DECODER_PASSTHROUGH
-	if (mime && !strcmp(mime, decoder_passthrough->mime(NULL)))
-	{
-		ops = decoder_passthrough;
-	}
-#endif
 
 	if (ops != NULL)
 	{
@@ -82,4 +75,30 @@ decoder_t *decoder_build(player_ctx_t *player, const char *mime)
 		decoder->ctx = ctx;
 	}
 	return decoder;
+}
+
+static void _decoder_init(void) __attribute__((constructor));
+
+static void _decoder_init(void)
+{
+	const decoder_ops_t *decoders[] = {
+#ifdef DECODER_MAD
+		decoder_mad,
+#endif
+#ifdef DECODER_FLAC
+		decoder_flac,
+#endif
+#ifdef DECODER_PASSTHROUGH
+		decoder_passthrough,
+#endif
+		NULL
+	};
+
+	const decoder_ops_t *ops = decoders[0];
+	int i;
+	for (i = 0; i < 10 && ops != NULL; i++)
+	{
+		decoderslist[i] = ops;
+		ops ++;
+	}
 }

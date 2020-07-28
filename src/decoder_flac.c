@@ -77,10 +77,8 @@ struct decoder_ctx_s
 
 #define NBUFFER 4
 
-static void decoder_appendnsamples(decoder_ctx_t *ctx, uint32_t nsamples);
-
 static const char *jitter_name = "flac decoder";
-static decoder_ctx_t *decoder_init(player_ctx_t *player)
+static decoder_ctx_t *_decoder_init(player_ctx_t *player)
 {
 	decoder_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->ops = decoder_flac;
@@ -101,7 +99,7 @@ static decoder_ctx_t *decoder_init(player_ctx_t *player)
 	return ctx;
 }
 
-static jitter_t *decoder_jitter(decoder_ctx_t *ctx, jitte_t jitte)
+static jitter_t *_decoder_jitter(decoder_ctx_t *ctx, jitte_t jitte)
 {
 	if (ctx->in == NULL)
 	{
@@ -235,7 +233,7 @@ error_cb(const FLAC__StreamDecoder *decoder,
 {
 }
 
-static void *decoder_thread(void *arg)
+static void *_decoder_thread(void *arg)
 {
 	int result = 0;
 	decoder_ctx_t *ctx = (decoder_ctx_t *)arg;
@@ -256,7 +254,7 @@ static void *decoder_thread(void *arg)
 	return (void *)(intptr_t)result;
 }
 
-static int decoder_check(const char *path)
+static int _decoder_check(const char *path)
 {
 	char *ext = strrchr(path, '.');
 	if (ext)
@@ -264,7 +262,7 @@ static int decoder_check(const char *path)
 	return -1;
 }
 
-static int decoder_prepare(decoder_ctx_t *ctx)
+static int _decoder_prepare(decoder_ctx_t *ctx)
 {
 	decoder_dbg("decoder: prepare");
 	int ret;
@@ -289,7 +287,7 @@ static int decoder_prepare(decoder_ctx_t *ctx)
 	return ret;
 }
 
-static int decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
+static int _decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 {
 	int ret = 0;
 	ctx->out = jitter;
@@ -300,26 +298,26 @@ static int decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 	if (ctx->filter)
 		ret = ctx->filter->ops->set(ctx->filter->ctx, NULL, jitter->format, jitter->ctx->frequence);
 	if (ret == 0)
-		pthread_create(&ctx->thread, NULL, decoder_thread, ctx);
+		pthread_create(&ctx->thread, NULL, _decoder_thread, ctx);
 	return ret;
 }
 
-static const char *decoder_mime(decoder_ctx_t *ctx)
+static const char *_decoder_mime(decoder_ctx_t *ctx)
 {
 	return mime_audioflac;
 }
 
-static uint32_t decoder_position(decoder_ctx_t *ctx)
+static uint32_t _decoder_position(decoder_ctx_t *ctx)
 {
 	return ctx->position;
 }
 
-static uint32_t decoder_duration(decoder_ctx_t *ctx)
+static uint32_t _decoder_duration(decoder_ctx_t *ctx)
 {
 	return ctx->duration;
 }
 
-static void decoder_destroy(decoder_ctx_t *ctx)
+static void _decoder_destroy(decoder_ctx_t *ctx)
 {
 	if (ctx->out)
 		ctx->out->ops->flush(ctx->out->ctx);
@@ -339,13 +337,17 @@ static void decoder_destroy(decoder_ctx_t *ctx)
 const decoder_ops_t *decoder_flac = &(decoder_ops_t)
 {
 	.name = "flac" ,
-	.check = decoder_check,
-	.init = decoder_init,
-	.jitter = decoder_jitter,
-	.prepare = decoder_prepare,
-	.run = decoder_run,
-	.mime = decoder_mime,
-	.position = decoder_position,
-	.duration = decoder_duration,
-	.destroy = decoder_destroy,
+	.check = _decoder_check,
+	.init = _decoder_init,
+	.jitter = _decoder_jitter,
+	.prepare = _decoder_prepare,
+	.run = _decoder_run,
+	.mime = _decoder_mime,
+	.position = _decoder_position,
+	.duration = _decoder_duration,
+	.destroy = _decoder_destroy,
 };
+
+#ifdef DECODER_MODULES
+extern const decoder_ops_t *decoder_ops __attribute__ ((weak, alias ("decoder_flac")));
+#endif

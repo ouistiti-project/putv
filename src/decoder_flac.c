@@ -334,7 +334,7 @@ static void _decoder_destroy(decoder_ctx_t *ctx)
 	free(ctx);
 }
 
-const decoder_ops_t *decoder_flac = &(decoder_ops_t)
+static const decoder_ops_t _decoder_flac =
 {
 	.name = "flac" ,
 	.check = _decoder_check,
@@ -348,6 +348,8 @@ const decoder_ops_t *decoder_flac = &(decoder_ops_t)
 	.destroy = _decoder_destroy,
 };
 
+const decoder_ops_t *decoder_flac = &_decoder_flac;
+
 #ifdef DECODER_MODULES
-extern const decoder_ops_t *decoder_ops __attribute__ ((weak, alias ("decoder_flac")));
+extern const decoder_ops_t decoder_ops __attribute__ ((weak, alias ("_decoder_flac")));
 #endif

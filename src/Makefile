@@ -45,10 +45,13 @@ $(PUTV)_SOURCES-$(SRC_UDP)+=src_udp.c
 $(PUTV)_SOURCES-$(DEMUX_PASSTHROUGH)+=demux_passthrough.c
 $(PUTV)_SOURCES-$(DEMUX_RTP)+=demux_rtp.c
 $(PUTV)_SOURCES-$(DECODER_PASSTHROUGH)+=decoder_passthrough.c
+ifneq ($(DECODER_MODULES),y)
 $(PUTV)_SOURCES-$(DECODER_MAD)+=decoder_mad.c
 $(PUTV)_LIBRARY-$(DECODER_MAD)+=mad
 $(PUTV)_SOURCES-$(DECODER_FLAC)+=decoder_flac.c
 $(PUTV)_LIBRARY-$(DECODER_FLAC)+=FLAC
+endif
+$(PUTV)_LIBRARY-$(DECODER_MODULES)+=dl
 $(PUTV)_SOURCES-$(ENCODER_PASSTHROUGH)+=encoder_passthrough.c
 $(PUTV)_CFLAGS-$(ENCODER_PASSTHROUGH)+=-DENCODER=encoder_passthrough
 $(PUTV)_SOURCES-$(ENCODER_LAME)+=encoder_lame.c
@@ -86,6 +89,19 @@ $(PUTV)_CFLAGS-$(TINYSVCMDNS)+=-DINDEX_HTML="\"/ouiradio.html\""
 $(PUTV)_CFLAGS-$(TINYSVCMDNS)+=-I ../lib/tinysvcmdns
 $(PUTV)_LDFLAGS-$(TINYSVCMDNS)+=-L ../lib/tinysvcmdns
 $(PUTV)_LIBRARY-$(USE_ID3TAG)+=id3tag
+$(PUTV)_LIBRARY-$(USE_OGGMETADDATA)+=FLAC
 $(PUTV)_LIBRARY-$(USE_TIMER)+=rt
 
 $(PUTV)_CFLAGS-$(DEBUG)+=-g -DDEBUG
+
+ifeq ($(DECODER_MODULES),y)
+modules-$(DECODER_MAD)+=decoder_mad
+decoder_mad_SOURCES+=decoder_mad.c
+decoder_mad_LIBRARY+=mad
+modules-$(DECODER_FLAC)+=decoder_flac
+decoder_flac_CFLAGS-$(SAMPLERATE_AUTO)+=-DDEFAULT_SAMPLERATE=44100
+decoder_flac_CFLAGS-$(SAMPLERATE_44100)+=-DDEFAULT_SAMPLERATE=44100
+decoder_flac_CFLAGS-$(SAMPLERATE_48000)+=-DDEFAULT_SAMPLERATE=48000
+decoder_flac_SOURCES+=decoder_flac.c
+decoder_flac_LIBRARY+=FLAC
+endif

@@ -452,7 +452,7 @@ static void _decoder_destroy(decoder_ctx_t *ctx)
 	free(ctx);
 }
 
-const decoder_ops_t *decoder_mad = &(const decoder_ops_t)
+const decoder_ops_t _decoder_mad =
 {
 	.name = "mad",
 	.check = _decoder_check,
@@ -465,6 +465,8 @@ const decoder_ops_t *decoder_mad = &(const decoder_ops_t)
 	.mime = _decoder_mime,
 };
 
+const decoder_ops_t *decoder_mad = &_decoder_mad;
+
 #ifdef DECODER_MODULES
-extern const decoder_ops_t *decoder_ops __attribute__ ((weak, alias ("decoder_mad")));
+extern const decoder_ops_t decoder_ops __attribute__ ((weak, alias ("_decoder_mad")));
 #endif

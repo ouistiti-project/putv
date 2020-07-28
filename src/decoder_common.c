@@ -33,6 +33,11 @@
 #include <errno.h>
 #include <stdlib.h>
 
+#ifdef DECODER_MODULES
+#include <dlfcn.h>
+#include <dirent.h>
+#endif
+
 #include "player.h"
 #include "decoder.h"
 #include "filter.h"
@@ -48,6 +53,33 @@
 #define decoder_dbg(...)
 
 static const decoder_ops_t * decoderslist [10];
+
+#ifdef DECODER_MODULES
+static const decoder_ops_t * decoder_load_module(const char *root, const char *name)
+{
+	const decoder_ops_t *ops = NULL;
+	if (name != NULL)
+	{
+		char *file = NULL;
+		if (!strncmp("decoder_", name, 7) &&
+			asprintf(&file, "%s/%s", root, name) > 0)
+		{
+			void *dh = dlopen(file, RTLD_NOW | RTLD_DEEPBIND | RTLD_GLOBAL);
+			if (dh == NULL)
+			{
+				err("ERROR: No such output library: '%s %s'", file, dlerror());
+			}
+			else
+			{
+				ops = dlsym(dh, "decoder_ops");
+				dbg("new decoder %p", ops);
+			}
+			free(file);
+		}
+	}
+	return ops;
+}
+#endif
 
 decoder_t *decoder_build(player_ctx_t *player, const char *mime)
 {
@@ -137,4 +169,22 @@ static void _decoder_init(void)
 		decoderslist[i] = decoders[i];
 	}
 
+#ifdef DECODER_MODULES
+	struct dirent **namelist;
+	int n;
+
+	n = scandir(PKGLIBDIR, &namelist, NULL, alphasort);
+	while (n > 0)
+	{
+		n--;
+		if (namelist[n]->d_name[0] != '.')
+		{
+			const decoder_ops_t *ops = decoder_load_module(PKGLIBDIR, namelist[n]->d_name);
+			if (ops != NULL)
+				decoderslist[i++] = ops;
+			if (i >= 10)
+				break;
+		}
+	}
+#endif
 }

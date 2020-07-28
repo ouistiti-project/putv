@@ -49,9 +49,15 @@
 extern void Log_info(const char *category, const char *format, ...);
 extern void Log_error(const char *category, const char *format, ...);
 
+#if 1
 #define err(format, ...) Log_error("output_putv", format, ##__VA_ARGS__)
 #define warn(format, ...) Log_info("output_putv", format, ##__VA_ARGS__)
 #define dbg(format, ...) Log_info("output_putv", format, ##__VA_ARGS__)
+#else
+#define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
+#define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
+#define dbg(format, ...) fprintf(stderr, "\x1B[32m"format"\x1B[0m\n",  ##__VA_ARGS__)
+#endif
 
 #define QUOTE(str) #str
 #define EXPAND_AND_QUOTE(str) QUOTE(str)
@@ -256,13 +262,19 @@ static void *_check_socket(void *arg)
 static int
 output_putv_init(void)
 {
-	const char *websocketdir = getenv("WEBSOCKETDIR");
-	if (websocketdir != NULL)
-		gmrenderer_ctx->root = websocketdir;
-	const char *putv = getenv("PUTV");
-	if (putv != NULL)
-		gmrenderer_ctx->name = putv;
-	gmrenderer_ctx->current_id = -1;
+	if (gmrenderer_ctx->root == NULL)
+	{
+		const char *websocketdir = getenv("WEBSOCKETDIR");
+		if (websocketdir != NULL)
+			gmrenderer_ctx->root = websocketdir;
+	}
+	if (gmrenderer_ctx->name == NULL)
+	{
+		const char *putv = getenv("PUTV");
+		if (putv != NULL)
+			gmrenderer_ctx->name = putv;
+		gmrenderer_ctx->current_id = -1;
+	}
 
 	int len = strlen(gmrenderer_ctx->root) + 1;
 	len += strlen(gmrenderer_ctx->name) + 1;
@@ -426,27 +438,40 @@ output_putv_setmute(int value)
 	return 0;
 }
 
-static int output_putv_add_options(int *argc, char **argv[])
+static int output_putv_add_options(int *pargc, char **pargv[])
 {
-	if (*argc < 2)
+	if (*pargc < 2)
 	return 0;
-	int opt;
-	do
+	int i;
+	char *optarg = NULL;
+	for (i = 1; i < *pargc; i++)
 	{
-		opt = getopt(*argc, *argv, "R:n:");
-		switch (opt)
+		int c;
+		if ((*pargv)[i][0] == '-')
+		{
+			c = (*pargv)[i][1];
+			optarg = (*pargv)[i + 1];
+			if (optarg[0] != '-')
+				i++;
+		}
+		else
+			c = -1;
+		switch (c)
 		{
 		case 'R':
-			gmrenderer_ctx->root = optarg;
+			if (optarg != NULL)
+				gmrenderer_ctx->root = strdup(optarg);
 		break;
 		case 'n':
-			gmrenderer_ctx->name = optarg;
+			if (optarg != NULL)
+				gmrenderer_ctx->name = strdup(optarg);
 		break;
+		case -1:
 		default:
+			i = *pargc;
 		break;
 		}
-	} while(opt != -1);
-
+	}
 	return 0;
 }
 

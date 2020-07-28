@@ -959,14 +959,13 @@ static int method_capabilities(json_t *json_params, json_t **result, void *userd
 	input = json_object();
 	json_t *codec;
 	codec = json_array();
-#ifdef DECODER_MAD
-	value = json_string(decoder_mad->mime(NULL));
-	json_array_append(codec, value);
-#endif
-#ifdef DECODER_FLAC
-	value = json_string(decoder_flac->mime(NULL));
-	json_array_append(codec, value);
-#endif
+	const char *mime = decoder_mimelist(1);
+	while (mime != NULL)
+	{
+		value = json_string(mime);
+		json_array_append(codec, value);
+		mime = decoder_mimelist(0);
+	}
 	json_object_set(input, "codec", codec);
 	json_t *aprotocol;
 	aprotocol = json_array();

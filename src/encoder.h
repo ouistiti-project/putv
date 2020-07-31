@@ -22,4 +22,5 @@ const encoder_t *encoder_get(encoder_ctx_t *ctx);
 
 extern const encoder_t *encoder_passthrough;
 extern const encoder_t *encoder_lame;
+extern const encoder_t *encoder_flac;
 #endif

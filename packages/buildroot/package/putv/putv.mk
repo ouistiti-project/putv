@@ -21,15 +21,15 @@ endif
 
 #PUTV_MAKE_OPTS+=V=1
 #PUTV_MAKE_OPTS+=DEBUG=y
-PUTV_MAKE_OPTS+=SYSROOT=$(STAGING_DIR)
 
 ifeq ($(BR2_PACKAGE_PUTV_WEBIF_HTTPS),y)
 PUTV_DATADIR=/srv/wwwS
 else
 PUTV_DATADIR=/srv/www
 endif
-PUTV_MAKE_OPTS+=prefix=/usr
-PUTV_MAKE_OPTS+=datadir=$(PUTV_DATADIR)
+PUTV_MAKE_OPTS= \
+	prefix=/usr \
+	datadir=$(PUTV_DATADIR)
 
 PUTV?=ouiradio
 BR2_PACKAGE_PUTV_DEFCONFIG?=$(PUTV:%=%_)defconfig
@@ -62,10 +62,6 @@ define PUTV_KCONFIG_FIXUP_CMDS
 	$(PUTV_GMRENDER_OPTS)
 endef
 
-define PUTV_CONFIGURE_CMDS
-	cat $(@D)/.config
-endef
-
 define PUTV_BUILD_CMDS
 	$(TARGET_MAKE_ENV) $(MAKE1) $(TARGET_CONFIGURE_OPTS) -C $(@D) $(PUTV_MAKE_OPTS)
 endef
@@ -78,16 +74,25 @@ define PUTV_INSTALL_TARGET_CMDS
 	ln -sf /home/ouiradio.json $(TARGET_DIR)$(PUTV_DATADIR)/htdocs/apps/ouiradio.json
 	$(INSTALL) -D -m 644 $(PUTV_PKGDIR)/radio.db \
 		$(TARGET_DIR)/home/radio.db
-	sed "s/\%PUTV\%/$(PUTV)/g" $(PUTV_PKGDIR)/putv.in > $(TARGET_DIR)/etc/setting.d/putv.in
-	$(INSTALL) -D -m 755 $(PUTV_PKGDIR)/putv.sh \
-		$(TARGET_DIR)/etc/setting.d/putv.sh
-	$(INSTALL) -D -m 755 $(PUTV_PKGDIR)/gmrender.sh \
-		$(TARGET_DIR)/etc/setting.d/gmrender.sh
+	sed "s/\%PUTV\%/$(PUTV)/g" $(PUTV_PKGDIR)/putv.in > /tmp/putv
+	$(INSTALL) -D -m 644 /tmp/putv \
+		$(TARGET_DIR)/etc/default/putv
 endef
 
+define PUTV_INSTALL_INIT_SYSV_GPIOD_CMDS
+	$(INSTALL) -D -m 644 $(PUTV_PKGDIR)/gpiod.conf \
+		$(TARGET_DIR)/etc/gpiod/rules.d/putv.conf
+endef
+ifeq ($(BR2_PACKAGE_GPIOD),y)
+PUTV_POST_INSTALL_TARGET_HOOKS+=PUTV_INSTALL_INIT_SYSV_GPIOD_CMDS
+endif
+
 define PUTV_INSTALL_INIT_SYSV
-	ln -sf /etc/setting.d/putv.sh $(TARGET_DIR)/etc/init.d/S50putv
-	ln -sf /etc/setting.d/gmrender.sh $(TARGET_DIR)/etc/init.d/S51gmrender
+	$(INSTALL) -D -m 755 $(PUTV_PKGDIR)/putv.sh \
+		$(TARGET_DIR)/etc/init.d/S50putv
+
+	$(INSTALL) -D -m 755 $(PUTV_PKGDIR)/gmrender.sh \
+		$(TARGET_DIR)/etc/init.d/S51gmrender
 endef
 
 $(eval $(kconfig-package))

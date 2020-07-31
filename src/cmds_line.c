@@ -213,6 +213,7 @@ static int _display(void *arg, int id, const char *url, const char *info, const 
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t*)arg;
 	printf("player: media %d => %s\n", id, url);
+	return 0;
 }
 
 void cmds_line_onchange(void *arg, event_t event, void *eventarg)
@@ -248,7 +249,7 @@ void cmds_line_onchange(void *arg, event_t event, void *eventarg)
 	}
 	int id = player_mediaid(ctx->player);
 	media_t *media = player_media(ctx->player);
-	if (media != NULL)
+	if (media != NULL && id != -1)
 		media->ops->find(media->ctx, id, _display, ctx);
 }
 

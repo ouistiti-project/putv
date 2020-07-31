@@ -178,7 +178,7 @@ static int method_list(json_t *json_params, json_t **result, void *userdata)
 	int count = media->ops->count(media->ctx);
 	int nbitems = MAX_ITEMS;
 	nbitems = (count < nbitems)? count:nbitems;
-	dbg("cmds: list");
+	cmds_dbg("cmds: list");
 
 	if (media->ops->list == NULL)
 	{
@@ -298,7 +298,7 @@ static int method_append(json_t *json_params, json_t **result, void *userdata)
 			if (json_is_string(value))
 			{
 				const char *str = json_string_value(value);
-				dbg("cmds: append %s", str);
+				cmds_dbg("cmds: append %s", str);
 				ret = append_cb(media->ctx, str, "", NULL);
 			}
 			else if (json_is_object(value))
@@ -446,13 +446,12 @@ static int method_setnext(json_t *json_params, json_t **result, void *userdata)
 	media_t *media = player_media(ctx->player);
 	int ret = -1;
 	int id = 0;
-	cmds_dbg("cmds: setnext");
 
 	if (json_is_object(json_params))
 	{
 		id = json_integer_value(json_object_get(json_params, "id"));
 	}
-	dbg("set next id %d", id);
+	cmds_dbg("cmds: setnext id %d", id);
 	if (media->ops->find != NULL)
 	{
 		ret = media->ops->find(media->ctx, id, player_play, ctx->player);
@@ -461,6 +460,30 @@ static int method_setnext(json_t *json_params, json_t **result, void *userdata)
 	if (ret == 0)
 	{
 		*result = json_pack("{si}", "next", id);
+		ret = 0;
+	}
+	else
+	{
+		*result = jsonrpc_error_object_predefined(JSONRPC_INVALID_PARAMS, json_string("player state error"));
+	}
+	return ret;
+}
+
+static int method_getposition(json_t *json_params, json_t **result, void *userdata)
+{
+	int ret = -1;
+	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
+	const src_t *src = player_source(ctx->player);
+	decoder_t *decoder = NULL;
+	if (src != NULL)
+	{
+		decoder = src->ops->estream(src->ctx, 0);
+	}
+	if (decoder != NULL)
+	{
+		*result = json_pack("{s:i,s:i}",
+			"position", decoder->ops->position(decoder->ctx),
+			"duration", decoder->ops->duration(decoder->ctx));
 		ret = 0;
 	}
 	else
@@ -513,7 +536,7 @@ static int _display(void *arg, int id, const char *url, const char *info, const 
 
 	if (json_is_array(result))
 		json_array_append_new(result, object);
-	return 1;
+	return 0;
 }
 
 static int method_change(json_t *json_params, json_t **result, void *userdata)
@@ -587,7 +610,7 @@ static int method_change(json_t *json_params, json_t **result, void *userdata)
 
 static int method_onchange(json_t *json_params, json_t **result, void *userdata)
 {
-	dbg("cmds: onchange");
+	cmds_dbg("cmds: onchange");
 	int ret;
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 	media_t *media = player_media(ctx->player);
@@ -636,7 +659,7 @@ static int method_onchange(json_t *json_params, json_t **result, void *userdata)
 
 static int method_status(json_t *json_params, json_t **result, void *userdata)
 {
-	dbg("cmds: status");
+	cmds_dbg("cmds: status");
 	return method_onchange(json_params, result, userdata);
 }
 
@@ -674,8 +697,15 @@ static int method_options(json_t *json_params, json_t **result, void *userdata)
 			int state = json_boolean_value(value);
 			if (media->ops->random)
 			{
-				media->ops->random(media->ctx, state);
+				state = media->ops->random(media->ctx, state);
 				ret = 0;
+				if (state == OPTION_DISABLE && media->ops->find != NULL)
+				{
+					int id = player_mediaid(ctx->player);
+					id += 1;
+					ret = media->ops->find(media->ctx, id, player_play, ctx->player);
+					ret -= 1;
+				}
 			}
 			else
 			{
@@ -907,6 +937,21 @@ static int method_capabilities(json_t *json_params, json_t **result, void *userd
 		json_object_set(action, "params", params);
 		json_array_append(actions, action);
 	}
+	const src_t *src = player_source(ctx->player);
+	decoder_t *decoder = NULL;
+	if (src != NULL)
+	{
+		decoder = src->ops->estream(src->ctx, 0);
+	}
+	if (decoder != NULL && decoder->ops->position != NULL)
+	{
+		action = json_object();
+		value = json_string("getposition");
+		json_object_set(action, "method", value);
+		params = json_array();
+		json_object_set(action, "params", params);
+		json_array_append(actions, action);
+	}
 	json_object_set(*result, "actions", actions);
 
 	json_t *input;
@@ -1002,6 +1047,7 @@ static struct jsonrpc_method_entry_t method_table[] = {
 	{ 'n', "onchange", method_onchange, "o" },
 	{ 'r', "options", method_options, "o" },
 	{ 'r', "volume", method_volume, "o" },
+	{ 'r', "getposition", method_getposition, "" },
 	{ 0, NULL },
 };
 
@@ -1081,9 +1127,13 @@ static int jsonrpc_sendevent(cmds_ctx_t *ctx, thread_info_t *info, const char *e
 		int sock = info->sock;
 		cmds_dbg("cmds: send notification %s", message);
 		ret = send(sock, message, length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
-		dbg("cmds: send %d", ret);
+		dbg("cmds: send notification %d", ret);
 		fsync(sock);
 		json_decref(notification);
+	}
+	else
+	{
+		err("cmds: unkonwn event %s", event);
 	}
 	if (ret < 0)
 		err("cmd: json send error %s", strerror(errno));
@@ -1100,13 +1150,11 @@ static int _jsonrpc_sendresponse(thread_info_t *info, json_t *request)
 
 	if (response != NULL)
 	{
-		pthread_mutex_lock(&ctx->mutex);
 		char *buff = json_dumps(response, JSONRPC_DEBUG_FORMAT );
 		cmds_dbg("cmds: send response %s", buff);
 		ret = send(sock, buff, strlen(buff) + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
-		dbg("cmds: send %d", ret);
+		dbg("cmds: send response %d", ret);
 		fsync(sock);
-		pthread_mutex_unlock(&ctx->mutex);
 		json_decref(response);
 	}
 	else
@@ -1154,15 +1202,15 @@ static void *_cmds_json_pthreadsend(void *arg)
 		{
 			pthread_cond_wait(&ctx->cond, &ctx->mutex);
 		}
-		pthread_mutex_unlock(&ctx->mutex);
 		while (ctx->requests != NULL)
 		{
 			json_request_list_t *request = ctx->requests;
 			ctx->requests = ctx->requests->next;
-			if (_jsonrpc_sendresponse(request->info, request->request) < 0)
+			int ret = _jsonrpc_sendresponse(request->info, request->request);
+			if (ret < 0)
 			{
+				err("cmds: sendresponse error %d", ret);
 				_cmds_json_removeinfo(ctx, request->info);
-				pthread_mutex_unlock(&ctx->mutex);
 				free(request);
 				continue;
 			}
@@ -1176,19 +1224,18 @@ static void *_cmds_json_pthreadsend(void *arg)
 				while (info)
 				{
 					thread_info_t *next = info->next;
-					pthread_mutex_lock(&ctx->mutex);
-					if (jsonrpc_sendevent(ctx, info, "onchange") < 0)
+					int ret = jsonrpc_sendevent(ctx, info, "onchange");
+					if (ret < 0)
 					{
+						err("cmds: sendevent error %d", ret);
 						_cmds_json_removeinfo(ctx, info);
 					}
-					pthread_mutex_unlock(&ctx->mutex);
 					info = next;
 				}
-				pthread_mutex_lock(&ctx->mutex);
 				ctx->eventsmask &= ~ONCHANGE;
-				pthread_mutex_unlock(&ctx->mutex);
 			}
 		}
+		pthread_mutex_unlock(&ctx->mutex);
 	}
 	warn("cmds: leave thread send");
 	return NULL;
@@ -1219,7 +1266,7 @@ static int jsonrpc_command(thread_info_t *info)
 	warn("cmds: json socket connection");
 	event_player_state_t event = {.playerctx = ctx->player};
 	event.state = player_state(ctx->player, STATE_UNKNOWN);
-	jsonrpc_onchange(info, PLAYER_EVENT_CHANGE, &event);
+	jsonrpc_onchange(ctx, PLAYER_EVENT_CHANGE, &event);
 	errno = 0;
 	int run = 1;
 
@@ -1227,30 +1274,31 @@ static int jsonrpc_command(thread_info_t *info)
 	memset(poll_set, 0, sizeof(poll_set));
 	int numfds = 0;
 	poll_set[0].fd = sock;
-	poll_set[0].events = POLLIN;
+	poll_set[0].events = POLLIN | POLLHUP;
 	numfds++;
 	while (run)
 	{
 		if (ctx->info == NULL)
 			break;
 
-		dbg("cmds: recv wait");
+		cmds_dbg("cmds: recv wait");
 		ret = poll(poll_set, numfds, -1);
 		if (poll_set[0].revents & POLLHUP)
 		{
 			pthread_mutex_lock(&ctx->mutex);
+			err("cmds: client hangup");
 			_cmds_json_removeinfo(ctx, info);
 			pthread_mutex_unlock(&ctx->mutex);
 			run = 0;
 			break;
 		}
-		dbg("cmds: recv ready");
+		cmds_dbg("cmds: recv ready");
+		poll_set[0].revents = 0;
 
 		json_t *request = NULL;
 		json_error_t error;
 		int flags = JSON_DISABLE_EOF_CHECK;
 		//int flags = 0;
-		dbg("try to recv");
 		request = json_load_callback(_cmds_recv, info, flags, &error);
 		if (request != NULL)
 		{
@@ -1258,7 +1306,6 @@ static int jsonrpc_command(thread_info_t *info)
 			json_request_list_t *entry = calloc(1, sizeof(*entry));
 			entry->info = info;
 			entry->request = request;
-			dbg("recv request");
 			pthread_mutex_lock(&ctx->mutex);
 			if (ctx->requests == NULL)
 				ctx->requests = entry;
@@ -1269,7 +1316,6 @@ static int jsonrpc_command(thread_info_t *info)
 				it->next = entry;
 			}
 			pthread_mutex_unlock(&ctx->mutex);
-			dbg("request ready");
 			pthread_cond_broadcast(&ctx->cond);
 		}
 		else
@@ -1289,6 +1335,7 @@ static cmds_ctx_t *cmds_json_init(player_ctx_t *player, void *arg)
 	ctx->socketpath = (const char *)arg;
 	pthread_cond_init(&ctx->cond, NULL);
 	pthread_mutex_init(&ctx->mutex, NULL);
+	ctx->onchangeid = player_eventlistener(ctx->player, jsonrpc_onchange, (void *)ctx, "jsonrpc");
 	return ctx;
 }
 
@@ -1304,9 +1351,8 @@ static void *_cmds_json_pthreadrecv(void *arg)
 static int cmds_json_run(cmds_ctx_t *ctx, sink_t *sink)
 {
 	ctx->sink = sink;
-	ctx->onchangeid = player_eventlistener(ctx->player, jsonrpc_onchange, (void *)ctx, "jsonrpc");
-	pthread_create(&ctx->threadsend, NULL, _cmds_json_pthreadsend, (void *)ctx);
 	pthread_create(&ctx->threadrecv, NULL, _cmds_json_pthreadrecv, (void *)ctx);
+	pthread_create(&ctx->threadsend, NULL, _cmds_json_pthreadsend, (void *)ctx);
 	return 0;
 }
 

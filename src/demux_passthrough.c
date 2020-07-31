@@ -99,15 +99,7 @@ static const char *demux_mime(src_ctx_t *ctx, int index)
 {
 	if (index > 0)
 		return NULL;
-	if (ctx->mime)
-		return ctx->mime;
-#ifdef DECODER_MAD
-	return mime_audiomp3;
-#elif defined(DECODER_FLAC)
-	return mime_audioflac;
-#else
-	return mime_audiopcm;
-#endif
+	return ctx->mime;
 }
 
 static void demux_eventlistener(src_ctx_t *ctx, event_listener_cb_t cb, void *arg)
@@ -175,9 +167,9 @@ const src_ops_t *demux_passthrough = &(src_ops_t)
 	.init = demux_init,
 	.jitter = demux_jitter,
 	.run = demux_run,
+	.mime = demux_mime,
 	.eventlistener = demux_eventlistener,
 	.attach = demux_attach,
 	.estream = demux_estream,
-	.mime = demux_mime,
 	.destroy = demux_destroy,
 };

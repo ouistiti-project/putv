@@ -27,6 +27,7 @@
  *****************************************************************************/
 #include <stdio.h>
 #include <unistd.h>
+#include <errno.h>
 
 #include <libgen.h>
 #include <sys/socket.h>
@@ -196,6 +197,19 @@ static int answer_list(json_t *json_params, json_t **result, void *userdata)
 	return 0;
 }
 
+static int method_getposition(json_t *json_params, json_t **result, void *userdata)
+{
+	*result = json_null();
+	return 0;
+}
+
+static int answer_getposition(json_t *json_params, json_t **result, void *userdata)
+{
+	client_data_t *data = userdata;
+	answer_proto(data, json_params);
+	return 0;
+}
+
 static int notification_onchange(json_t *json_params, json_t **result, void *userdata)
 {
 	client_data_t *data = userdata;
@@ -237,6 +251,8 @@ struct jsonrpc_method_entry_t table[] =
 	{'a',"remove", answer_remove, "o", 0, NULL},
 	{'r',"list", method_list, "o", 0, NULL},
 	{'a',"list", answer_list, "o", 0, NULL},
+	{'r',"getposition", method_getposition, "", 0, NULL},
+	{'a',"getposition", answer_getposition, "o", 0, NULL},
 	{'n',"onchange", notification_onchange, "o", 0, NULL},
 	{0, NULL},
 };
@@ -269,21 +285,29 @@ void client_async(client_data_t *data,int async)
 		data->options &= ~OPTION_ASYNC;
 }
 
-int client_cmd(client_data_t *data, char * cmd)
+unsigned long int client_cmd(client_data_t *data, char * cmd)
 {
 	int ret;
 	char *buffer = jsonrpc_request(cmd, strlen(cmd), table, (char*)data, &data->pid);
 	if (buffer == NULL)
-		return -1;
-	int pid = data->pid;
+	{
+		err("cmd %s unknown", cmd);
+		return 0;
+	}
+	unsigned long int pid = data->pid;
 	client_dbg("client: send %s", buffer);
 	ret = send(data->sock, buffer, strlen(buffer) + 1, MSG_NOSIGNAL);
+	if (ret < 0)
+	{
+		err("jsonrpc: send error %s", strerror(errno));
+		return -1;
+	}
 	if (data->options & OPTION_ASYNC)
 		return 0;
 	return pid;
 }
 
-int client_wait(client_data_t *data, int pid)
+int client_wait(client_data_t *data, unsigned long int pid)
 {
 	if ((data->options & OPTION_ASYNC) == OPTION_ASYNC)
 		return 0;
@@ -296,79 +320,129 @@ int client_wait(client_data_t *data, int pid)
 
 int client_next(client_data_t *data, client_event_prototype_t proto, void *protodata)
 {
-	if (data->pid != 0)
-		return -1;
+	if (data->pid > 0)
+	{
+		return -2;
+	}
 	pthread_mutex_lock(&data->mutex);
 	data->proto = proto;
 	data->data = protodata;
-	int pid = client_cmd(data, "next");
-	client_wait(data, pid);
+	long int pid = client_cmd(data, "next");
+	if (pid == -1)
+	{
+		pthread_mutex_unlock(&data->mutex);
+		return -1;
+	}
+	client_wait(data, (unsigned long int)pid);
 	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
 
 int client_play(client_data_t *data, client_event_prototype_t proto, void *protodata)
 {
-	if (data->pid != 0)
-		return -1;
+	if (data->pid > 0)
+		return -2;
 	pthread_mutex_lock(&data->mutex);
 	data->proto = proto;
 	data->data = protodata;
-	int pid = client_cmd(data, "play");
-	client_wait(data, pid);
+	long int pid = client_cmd(data, "play");
+	if (pid == -1)
+	{
+		pthread_mutex_unlock(&data->mutex);
+		return -1;
+	}
+	client_wait(data, (unsigned long int)pid);
 	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
 
 int client_pause(client_data_t *data, client_event_prototype_t proto, void *protodata)
 {
-	if (data->pid != 0)
-		return -1;
+	if (data->pid > 0)
+		return -2;
 	pthread_mutex_lock(&data->mutex);
 	data->proto = proto;
 	data->data = protodata;
-	int pid = client_cmd(data, "pause");
-	client_wait(data, pid);
+	long int pid = client_cmd(data, "pause");
+	if (pid == -1)
+	{
+		pthread_mutex_unlock(&data->mutex);
+		return -1;
+	}
+	client_wait(data, (unsigned long int)pid);
 	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
 
 int client_stop(client_data_t *data, client_event_prototype_t proto, void *protodata)
 {
-	if (data->pid != 0)
-		return -1;
+	if (data->pid > 0)
+		return -2;
 	pthread_mutex_lock(&data->mutex);
 	data->proto = proto;
 	data->data = protodata;
-	int pid = client_cmd(data, "stop");
-	client_wait(data, pid);
+	long int pid = client_cmd(data, "stop");
+	if (pid == -1)
+	{
+		pthread_mutex_unlock(&data->mutex);
+		return -1;
+	}
+	client_wait(data, (unsigned long int)pid);
 	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
 
 int client_status(client_data_t *data, client_event_prototype_t proto, void *protodata)
 {
-	if (data->pid != 0)
-		return -1;
+	if (data->pid > 0)
+		return -2;
 	pthread_mutex_lock(&data->mutex);
 	data->proto = proto;
 	data->data = protodata;
-	int pid = client_cmd(data, "status");
-	client_wait(data, pid);
+	long int pid = client_cmd(data, "status");
+	if (pid == -1)
+	{
+		pthread_mutex_unlock(&data->mutex);
+		return -1;
+	}
+	client_wait(data, (unsigned long int)pid);
+	pthread_mutex_unlock(&data->mutex);
+	return 0;
+}
+
+int client_getposition(client_data_t *data, client_event_prototype_t proto, void *protodata)
+{
+	if (data->pid > 0)
+		return -2;
+	pthread_mutex_lock(&data->mutex);
+	data->proto = proto;
+	data->data = protodata;
+	long int pid = client_cmd(data, "getposition");
+	if (pid == -1)
+	{
+		pthread_mutex_unlock(&data->mutex);
+		return -1;
+	}
+	client_wait(data, (unsigned long int)pid);
 	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
 
 int client_volume(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *step)
 {
-	if (data->pid != 0)
-		return -1;
+	if (data->pid > 0)
+		return -2;
 	pthread_mutex_lock(&data->mutex);
 	data->proto = proto;
 	data->data = protodata;
 	data->params = step;
-	int pid = client_cmd(data, "volume");
-	client_wait(data, pid);
+	long int pid = client_cmd(data, "volume");
+	if (pid == -1)
+	{
+		pthread_mutex_unlock(&data->mutex);
+		return -1;
+	}
+	client_wait(data, (unsigned long int)pid);
 	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
@@ -386,56 +460,76 @@ int client_eventlistener(client_data_t *data, const char *name, client_event_pro
 
 int media_change(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *media)
 {
-	if (data->pid != 0)
-		return -1;
+	if (data->pid > 0)
+		return -2;
 	pthread_mutex_lock(&data->mutex);
 	data->proto = proto;
 	data->data = protodata;
 	data->params = media;
-	int pid = client_cmd(data, "change");
-	client_wait(data, pid);
+	long int pid = client_cmd(data, "change");
+	if (pid == -1)
+	{
+		pthread_mutex_unlock(&data->mutex);
+		return -1;
+	}
+	client_wait(data, (unsigned long int)pid);
 	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
 
 int media_insert(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *media)
 {
-	if (data->pid != 0)
-		return -1;
+	if (data->pid > 0)
+		return -2;
 	pthread_mutex_lock(&data->mutex);
 	data->proto = proto;
 	data->data = protodata;
 	data->params = media;
-	int pid = client_cmd(data, "append");
-	client_wait(data, pid);
+	long int pid = client_cmd(data, "append");
+	if (pid == -1)
+	{
+		pthread_mutex_unlock(&data->mutex);
+		return -1;
+	}
+	client_wait(data, (unsigned long int)pid);
 	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
 
 int media_remove(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *media)
 {
-	if (data->pid != 0)
-		return -1;
+	if (data->pid > 0)
+		return -2;
 	pthread_mutex_lock(&data->mutex);
 	data->proto = proto;
 	data->data = protodata;
 	data->params = media;
-	int pid = client_cmd(data, "remove");
-	client_wait(data, pid);
+	long int pid = client_cmd(data, "remove");
+	if (pid == -1)
+	{
+		pthread_mutex_unlock(&data->mutex);
+		return -1;
+	}
+	client_wait(data, (unsigned long int)pid);
 	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }
 
 int media_list(client_data_t *data, client_event_prototype_t proto, void *protodata, list_t *list)
 {
-	if (data->pid != 0)
-		return -1;
+	if (data->pid > 0)
+		return -2;
 	pthread_mutex_lock(&data->mutex);
 	data->proto = proto;
 	data->data = protodata;
 	data->list = list;
-	int pid = client_cmd(data, "list");
-	client_wait(data, pid);
+	long int pid = client_cmd(data, "list");
+	if (pid == -1)
+	{
+		pthread_mutex_unlock(&data->mutex);
+		return -1;
+	}
+	client_wait(data, (unsigned long int)pid);
 	pthread_mutex_unlock(&data->mutex);
 	return 0;
 }

@@ -67,6 +67,14 @@ struct demux_out_s
 	demux_out_t *next;
 };
 
+typedef struct demux_profile_s demux_profile_t;
+struct demux_profile_s
+{
+	const char *mime;
+	demux_profile_t *next;
+	char pt;
+};
+
 typedef struct demux_ctx_s demux_ctx_t;
 typedef struct demux_ctx_s src_ctx_t;
 struct demux_ctx_s
@@ -81,6 +89,7 @@ struct demux_ctx_s
 	const char *mime;
 	pthread_t thread;
 	event_listener_t *listener;
+	demux_profile_t *profiles;
 };
 #define SRC_CTX
 #define DEMUX_CTX
@@ -109,6 +118,11 @@ static demux_ctx_t *demux_init(player_ctx_t *player, const char *protocol, const
 {
 	demux_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->mime = utils_mime2mime(mime);
+	demux_profile_t *profile = NULL;
+
+	demux_rtp_addprofile(ctx, 14, mime_audiomp3);
+	demux_rtp_addprofile(ctx, 11, mime_audiopcm);
+
 	return ctx;
 }
 
@@ -126,6 +140,26 @@ static jitter_t *demux_jitter(demux_ctx_t *ctx, jitte_t jitte)
 		ctx->jitte = jitte;
 	}
 	return ctx->in;
+}
+
+static const char *demux_profile(demux_ctx_t *ctx, char pt)
+{
+	demux_profile_t *profile = ctx->profiles;
+	while (profile != NULL && profile->pt != pt) profile = profile->next;
+	if (profile == NULL)
+		return mime_octetstream;
+	return profile->mime;
+}
+
+void demux_rtp_addprofile(demux_ctx_t *ctx, char pt, const char *mime)
+{
+	demux_profile_t *profile = NULL;
+
+	profile = calloc(1, sizeof(*profile));
+	profile->pt = pt;
+	profile->mime = mime;
+	profile->next = ctx->profiles;
+	ctx->profiles = profile;
 }
 
 static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
@@ -155,14 +189,7 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 		out->ssrc = header->ssrc;
 		out->cc = header->b.cc;
 		out->mime = mime_octetstream;
-		if (header->b.pt == 14)
-		{
-			out->mime = mime_audiomp3;
-		}
-		if (header->b.pt == 11)
-		{
-			out->mime = mime_audiopcm;
-		}
+		out->mime = demux_profile(ctx, header->b.pt);
 		out->next = ctx->out;
 		ctx->out = out;
 		warn("demux: new  rtp substream %d %s", out->ssrc, out->mime);
@@ -240,6 +267,16 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 		while (ctx->seqnum < header->b.seqnum)
 		{
 #if 0
+			/*
+			 * generate missing data
+			 * this code is not correct:
+			 * it is impossible to generate a good stream for the decoder
+			 * and if they are missing, they are yet old too,
+			 * it is useless to generate them.
+			 * it is more efficient to count the missing PCM and
+			 * remove from the encoder the same number of PCM, who generated
+			 * during previous hole of data.
+			 */
 			if (out->data == NULL)
 				out->data = out->jitter->ops->pull(out->jitter->ctx);
 			memset(out->data, 0, out->jitter->ctx->size);
@@ -353,8 +390,6 @@ static int demux_run(demux_ctx_t *ctx)
 
 static const char *demux_mime(demux_ctx_t *ctx, int index)
 {
-	if (ctx->mime)
-		return ctx->mime;
 	demux_out_t *out = ctx->out;
 	while (out != NULL && index > 0)
 	{
@@ -363,13 +398,7 @@ static const char *demux_mime(demux_ctx_t *ctx, int index)
 	}
 	if (ctx->out != NULL)
 		return ctx->out->mime;
-#ifdef DECODER_MAD
-	return mime_audiomp3;
-#elif defined(DECODER_FLAC)
-	return mime_audioflac;
-#else
-	return mime_audiopcm;
-#endif
+	return ctx->mime;
 }
 
 static void demux_eventlistener(demux_ctx_t *ctx, event_listener_cb_t cb, void *arg)
@@ -436,6 +465,13 @@ static void demux_destroy(demux_ctx_t *ctx)
 		free(listener);
 		listener = next;
 	}
+	demux_profile_t *profile = ctx->profiles;
+	while (profile != NULL)
+	{
+		demux_profile_t *next = profile->next;
+		free(profile);
+		profile = next;
+	}
 	free(ctx);
 }
 
@@ -446,9 +482,9 @@ const demux_ops_t *demux_rtp = &(demux_ops_t)
 	.init = demux_init,
 	.jitter = demux_jitter,
 	.run = demux_run,
+	.mime = demux_mime,
 	.eventlistener = demux_eventlistener,
 	.attach = demux_attach,
 	.estream = demux_estream,
-	.mime = demux_mime,
 	.destroy = demux_destroy,
 };

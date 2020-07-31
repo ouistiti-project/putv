@@ -76,6 +76,8 @@ const char const *str_genre = "genre";
 const char const *str_date = "date";
 const char const *str_comment = "comment";
 const char const *str_cover = "cover";
+const char const *str_regain = "replaygain";
+const char const *str_duration = "duration";
 
 void utils_srandom()
 {
@@ -331,6 +333,8 @@ int media_parseid3tag(const char *path, json_t *object)
 	{ ID3_FRAME_GENRE,  N_(str_genre)     },
 	{ ID3_FRAME_COMMENT,N_(str_comment)   },
 	{ "APIC",           N_(str_cover)   },
+	{ "RGAD",           N_(str_regain)   },
+	{ "TLEN",           N_(str_duration)   },
 	};
 	struct id3_file *fd = id3_file_open(path, ID3_FILE_MODE_READONLY);
 	if (fd == NULL)
@@ -660,8 +664,20 @@ char *media_fillinfo(const char *url, const char *mime)
 			value = json_string(coverpath);
 			json_object_set(object, str_cover, value);
 		}
+		strcpy(dname, "Notes.nfo");
+		if (!access(coverpath, R_OK))
+		{
+			json_t *value;
+			value = json_string(coverpath);
+			json_object_set(object, str_comment, value);
+		}
 	}
+#ifdef DEBUG
 	info = json_dumps(object, JSON_INDENT(2));
+#else
+	info = json_dumps(object, 0);
+#endif
+	//dbg("media info: %s", info);
 	json_decref(object);
 	return info;
 }

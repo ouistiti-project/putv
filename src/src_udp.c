@@ -418,11 +418,9 @@ static int src_run(src_ctx_t *ctx)
 
 static const char *src_mime(src_ctx_t *ctx, int index)
 {
-#ifdef DEMUX_PASSTHROUGH
-	return ctx->demux->ops->mime(ctx->demux->ctx, index);
-#else
-	return mime_octetstream;
-#endif
+	if (index > 0)
+		return NULL;
+	return ctx->mime;
 }
 
 static void src_eventlistener(src_ctx_t *ctx, event_listener_cb_t cb, void *arg)
@@ -510,7 +508,6 @@ const src_ops_t *src_udp = &(src_ops_t)
 	.protocol = "udp://|rtp://",
 	.init = src_init,
 	.run = src_run,
-	.mime = src_mime,
 	.eventlistener = src_eventlistener,
 	.attach = src_attach,
 	.estream = src_estream,

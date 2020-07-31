@@ -35,7 +35,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#include <lame/lame.h>
+#include <FLAC/stream_encoder.h>
 
 #include "player.h"
 #include "jitter.h"
@@ -47,11 +47,12 @@ typedef struct encoder_ctx_s encoder_ctx_t;
 struct encoder_ctx_s
 {
 	const encoder_t *ops;
-	lame_global_flags *encoder;
+	FLAC__StreamEncoder *encoder;
 	unsigned int samplerate;
 	unsigned char nchannels;
 	unsigned char samplesize;
-	int samplesframe;
+	unsigned short samplesframe;
+	unsigned int framescnt;
 	int dumpfd;
 	pthread_t thread;
 	player_ctx_t *player;
@@ -79,75 +80,118 @@ struct encoder_ctx_s
 #define ENCODER_HEARTBEAT
 #endif
 
-#define NB_BUFFERS 6
+#ifndef DEFAULT_SAMPLERATE
+#define DEFAULT_SAMPLERATE 44100
+#endif
 
-static const char *jitter_name = "lame encoder";
-void error_report(const char *format, va_list ap)
+#define NB_BUFFERS 6
+#define LATENCY 200 //ms
+#define MAX_SAMPLES (44100 * 60 * 2)
+
+static const char *jitter_name = "flac encoder";
+
+static FLAC__StreamEncoderWriteStatus
+_encoder_writecb(const FLAC__StreamEncoder *encoder,
+		const FLAC__byte buffer[], size_t bytes,
+		unsigned samples, unsigned current_frame, void *client_data)
 {
-	fprintf(stderr, format, ap);
+	encoder_ctx_t *ctx = (encoder_ctx_t *)client_data;
+
+	dbg("encoder: stream frame %u of %u samples", current_frame, samples);
+	int check = 1;
+#ifdef ENCODER_DUMP
+	if (ctx->dumpfd > 0)
+	{
+		write(ctx->dumpfd, buffer, bytes);
+	}
+#endif
+//	if (samples == 0)
+//		return FLAC__STREAM_ENCODER_WRITE_STATUS_OK;
+	int ret = 0;
+	if (ctx->outbuffer == NULL)
+	{
+		ctx->outbuffer = ctx->out->ops->pull(ctx->out->ctx);
+	}
+
+	if (ctx->outbuffer != NULL && ctx->out->ctx->size >= bytes)
+	{
+		memcpy(ctx->outbuffer, buffer, bytes);
+		ret = bytes;
+	}
+	else if (ctx->outbuffer == NULL)
+		warn("encoder: jitter closed");
+	else
+		warn("encoder: jitter too small %lu bytes for %ld", bytes, ctx->out->ctx->size);
+	if (ret > 0)
+	{
+		encoder_dbg("encoder: flac %d", ret);
+		beat_bitrate_t *beat = NULL;
+#ifdef ENCODER_HEARTBEAT
+		//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
+		ctx->beat.length = ctx->samplesframe;
+		beat = &ctx->beat;
+		//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
+#endif
+		ctx->out->ops->push(ctx->out->ctx, bytes, beat);
+		ctx->outbuffer = NULL;
+
+		return FLAC__STREAM_ENCODER_WRITE_STATUS_OK;
+	}
+	return FLAC__STREAM_ENCODER_WRITE_STATUS_FATAL_ERROR;
 }
 
-static int encoder_lame_init(encoder_ctx_t *ctx)
+static int encoder_flac_init(encoder_ctx_t *ctx)
 {
-	if (ctx->encoder)
-		lame_close(ctx->encoder);
-	ctx->encoder = lame_init();
+	int ret = 0;
 
-	lame_set_in_samplerate(ctx->encoder, ctx->samplerate);
-	lame_set_num_channels(ctx->encoder, ctx->nchannels);
-	// this value change the complexity and the time of compression
-	// nothing else
-	lame_set_quality(ctx->encoder, 5);
-	lame_set_mode(ctx->encoder, STEREO);
-	//lame_set_mode(encoder->encoder, JOINT_STEREO);
-	lame_set_errorf(ctx->encoder, error_report);
+	/** reinitialize the encoder **/
+	FLAC__stream_encoder_finish(ctx->encoder);
 
-	// for CBR encoding
-	// 44100Hz the output buffer is between 1252 and 1254 for brate to 128
-	// 48000Hz the output buffer is between 1536 and 1152 for brate to 128
-	// 48000Hz the output buffer is between 1008 and 1344 for brate to 112
-	lame_set_out_samplerate(ctx->encoder, DEFAULT_SAMPLERATE);
-#ifdef ENCODER_VBR
-	lame_set_VBR(ctx->encoder, vbr_default);
-#if DEFAULT_SAMPLERATE == 48000
-	lame_set_VBR_q(ctx->encoder, 7);
-#else
-	lame_set_VBR_q(ctx->encoder, 4);
-#endif
-#else
-	lame_set_VBR(ctx->encoder, vbr_off);
-#if DEFAULT_SAMPLERATE == 48000
-	lame_set_brate(ctx->encoder, 112);
-#else
-	lame_set_brate(ctx->encoder, 128);
-#endif
-#endif
+	ret = FLAC__stream_encoder_set_verify(ctx->encoder, true);
+	FLAC__stream_encoder_set_streamable_subset(ctx->encoder, true);
+	FLAC__stream_encoder_set_sample_rate(ctx->encoder, ctx->samplerate);
+	FLAC__stream_encoder_set_bits_per_sample(ctx->encoder, 24);
+	FLAC__stream_encoder_set_channels(ctx->encoder, ctx->nchannels);
+	FLAC__stream_encoder_set_compression_level(ctx->encoder, 2);
+	FLAC__stream_encoder_set_blocksize(ctx->encoder, 1000);
+//	FLAC__stream_encoder_set_blocksize(ctx->encoder, 0);
+	FLAC__stream_encoder_set_total_samples_estimate(ctx->encoder, MAX_SAMPLES);
 
-	lame_set_disable_reservoir(ctx->encoder, 1);
-	lame_init_params(ctx->encoder);
-	return 0;
+	ctx->framescnt = 0;
+	dbg("flac: initialized");
+	return ret;
 }
 
 static encoder_ctx_t *encoder_init(player_ctx_t *player)
 {
 	encoder_ctx_t *ctx = calloc(1, sizeof(*ctx));
-	ctx->ops = encoder_lame;
+	ctx->ops = encoder_flac;
 	ctx->player = player;
+
+	jitter_format_t format = PCM_24bits4_LE_stereo;
 
 	ctx->nchannels = 2;
 	ctx->samplerate = DEFAULT_SAMPLERATE;
-	ctx->samplesize = sizeof(signed short);
+	ctx->samplesize = sizeof(uint32_t);
+	ctx->samplesframe = LATENCY * DEFAULT_SAMPLERATE / 1000;
 
-	encoder_lame_init(ctx);
+	ctx->encoder = FLAC__stream_encoder_new();
+
+	if (encoder_flac_init(ctx) < 0)
+	{
+		free(ctx);
+		err("encoder: DISABLE flac error");
+		return NULL;
+	}
 #ifdef ENCODER_DUMP
-	ctx->dumpfd = open("lame_dump.mp3", O_RDWR | O_CREAT, 0644);
+	ctx->dumpfd = open("dump.flac", O_RDWR | O_CREAT, 0644);
+	err("dump %d", ctx->dumpfd);
 #endif
 	/**
 	 * set samples frame to 3 framesize to have less than 1500 bytes
 	 * but more than 1000 bytes into the output
 	 */
-	ctx->samplesframe = lame_get_framesize(ctx->encoder) * 3;
-	//ctx->samplesframe = 576;
+	ctx->samplesframe = 576;
 	unsigned long buffsize = ctx->samplesframe * ctx->samplesize * ctx->nchannels;
 	dbg("encoder config :\n" \
 		"\tbuffer size %lu\n" \
@@ -158,10 +202,9 @@ static encoder_ctx_t *encoder_init(player_ctx_t *player)
 		ctx->samplerate,
 		ctx->samplesize,
 		ctx->nchannels);
-	jitter_t *jitter = jitter_scattergather_init(jitter_name, NB_BUFFERS,
-				ctx->samplesframe * ctx->samplesize * ctx->nchannels);
+	jitter_t *jitter = jitter_scattergather_init(jitter_name, NB_BUFFERS, buffsize);
 	ctx->in = jitter;
-	jitter->format = PCM_16bits_LE_stereo;
+	jitter->format = format;
 	jitter->ctx->frequence = 0; // automatic freq
 	jitter->ctx->thredhold = 1;
 
@@ -180,7 +223,7 @@ static void encoder_message(const char *format, va_list ap)
 }
 #endif
 
-static void *lame_thread(void *arg)
+static void *_encoder_thread(void *arg)
 {
 	int result = 0;
 	int run = 1;
@@ -190,11 +233,6 @@ static void *lame_thread(void *arg)
 	clockid_t clockid = CLOCK_REALTIME;
 	struct timespec start = {0, 0};
 	clock_gettime(clockid, &start);
-#endif
-#ifdef DEBUG
-	lame_set_errorf(ctx->encoder, encoder_message);
-	lame_set_debugf(ctx->encoder, encoder_message);
-	lame_set_msgf(ctx->encoder, encoder_message);
 #endif
 #ifdef ENCODER_HEARTBEAT
 	ctx->heartbeat.ops->start(ctx->heartbeat.ctx);
@@ -211,50 +249,41 @@ static void *lame_thread(void *arg)
 		if (ctx->in->ctx->frequence != ctx->samplerate)
 		{
 			ctx->samplerate = ctx->in->ctx->frequence;
-			encoder_lame_init(ctx);
+			encoder_flac_init(ctx);
+
+			FLAC__StreamEncoderInitStatus init_status;
+			init_status = FLAC__stream_encoder_init_stream(ctx->encoder, _encoder_writecb, NULL, NULL, NULL, ctx);
+			if(init_status != FLAC__STREAM_ENCODER_INIT_STATUS_OK)
+			{
+				err("encoder: flac initializing encoder: %s\n", FLAC__StreamEncoderInitStatusString[init_status]);
+				ret = -1;
+			}
 		}
-		if (ctx->outbuffer == NULL)
+		ctx->framescnt++;
+		if (ctx->framescnt > (MAX_SAMPLES / ctx->samplesframe))
 		{
-			ctx->outbuffer = ctx->out->ops->pull(ctx->out->ctx);
+			encoder_flac_init(ctx);
+
+			FLAC__StreamEncoderInitStatus init_status;
+			init_status = FLAC__stream_encoder_init_stream(ctx->encoder, _encoder_writecb, NULL, NULL, NULL, ctx);
+			if(init_status != FLAC__STREAM_ENCODER_INIT_STATUS_OK) {
+				err("encoder: flac initializing encoder: %s\n", FLAC__StreamEncoderInitStatusString[init_status]);
+				ret = -1;
+			}
 		}
+
 		if (ctx->inbuffer)
 		{
-			ret = lame_encode_buffer_interleaved(ctx->encoder,
-					(short int *)ctx->inbuffer, inlength,
-					ctx->outbuffer, ctx->out->ctx->size);
-#ifdef ENCODER_DUMP
-			if (ctx->dumpfd > 0 && ret > 0)
-			{
-				write(ctx->dumpfd, ctx->outbuffer, ret);
-			}
-#endif
+			ret = FLAC__stream_encoder_process_interleaved(ctx->encoder,
+					(int *)ctx->inbuffer, inlength);
 			ctx->in->ops->pop(ctx->in->ctx, ctx->in->ctx->size);
-		}
-		else
-		{
-			ret = lame_encode_flush_nogap(ctx->encoder, ctx->outbuffer, ctx->out->ctx->size);
-			/* TODO : request media data from player to set new ID3 tag */
-			lame_init_bitstream(ctx->encoder);
-		}
-		if (ret > 0)
-		{
-			encoder_dbg("encoder lame %d", ret);
-			beat_bitrate_t *beat = NULL;
-#ifdef ENCODER_HEARTBEAT
-			//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
-			ctx->beat.length = ret;
-			beat = &ctx->beat;
-			//ctx->heartbeat.ops->unlock(&ctx->heartbeat.ctx);
-#endif
-			ctx->out->ops->push(ctx->out->ctx, ret, beat);
-			ctx->outbuffer = NULL;
 		}
 		if (ret < 0)
 		{
 			if (ret == -1)
-				err("lame error %d, too small buffer %ld", ret, ctx->out->ctx->size);
+				err("encoder: flac error %d, too small buffer %ld", ret, ctx->out->ctx->size);
 			else
-				err("lame error %d", ret);
+				err("encoder: flac error %d", ret);
 			run = 0;
 		}
 	}
@@ -275,23 +304,34 @@ static void *lame_thread(void *arg)
 
 static int encoder_run(encoder_ctx_t *ctx, jitter_t *jitter)
 {
+	int ret = 0;
 	ctx->out = jitter;
+	FLAC__StreamEncoderInitStatus init_status;
+	init_status = FLAC__stream_encoder_init_stream(ctx->encoder, _encoder_writecb, NULL, NULL, NULL, ctx);
+	if(init_status != FLAC__STREAM_ENCODER_INIT_STATUS_OK) {
+		err("encoder: flac initializing encoder: %s\n", FLAC__StreamEncoderInitStatusString[init_status]);
+		ret = -1;
+	}
+
 #ifdef ENCODER_HEARTBEAT
-	heartbeat_bitrate_t config;
-	config.bitrate = lame_get_brate(ctx->encoder);
-	config.ms = jitter->ctx->size * jitter->ctx->count * 8 / config.bitrate;
-	ctx->heartbeat.ops = heartbeat_bitrate;
-	ctx->heartbeat.ctx = heartbeat_bitrate->init(&config);
-	dbg("set heart %s %dms %dkbps", jitter->ctx->name, config.ms, config.bitrate);
+	heartbeat_samples_t config;
+	config.samplerate = ctx->samplerate;
+	config.format = ctx->in->format;
+	ctx->heartbeat.ops = heartbeat_samples;
+	ctx->heartbeat.ctx = ctx->heartbeat.ops->init(&config);
+	int timeslot = ctx->samplesframe / config.samplerate;
+	int bitrate = config.samplerate * ctx->samplesize;
+	dbg("set heart %s %dms %dkbps", jitter->ctx->name, timeslot, bitrate);
 	jitter->ops->heartbeat(jitter->ctx, &ctx->heartbeat);
 #endif
-	pthread_create(&ctx->thread, NULL, lame_thread, ctx);
-	return 0;
+	if (ret == 0)
+		pthread_create(&ctx->thread, NULL, _encoder_thread, ctx);
+	return ret;
 }
 
 static const char *encoder_mime(encoder_ctx_t *encoder)
 {
-	return mime_audiomp3;
+	return mime_audioflac;
 }
 
 static void encoder_destroy(encoder_ctx_t *ctx)
@@ -302,7 +342,8 @@ static void encoder_destroy(encoder_ctx_t *ctx)
 #endif
 	if (ctx->thread)
 		pthread_join(ctx->thread, NULL);
-	lame_close(ctx->encoder);
+	FLAC__stream_encoder_finish(ctx->encoder);
+	FLAC__stream_encoder_delete(ctx->encoder);
 #ifdef ENCODER_HEARTBEAT
 	ctx->heartbeat.ops->destroy(ctx->heartbeat.ctx);
 #endif
@@ -311,7 +352,7 @@ static void encoder_destroy(encoder_ctx_t *ctx)
 	free(ctx);
 }
 
-const encoder_t *encoder_lame = &(encoder_t)
+const encoder_t *encoder_flac = &(encoder_t)
 {
 	.init = encoder_init,
 	.jitter = encoder_jitter,

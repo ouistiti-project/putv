@@ -68,6 +68,7 @@ int client_next(client_data_t *data, client_event_prototype_t proto, void *proto
 int client_play(client_data_t *data, client_event_prototype_t proto, void *protodata);
 int client_pause(client_data_t *data, client_event_prototype_t proto, void *protodata);
 int client_stop(client_data_t *data, client_event_prototype_t proto, void *protodata);
+int client_getposition(client_data_t *data, client_event_prototype_t proto, void *protodata);
 int client_volume(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *step);
 
 int media_change(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *media);

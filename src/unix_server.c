@@ -137,8 +137,9 @@ int unixserver_run(client_routine_t routine, void *userctx, const char *socketpa
 					info->sock = newsock;
 					info->userctx = userctx;
 					info->server = server;
-					info->next = server->firstinfo.next;
-					server->firstinfo.next = info;
+					struct thread_info_s *it = &server->firstinfo;
+					while (it->next != NULL) it = it->next;
+					it->next = info;
 					start(routine, info);
 				}
 			} while(newsock > 0);

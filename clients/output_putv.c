@@ -204,13 +204,12 @@ int inotifyfd;
 static void *_check_socket(void *arg)
 {
 	gmrenderer_ctx_t *ctx = (gmrenderer_ctx_t *)arg;
-	char *socketpath;
-	socketpath = malloc(strlen(ctx->root) + 1 + strlen(ctx->name) + 1);
-	sprintf(socketpath, "%s/%s", ctx->root, ctx->name);
 
-	if (!access(socketpath, R_OK | W_OK))
+	if (!access(ctx->socketpath, R_OK | W_OK))
 	{
-		return NULL;
+		client_unix(gmrenderer_ctx->socketpath, &gmrenderer_ctx->client);
+		client_async(&gmrenderer_ctx->client, 1);
+		client_eventlistener(&gmrenderer_ctx->client, "onchange", gmrenderer_checkstate, gmrenderer_ctx);
 	}
 	while (1)
 	{
@@ -231,9 +230,11 @@ static void *_check_socket(void *arg)
 			{
 				if (event->mask & IN_CREATE)
 				{
-					if (!access(socketpath, R_OK | W_OK))
+					if (!access(ctx->socketpath, R_OK | W_OK))
 					{
-						return NULL;
+						client_unix(gmrenderer_ctx->socketpath, &gmrenderer_ctx->client);
+						client_async(&gmrenderer_ctx->client, 1);
+						client_eventlistener(&gmrenderer_ctx->client, "onchange", gmrenderer_checkstate, gmrenderer_ctx);
 					}
 				}
 #if 0
@@ -249,7 +250,6 @@ static void *_check_socket(void *arg)
 			i += EVENT_SIZE + event->len;
 		}
 	}
-	free(socketpath);
 }
 #endif
 
@@ -262,25 +262,29 @@ output_putv_init(void)
 	const char *putv = getenv("PUTV");
 	if (putv != NULL)
 		gmrenderer_ctx->name = putv;
-#ifdef USE_INOTIFY
-	inotifyfd = inotify_init();
-	int dirfd = inotify_add_watch(inotifyfd, gmrenderer_ctx->root,
-					IN_MODIFY | IN_CREATE | IN_DELETE);
-	_check_socket((void *)gmrenderer_ctx);
-#else
+	gmrenderer_ctx->current_id = -1;
+
 	int len = strlen(gmrenderer_ctx->root) + 1;
 	len += strlen(gmrenderer_ctx->name) + 1;
 	gmrenderer_ctx->socketpath = malloc(len);
 	sprintf(gmrenderer_ctx->socketpath, "%s/%s", gmrenderer_ctx->root, gmrenderer_ctx->name);
 	dbg("socket path %s", gmrenderer_ctx->socketpath);
+
+#if 0
+//#ifdef USE_INOTIFY
+	inotifyfd = inotify_init();
+	int dirfd = inotify_add_watch(inotifyfd, gmrenderer_ctx->root,
+					IN_MODIFY | IN_CREATE | IN_DELETE);
+	pthread_t thread;
+	pthread_create(&thread, NULL, (__start_routine_t)_check_socket, (void *)&gmrenderer_ctx);
+#else
 	if (access(gmrenderer_ctx->socketpath, R_OK | W_OK))
 		return -1;
-#endif
-	gmrenderer_ctx->current_id = -1;
 	client_unix(gmrenderer_ctx->socketpath, &gmrenderer_ctx->client);
 	client_async(&gmrenderer_ctx->client, 1);
-
 	client_eventlistener(&gmrenderer_ctx->client, "onchange", gmrenderer_checkstate, gmrenderer_ctx);
+#endif
+
 	return 0;
 }
 
@@ -311,16 +315,20 @@ output_putv_set_next_uri(const char *uri)
 	json_t *media = json_object();
 	json_object_set_new(media, "media", json_string(uri));
 	dbg("UPnP: set next uri %s", uri);
-	if (gmrenderer_ctx->media)
-		json_decref(gmrenderer_ctx->media);
-	gmrenderer_ctx->media = media;
+	if (media_insert(&gmrenderer_ctx->client, NULL, NULL, media) < 0)
+	{
+		if (gmrenderer_ctx->media)
+			json_decref(gmrenderer_ctx->media);
+		gmrenderer_ctx->media = media;
+	}
+	else
+		json_decref(media);
 }
 
 static int
 output_putv_play(output_transition_cb_t callback)
 {
 	gmrenderer_ctx->transition_cb = callback;
-	gmrenderer_ctx->current_id = -1;
 	dbg("UPnP: play");
 	client_play(&gmrenderer_ctx->client, gmrenderer_checkstate, gmrenderer_ctx);
 	return 0;
@@ -351,10 +359,44 @@ output_putv_seek(int64_t position_nanos)
 	return 0;
 }
 
+struct position_s
+{
+	uint32_t position;
+	uint32_t duration;
+};
+
+static int gmrenderer_getposition(void *data, json_t *params)
+{
+	dbg("putv check params %s", json_dumps(params, 0));
+	struct position_s *position = (struct position_s *)data;
+	if (json_is_object(params))
+	{
+		json_t *jduration = json_object_get(params, "duration");
+		if (json_is_integer(jduration))
+		{
+			position->duration = json_integer_value(jduration);
+			json_t *jposition = json_object_get(params, "position");
+			position->position = json_integer_value(jposition);
+
+		}
+		else
+		{
+			position->duration = 0;
+			position->position = 0;
+		}
+	}
+}
+
 static int
 output_putv_get_position(int64_t *track_duration,
 					 int64_t *track_pos)
 {
+	static struct position_s position;
+	client_async(&gmrenderer_ctx->client, 0);
+	client_getposition(&gmrenderer_ctx->client, gmrenderer_getposition, &position);
+	*track_duration = position.duration;
+	*track_pos = position.position;
+	client_async(&gmrenderer_ctx->client, 1);
 	return 0;
 }
 
@@ -384,11 +426,34 @@ output_putv_setmute(int value)
 	return 0;
 }
 
+static int output_putv_add_options(int *argc, char **argv[])
+{
+	if (*argc < 2)
+	return 0;
+	int opt;
+	do
+	{
+		opt = getopt(*argc, *argv, "R:n:");
+		switch (opt)
+		{
+		case 'R':
+			gmrenderer_ctx->root = optarg;
+		break;
+		case 'n':
+			gmrenderer_ctx->name = optarg;
+		break;
+		default:
+		break;
+		}
+	} while(opt != -1);
 
-const struct output_module putv_output = {
+	return 0;
+}
+
+struct output_module putv_output = {
     .shortname = "putv",
 	.description = "putv framework",
-	.add_goptions = NULL,
+	.add_options = output_putv_add_options,
 	.init        = output_putv_init,
 	.loop        = output_putv_loop,
 	.set_uri     = output_putv_set_uri,
@@ -402,9 +467,17 @@ const struct output_module putv_output = {
 	.set_volume  = output_putv_setvolume,
 	.get_mute  = output_putv_getmute,
 	.set_mute  = output_putv_setmute,
+	.next = NULL,
 };
 
 const struct output_module *get_module()
 {
 	return &putv_output;
+}
+
+void output_putv_initlib(void) __attribute__((constructor));
+
+void output_putv_initlib(void)
+{
+	output_append_module(&putv_output);
 }

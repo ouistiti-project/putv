@@ -1,9 +1,8 @@
-modules-y+=output_putv
-output_putv_SOURCES+=output_putv.c
-output_putv_SOURCES+=client_json.c
-output_putv_CFLAGS+=-I../lib/jsonrpc
-output_putv_CFLAGS+=-I../lib/gmrender/src
-output_putv_LDFLAGS+=-L../lib/jsonrpc
-output_putv_LIBS+=jansson
-output_putv_LIBRARY+=jsonrpc
-output_putv_CFLAGS-$(DEBUG)+=-g -DDEBUG
+modules-y+=gmrender_putv
+gmrender_putv_SOURCES+=output_putv.c
+gmrender_putv_SOURCES+=client_json.c
+gmrender_putv_CFLAGS+=-I../lib/jsonrpc
+gmrender_putv_LDFLAGS+=-L../lib/jsonrpc
+gmrender_putv_LIBS+=jansson
+gmrender_putv_LIBRARY+=jsonrpc
+gmrender_putv_CFLAGS-$(DEBUG)+=-g -DDEBUG

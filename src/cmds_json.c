@@ -1151,7 +1151,7 @@ static int _jsonrpc_sendresponse(thread_info_t *info, json_t *request)
 	if (response != NULL)
 	{
 		char *buff = json_dumps(response, JSONRPC_DEBUG_FORMAT );
-		cmds_dbg("cmds: send response %s", buff);
+		cmds_dbg("cmds: send response %d %s", strlen(buff), buff);
 		ret = send(sock, buff, strlen(buff) + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
 		dbg("cmds: send response %d", ret);
 		fsync(sock);
@@ -1161,7 +1161,7 @@ static int _jsonrpc_sendresponse(thread_info_t *info, json_t *request)
 	{
 		err("cmds: no response for %s", json_dumps(request, JSONRPC_DEBUG_FORMAT ));
 	}
-	json_decref(request);
+	json_decref(response);
 	return ret;
 }
 
@@ -1213,9 +1213,11 @@ static void *_cmds_json_pthreadsend(void *arg)
 			{
 				err("cmds: sendresponse error %d", ret);
 				_cmds_json_removeinfo(ctx, request->info);
+				json_decref(request->request);
 				free(request);
 				continue;
 			}
+			json_decref(request->request);
 			free(request);
 		}
 		while (ctx->eventsmask != 0)

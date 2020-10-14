@@ -1431,6 +1431,48 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url, ...)
 				NULL,
 			};
 #else
+/**
+ * Database format:
+ * |   Table   |   Field   |  Comments               |
+ * ---------------------------------------------------
+ * |  media    |    url    | URL or file path to the |
+ * |           |           | data                    |
+ * |           |   mime    | mime string about the   |
+ * |           |           | type of data (ref mime) |
+ * |           |  opusid   | (ref opus)              |
+ * |           |  albumid  | opus may be on several  |
+ * |           |           | albums, media comes from|
+ * |           |           | one and only one album  |
+ * |           |  comment  | specific test about the |
+ * |           |           | data (radio, story...)  |
+ * ---------------------------------------------------
+ * |   opus    | titleid   | title of the opus       |
+ * |           |           | (ref word)              |
+ * |           | artistid  | name of the artist      |
+ * |           |           | (ref artist => word)    |
+ * |           | genreid   | genre of the opus       |
+ * |           |           | (ref word)              |
+ * |           | coverid   | url to the cover image  |
+ * |           |           | for the opus (ref cover)|
+ * |           |   like    | note to the opus        |
+ * |           |   speed   | speed of the music      |
+ * |           |           | (ref speed)             |
+ * |           |  introid  | link the opeing opus of |
+ * |           |           | this one (ref opus)     |
+ * |           |  comment  | text about the opus     |
+ * ---------------------------------------------------
+ * |   album   |  wordid   | name of the album       |
+ * |           |           | (ref word)              |
+ * |           | artistid  | artist of the album may |
+ * |           |           | be different of the opus|
+ * |           |           | (ref artist)            |
+ * |           |  genreid  | genre of the opus       |
+ * |           |           | (ref word)              |
+ * |           |  coverid  | url to the cover image  |
+ * |           |           | for the album(ref cover)|
+ * |           |  comment  | text about the album    |
+ * ---------------------------------------------------
+ */
 			const char *query[] = {
 "create table mimes (\"id\" INTEGER PRIMARY KEY, \"name\" TEXT UNIQUE NOT NULL);",
 "insert into mimes (id, name) values (0, \"octet/stream\");",
@@ -1445,12 +1487,13 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url, ...)
 	"FOREIGN KEY (albumid) REFERENCES album(id) ON UPDATE SET NULL);",
 "create table opus (id INTEGER PRIMARY KEY,  titleid INTEGER UNIQUE NOT NULL, " \
 	"artistid INTEGER, otherid INTEGER, albumid INTEGER, " \
-	"genreid INTEGER, coverid INTEGER, like INTEGER, introid INTEGER, comment BLOB, " \
+	"genreid INTEGER, coverid INTEGER, like INTEGER, speedid INTEGER, introid INTEGER, comment BLOB, " \
 	"FOREIGN KEY (titleid) REFERENCES word(id), " \
 	"FOREIGN KEY (introid) REFERENCES opus(id), " \
 	"FOREIGN KEY (artistid) REFERENCES artist(id) ON UPDATE SET NULL," \
 	"FOREIGN KEY (albumid) REFERENCES album(id) ON UPDATE SET NULL," \
 	"FOREIGN KEY (genreid) REFERENCES word(id) ON UPDATE SET NULL," \
+	"FOREIGN KEY (speedid) REFERENCES speed(id) ON UPDATE SET NULL," \
 	"FOREIGN KEY (coverid) REFERENCES cover(id) ON UPDATE SET NULL);",
 "create table album (id INTEGER PRIMARY KEY, wordid INTEGER UNIQUE NOT NULL, artistid INTEGER, " \
 	"genreid INTEGER, coverid INTEGER, comment BLOB, " \
@@ -1462,6 +1505,11 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url, ...)
 	"FOREIGN KEY (wordid) REFERENCES word(id));",
 "create table genre (id INTEGER PRIMARY KEY, wordid INTEGER, " \
 	"FOREIGN KEY (wordid) REFERENCES word(id));",
+"create table speed (id INTEGER PRIMARY KEY, wordid INTEGER, " \
+	"FOREIGN KEY (wordid) REFERENCES word(id));",
+"insert into speed (id, wordid) values (1, 3);",
+"insert into speed (id, wordid) values (2, 4);",
+"insert into speed (id, wordid) values (3, 5);",
 "create table cover (id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL);",
 "create table playlist (id INTEGER, listid INTEGER, " \
 	"FOREIGN KEY (id) REFERENCES media(id) ON UPDATE SET NULL, " \
@@ -1469,6 +1517,9 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url, ...)
 "create table word (id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL);",
 "insert into word (id, name) values (1, \"default\");",
 "insert into word (id, name) values (2, \"unknown\");",
+"insert into word (id, name) values (3, \"cool\");",
+"insert into word (id, name) values (4, \"ambiant\");",
+"insert into word (id, name) values (5, \"dance\");",
 "create table listname (id INTEGER PRIMARY KEY, wordid INTEGER, " \
 	"FOREIGN KEY (wordid) REFERENCES word(id));",
 "insert into listname (id, wordid) values (1, 1);",

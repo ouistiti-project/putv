@@ -46,6 +46,18 @@ typedef enum option_state_e
 	OPTION_ENABLE,
 } option_state_t;
 
+struct media_filter_s
+{
+	const char *keyword;
+	const char *artist;
+	const char *album;
+	const char *title;
+	const char *speed;
+	const char *genre;
+	int like;
+};
+typedef struct media_filter_s media_filter_t;
+
 typedef struct media_ops_s media_ops_t;
 struct media_ops_s
 {
@@ -78,6 +90,10 @@ struct media_ops_s
 	 * mandatory
 	 */
 	int (*find)(media_ctx_t *ctx, int id, media_parse_t cb, void *data);
+	/**
+	 * optional
+	 */
+	int (*filter)(media_ctx_t *ctx, media_filter_t *filter);
 	/**
 	 * optional
 	 */

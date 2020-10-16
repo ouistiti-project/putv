@@ -211,6 +211,57 @@ static int method_list(json_t *json_params, json_t **result, void *userdata)
 	return 0;
 }
 
+static int method_filter(json_t *json_params, json_t **result, void *userdata)
+{
+	int ret;
+	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
+	media_t *media = player_media(ctx->player);
+	media_filter_t filter = {0};
+	cmds_dbg("cmds: filter");
+
+	if (media->ops->filter == NULL)
+	{
+		*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
+		return -1;
+	}
+
+	entry_t entry;
+	entry.list = json_array();
+
+	json_t *value;
+	value = json_object_get(json_params, "keyword");
+	if (json_is_string(value))
+	{
+		filter.keyword = json_string_value(value);
+	}
+	value = json_object_get(json_params, "title");
+	if (json_is_string(value))
+	{
+		filter.title = json_string_value(value);
+	}
+	value = json_object_get(json_params, "artist");
+	if (json_is_string(value))
+	{
+		filter.artist = json_string_value(value);
+	}
+	value = json_object_get(json_params, "album");
+	if (json_is_string(value))
+	{
+		filter.album = json_string_value(value);
+	}
+	value = json_object_get(json_params, "genre");
+	if (json_is_string(value))
+	{
+		filter.genre = json_string_value(value);
+	}
+
+	int count;
+	count = media->ops->filter(media->ctx, &filter);
+	*result = json_pack("{s:i}", "count", count);
+
+	return 0;
+}
+
 static int method_remove(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
@@ -860,6 +911,27 @@ static int method_capabilities(json_t *json_params, json_t **result, void *userd
 		json_object_set(action, "params", params);
 		json_array_append(actions, action);
 	}
+	if (media->ops->filter != NULL)
+	{
+		action = json_object();
+		value = json_string("filter");
+		json_object_set(action, "method", value);
+		params = json_array();
+		value = json_string("keyword");
+		json_array_append(params, value);
+		value = json_string("title");
+		json_array_append(params, value);
+		value = json_string("artist");
+		json_array_append(params, value);
+		value = json_string("album");
+		json_array_append(params, value);
+		value = json_string("genre");
+		json_array_append(params, value);
+		value = json_string("speed");
+		json_array_append(params, value);
+		json_object_set(action, "params", params);
+		json_array_append(actions, action);
+	}
 	if (media->ops->find != NULL)
 	{
 		action = json_object();
@@ -1040,6 +1112,7 @@ static struct jsonrpc_method_entry_t method_table[] = {
 	{ 'r', "next", method_next, "" },
 	{ 'r', "setnext", method_setnext, "o" },
 	{ 'r', "list", method_list, "o" },
+	{ 'r', "filter", method_filter, "o" },
 	{ 'r', "append", method_append, "[]" },
 	{ 'r', "remove", method_remove, "o" },
 	{ 'r', "status", method_status, "" },
@@ -1151,7 +1224,7 @@ static int _jsonrpc_sendresponse(thread_info_t *info, json_t *request)
 	if (response != NULL)
 	{
 		char *buff = json_dumps(response, JSONRPC_DEBUG_FORMAT );
-		cmds_dbg("cmds: send response %d %s", strlen(buff), buff);
+		cmds_dbg("cmds: send response %ld %s", strlen(buff), buff);
 		ret = send(sock, buff, strlen(buff) + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
 		dbg("cmds: send response %d", ret);
 		fsync(sock);

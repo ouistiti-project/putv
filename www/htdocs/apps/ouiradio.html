@@ -16,6 +16,7 @@
 var g_player;
 var g_config;
 var g_imgbase = "";
+var g_maxitems = 5;
 initIHM = function()
 {
 	$('.action-btn').addClass('hidden');
@@ -84,7 +85,7 @@ playerlist = function(result)
 	}
 	if (result.count != undefined)
 	{
-		if (firstid > 5)
+		if (firstid > g_maxitems)
 		{
 			$('#PagerList').find('.previous')
 				.removeClass('disabled')
@@ -96,7 +97,7 @@ playerlist = function(result)
 				.addClass('disabled')
 				.data('firstid',firstid);
 		}
-		if (firstid < result.count -5)
+		if (firstid < result.count - g_maxitems)
 		{
 			$('#PagerList').find('.next')
 				.removeClass('disabled')
@@ -195,8 +196,8 @@ create_player = function (config)
 		if (result.id != undefined && result.id > -1)
 		{
 			$('#current-id').html(result.id);
-			var firstid = result.id - (result.id % 5);
-			player.send("list", {maxitems:5, first:firstid});
+			var firstid = result.id - (result.id % g_maxitems);
+			player.send("list", {maxitems:g_maxitems, first:firstid});
 		}
 		if (result.volume != undefined)
 		{
@@ -286,7 +287,7 @@ create_player = function (config)
 			case "list":
 				$('#PlayList').removeClass('hidden');
 				player.list = playerlist.bind(player);
-				player.send("list", {maxitems:5, first:0});
+				player.send("list", {maxitems:g_maxitems, first:0});
 			break;
 			case "volume":
 				$('#volume_down').removeClass('hidden');

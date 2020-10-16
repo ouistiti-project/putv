@@ -57,9 +57,9 @@ struct cmds_ctx_s
 #define dbg(...)
 #endif
 
-typedef int (*method_t)(cmds_ctx_t *ctx, char *arg);
+typedef int (*method_t)(cmds_ctx_t *ctx, const char *arg);
 
-static int method_append(cmds_ctx_t *ctx, char *arg)
+static int method_append(cmds_ctx_t *ctx, const char *arg)
 {
 	media_t *media = player_media(ctx->player);
 	if (media->ops->insert == NULL)
@@ -67,7 +67,7 @@ static int method_append(cmds_ctx_t *ctx, char *arg)
 	return media->ops->insert(media->ctx, arg, NULL, NULL);
 }
 
-static int method_remove(cmds_ctx_t *ctx, char *arg)
+static int method_remove(cmds_ctx_t *ctx, const char *arg)
 {
 	media_t *media = player_media(ctx->player);
 	if (media->ops->remove == NULL)
@@ -95,7 +95,7 @@ static int _print_entry(void *arg, int id, const char *url,
 	return 0;
 }
 
-static int method_list(cmds_ctx_t *ctx, char *arg)
+static int method_list(cmds_ctx_t *ctx, const char *arg)
 {
 	int value = 0;
 	media_t *media = player_media(ctx->player);
@@ -104,21 +104,21 @@ static int method_list(cmds_ctx_t *ctx, char *arg)
 	return media->ops->list(media->ctx, _print_entry, (void *)&value);
 }
 
-static int method_info(cmds_ctx_t *ctx, char *arg)
+static int method_info(cmds_ctx_t *ctx, const char *arg)
 {
 	int id = player_mediaid(ctx->player);
 	media_t *media = player_media(ctx->player);
 	return media->ops->find(media->ctx, id, _print_entry, (void *)&id);
 }
 
-static int method_search(cmds_ctx_t *ctx, char *arg)
+static int method_search(cmds_ctx_t *ctx, const char *arg)
 {
 	int id = atoi(arg);
 	media_t *media = player_media(ctx->player);
 	return media->ops->find(media->ctx, id, _print_entry, (void *)&id);
 }
 
-static int method_media(cmds_ctx_t *ctx, char *arg)
+static int method_media(cmds_ctx_t *ctx, const char *arg)
 {
 	return player_change(ctx->player, arg, 0, 0, 1);
 }
@@ -132,7 +132,7 @@ static int _import_entry(void *arg, int id, const char *url,
 	return 0;
 }
 
-static int method_import(cmds_ctx_t *ctx, char *arg)
+static int method_import(cmds_ctx_t *ctx, const char *arg)
 {
 	media_t *media = player_media(ctx->player);
 	if (media->ops->insert == NULL)
@@ -148,32 +148,32 @@ static int method_import(cmds_ctx_t *ctx, char *arg)
 	return 0;
 }
 
-static int method_play(cmds_ctx_t *ctx, char *arg)
+static int method_play(cmds_ctx_t *ctx, const char *arg)
 {
 	return (player_state(ctx->player, STATE_PLAY) == STATE_PLAY);
 }
 
-static int method_pause(cmds_ctx_t *ctx, char *arg)
+static int method_pause(cmds_ctx_t *ctx, const char *arg)
 {
 	return (player_state(ctx->player, STATE_PAUSE) == STATE_PAUSE);
 }
 
-static int method_stop(cmds_ctx_t *ctx, char *arg)
+static int method_stop(cmds_ctx_t *ctx, const char *arg)
 {
 	return (player_state(ctx->player, STATE_STOP) == STATE_STOP);
 }
 
-static int method_quit(cmds_ctx_t *ctx, char *arg)
+static int method_quit(cmds_ctx_t *ctx, const char *arg)
 {
 	return (player_state(ctx->player, STATE_ERROR) == STATE_ERROR);
 }
 
-static int method_next(cmds_ctx_t *ctx, char *arg)
+static int method_next(cmds_ctx_t *ctx, const char *arg)
 {
 	return (player_state(ctx->player, STATE_CHANGE) == STATE_CHANGE);
 }
 
-static int method_volume(cmds_ctx_t *ctx, char *arg)
+static int method_volume(cmds_ctx_t *ctx, const char *arg)
 {
 	unsigned int volume = atoi(arg);
 	if (ctx->sink->ops->setvolume != NULL && volume != -1)
@@ -187,7 +187,7 @@ static int method_volume(cmds_ctx_t *ctx, char *arg)
 	return volume;
 }
 
-static int method_loop(cmds_ctx_t *ctx, char *arg)
+static int method_loop(cmds_ctx_t *ctx,const  char *arg)
 {
 	int enable = 1;
 	media_t *media = player_media(ctx->player);
@@ -198,7 +198,7 @@ static int method_loop(cmds_ctx_t *ctx, char *arg)
 	return enable;
 }
 
-static int method_random(cmds_ctx_t *ctx, char *arg)
+static int method_random(cmds_ctx_t *ctx, const char *arg)
 {
 	int enable = 1;
 	media_t *media = player_media(ctx->player);
@@ -207,6 +207,35 @@ static int method_random(cmds_ctx_t *ctx, char *arg)
 	if (media->ops->random)
 		media->ops->random(media->ctx, enable);
 	return enable;
+}
+
+static int method_filter(cmds_ctx_t *ctx, const char *arg)
+{
+	if (arg == NULL)
+		return -1;
+
+	media_filter_t filter = {0};
+	if (!strncmp(arg, "album ", 6))
+		filter.album = arg + 6;
+	if (!strncmp(arg, "artist ", 7))
+		filter.artist = arg + 7;
+	if (!strncmp(arg, "title ", 6))
+		filter.title = arg + 6;
+	if (!strncmp(arg, "genre ", 6))
+		filter.genre = arg + 6;
+	if (!strncmp(arg, "speed ", 6))
+		filter.speed = arg + 6;
+	if (!strncmp(arg, "keyword ", 8))
+		filter.keyword = arg + 8;
+
+	media_t *media = player_media(ctx->player);
+	if (!strncmp(arg, "free", 4) && media->ops->filter)
+	{
+		media->ops->filter(media->ctx, NULL);
+	}
+	else if (media->ops->filter)
+		media->ops->filter(media->ctx, &filter);
+	return 0;
 }
 
 static int _display(void *arg, int id, const char *url, const char *info, const char *mime)
@@ -310,6 +339,11 @@ static int cmds_line_cmd(cmds_ctx_t *ctx)
 				{
 					method = method_list;
 					i += 4;
+				}
+				if (!strncmp(buffer + i, "filter",6))
+				{
+					method = method_filter;
+					i += 6;
 				}
 				if (!strncmp(buffer + i, "media",5))
 				{

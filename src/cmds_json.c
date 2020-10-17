@@ -217,6 +217,7 @@ static int method_filter(json_t *json_params, json_t **result, void *userdata)
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 	media_t *media = player_media(ctx->player);
 	media_filter_t filter = {0};
+	media_filter_t *pfilter = NULL;
 	cmds_dbg("cmds: filter");
 
 	if (media->ops->filter == NULL)
@@ -230,33 +231,38 @@ static int method_filter(json_t *json_params, json_t **result, void *userdata)
 
 	json_t *value;
 	value = json_object_get(json_params, "keyword");
-	if (json_is_string(value))
+	if (json_is_string(value) && json_string_length(value) > 0)
 	{
 		filter.keyword = json_string_value(value);
+		pfilter = &filter;
 	}
 	value = json_object_get(json_params, "title");
-	if (json_is_string(value))
+	if (json_is_string(value) && json_string_length(value) > 0)
 	{
 		filter.title = json_string_value(value);
+		pfilter = &filter;
 	}
 	value = json_object_get(json_params, "artist");
-	if (json_is_string(value))
+	if (json_is_string(value) && json_string_length(value) > 0)
 	{
 		filter.artist = json_string_value(value);
+		pfilter = &filter;
 	}
 	value = json_object_get(json_params, "album");
-	if (json_is_string(value))
+	if (json_is_string(value) && json_string_length(value) > 0)
 	{
 		filter.album = json_string_value(value);
+		pfilter = &filter;
 	}
 	value = json_object_get(json_params, "genre");
-	if (json_is_string(value))
+	if (json_is_string(value) && json_string_length(value) > 0)
 	{
 		filter.genre = json_string_value(value);
+		pfilter = &filter;
 	}
 
 	int count;
-	count = media->ops->filter(media->ctx, &filter);
+	count = media->ops->filter(media->ctx, pfilter);
 	*result = json_pack("{s:i}", "count", count);
 
 	return 0;

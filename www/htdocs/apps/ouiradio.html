@@ -41,7 +41,7 @@ playerlist = function(result)
 {
 	var table = result.playlist;
 	var firstid = 0;
-	if (typeof(table) == "object")
+	if (table != undefined && typeof(table) == "object")
 	{
 		var deletemenu = "<a href='#' class='button remove'><span class='glyphicon glyphicon-trash'></span></a>";
 		var playlist = $('#PlayList');
@@ -59,13 +59,22 @@ playerlist = function(result)
 				var info = table[i].info;
 				if (info != undefined)
 				{
-					//var escapingname = encodeURIComponent(info.Title);
+					//var escapingname = encodeURIComponent(info.title);
 					var escapingname = info.title;
 					if (escapingname == undefined)
 						escapingname = "unknown";
 
-					elem = $("<a class='list-group-item media' href='#' data-type='"+table[i].sources[0].mime+"' id='item-"+table[i].id+"' data-id='"+table[i].id+"' data-href=\""+escapingname+"\" ></a>");
-					$(elem).html("<span class='title'>"+escapingname+"</span> - <span class='artist'>"+info.artist+"</span>");
+					elem = $(
+							"<div class='media list-group-item ' data-type='"+table[i].sources[0].mime+"' id='item-"+table[i].id+"' data-id='"+table[i].id+"' data-href=\""+escapingname+"\" >"+
+								"<a href='#' class='link col-xs-11 list-group-item-heading' style='text-decoration: none;'>"+
+									"<span class='title'>"+escapingname+"</span> - "+
+									"<span class='artist'>"+info.artist+"</span>"+
+								"</a>"+
+								"<a href='#' class='info col-xs-1 pull-right text-nowrap list-group-item-text'>"+
+										"<span class='sr-only'>open info</span>"+
+										"<span class='glyphicon glyphicon-comment'> </span>"+
+								"</a>"+
+							"</div>");
 					var j;
 					for (j in options)
 					{
@@ -73,9 +82,14 @@ playerlist = function(result)
 							$(elem).append(deletemenu);
 					}
 					$(playlist).append(elem);
-					elem.on('click', function (event)
+					elem.find('.link').on('click', function (event)
 					{
-						this.send("setnext", {id:$(event.currentTarget).data('id')});
+						this.send("setnext", {id:$(event.currentTarget).parent('.media').data('id')});
+					}.bind(this));
+					elem.find('.info').on('click', function (event)
+					{
+						$(event.currentTarget).parent('.media').data('id');
+						this.send("info", {id:$(event.currentTarget).parent('.media').data('id')});
 					}.bind(this));
 				}
 			}
@@ -116,10 +130,10 @@ playerlist = function(result)
 playersetnext = function(result)
 {
 	var next = result.next;
-	$('.media').removeClass('disabled');
+	$('.media').removeClass('list-group-item-info');
 	if (next != undefined)
 	{
-		$('#item-'+next).addClass('disabled');
+		$('#item-'+next).addClass('list-group-item-info');
 	}
 }
 
@@ -291,11 +305,8 @@ create_player = function (config)
 			break;
 			case "filter":
 				$('#openfilter').removeClass('hidden');
-				player.filter = function ()
-				{
-					player.send("list", {maxitems:g_maxitems, first:0});
-					$('#filterbox').modal('hide');
-				}.bind(player);
+			break;
+			case "info":
 			break;
 			case "volume":
 				$('#volume_down').removeClass('hidden');
@@ -303,6 +314,20 @@ create_player = function (config)
 			break;
 			}
 		}
+	}.bind(player);
+	player.filter = function ()
+	{
+		player.send("list", {maxitems:g_maxitems, first:0});
+		$('#filterbox').modal('hide');
+	}.bind(player);
+	player.info = function (params)
+	{
+		$('#info-title').html(params.info.title);
+		$('#info-artist').html(params.info.artist);
+		$('#info-album').html(params.info.album);
+		$('#info-genre').html(params.info.genre);
+		$('#info-cover').attr('src', params.info.cover);
+		$('#infobox').modal('show');
 	}.bind(player);
 	player.getposition = function(result)
 	{
@@ -537,61 +562,93 @@ window.addEventListener('unload', function(event) {
 				</div>
 			</div>
 		</nav>
-		<div class="container-fluid">
-			<div id="Message" class="row hidden alert alert-warning"></div>
-			<div class="row">
-				<div class="modal fade" id='filterbox' tabindex="-1" role="dialog" aria-labelledby="Filter">
-						<div class="modal-dialog" role="document">
-							<div class="modal-content">
-								<form>
-									<div class="modal-header">
-										<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-										<h4 class="modal-title">Filter</h4>
+		<div class="modal fade" id='filterbox' tabindex="-1" role="dialog" aria-labelledby="Filter">
+			<div class="modal-dialog" role="document">
+				<div class="modal-content">
+					<form>
+						<div class="modal-header">
+							<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+							<h4 class="modal-title">Filter</h4>
+						</div>
+						<div class="modal-body">
+							<div class="form-group">
+								<div class="input-group">
+									<input type="text" class="form-control" id='keyword'>
+									<span class="input-group-btn">
+										<a class="btn btn-default" role="button" data-toggle="collapse" href="#collapseExample" aria-expanded="false" aria-controls="morefields">more</a>
+									</span>
+								</div>
+							</div>
+							<div class="collapse" id="collapseExample">
+								<div class="form-group">
+									<div class="input-group">
+										<span class="input-group-addon">artist</span>
+										<input type="text" class="form-control" id='artist'>
 									</div>
-									<div class="modal-body">
-										<div class="form-group">
-											<div class="input-group">
-												<input type="text" class="form-control" id='keyword'>
-												<span class="input-group-btn">
-													<a class="btn btn-default" role="button" data-toggle="collapse" href="#collapseExample" aria-expanded="false" aria-controls="morefields">more</a>
-												</span>
-											</div>
-										</div>
-										<div class="collapse" id="collapseExample">
-											<div class="form-group">
-												<div class="input-group">
-													<span class="input-group-addon">artist</span>
-													<input type="text" class="form-control" id='artist'>
-												</div>
-											</div>
-											<div class="form-group">
-												<div class="input-group">
-													<span class="input-group-addon">album</span>
-													<input type="text" class="form-control" id='album'>
-												</div>
-											</div>
-											<div class="form-group">
-												<div class="input-group">
-													<span class="input-group-addon">title</span>
-													<input type="text" class="form-control" id='title'>
-												</div>
-											</div>
-											<div class="form-group">
-												<div class="input-group">
-													<span class="input-group-addon">genre</span>
-													<input type="text" class="form-control" id='genre'>
-												</div>
-											</div>
-										</div>
+								</div>
+								<div class="form-group">
+									<div class="input-group">
+										<span class="input-group-addon">album</span>
+										<input type="text" class="form-control" id='album'>
 									</div>
-									<div class="modal-footer">
-										<button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
-										<button type="button" class="btn btn-primary" id='filter'>Apply</button>
+								</div>
+								<div class="form-group">
+									<div class="input-group">
+										<span class="input-group-addon">title</span>
+										<input type="text" class="form-control" id='title'>
 									</div>
-								</form>
+								</div>
+								<div class="form-group">
+									<div class="input-group">
+										<span class="input-group-addon">genre</span>
+										<input type="text" class="form-control" id='genre'>
+									</div>
+								</div>
+							</div>
+						</div>
+						<div class="modal-footer">
+							<button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+							<button type="button" class="btn btn-primary" id='filter'>Apply</button>
+						</div>
+					</form>
+				</div>
+			</div>
+		</div>
+		<div class="modal fade" id='infobox' tabindex="-1" role="dialog" aria-labelledby="Filter">
+			<div class="modal-dialog" role="document">
+				<div class="modal-content">
+					<div class="modal-header">
+						<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+						<div class="row">
+							<div class="col-md-9 col-xs-8">
+									<h3 id='info-artist'></h3>
+									<h4 id='info-title'></h4>
 							</div>
 						</div>
 					</div>
+					<div class="modal-body">
+						<div class="container-fluid">
+							<div class="row">
+								<img class="col-xs-9 col-xs-offset-1" id ='info-cover'/>
+							</div>
+							<div class="row">
+								<h4 class="col-xs-8" id ='info-album'></h4><div class="col-xs-3"> Track <span id='info-track'></span></div>
+							</div>
+							<div class="row">
+								<div class="col-xs-3" id='info-genre'></div>
+								<div class="col-xs-3 col-xs-offset-1" id='info-speed'></div>
+							</div>
+						</div>
+					</div>
+					<div class="modal-footer">
+						<button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+					</div>
+				</div>
+			</div>
+		</div>
+		<div class="container-fluid">
+			<div id="Message" class="row hidden alert alert-warning"></div>
+			<div class="row">
 				<div id='media-list' class="col-md-4 col-sm-6 hidden-xs">
 					<div class="panel panel-default">
 						<div class="panel-heading">
@@ -626,12 +683,15 @@ window.addEventListener('unload', function(event) {
 					</div>
 				</div>
 
-				<div class="col-md-8 col-sm-6 col-xs-12" id='info'>
+				<div id='info' class="col-md-8 col-sm-6 col-xs-12">
 					<div class="panel panel-default">
 						<div class="panel-heading">
-							<div class='row'>
-								<div class='col-md-9 col-xs-8'><h3 id='artist'></h3><h4 id='title'></h4></div>
-								<div class='col-md-3 col-md-offset-0 col-xs-3 col-xs-offset-1'><h4 id='counter'><span id='current-id'></span>/<span id='media-count'></span></h4></div>
+							<div class="row">
+								<div class="col-md-9 col-xs-8">
+										<h3 id='artist'></h3>
+										<h4 id='title'></h4>
+								</div>
+								<div class="col-md-3 col-md-offset-0 col-xs-3 col-xs-offset-1"><h4 id='counter'><span id='current-id'></span>/<span id='media-count'></span></h4></div>
 							</div>
 						</div>
 						<div class="panel-body">

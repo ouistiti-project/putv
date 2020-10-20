@@ -100,14 +100,13 @@ static const char const *str_play = "play";
 static const char const *str_pause = "pause";
 static const char const *str_next = "next";
 
-static int _print_entry(void *arg, const char *url,
+static int _print_entry(void *arg, int id, const char *url,
 		const char *info, const char *mime)
 {
 	if (url == NULL)
 		return -1;
 
 	json_t *object = (json_t*)arg;
-
 	json_t *json_info;
 	if (info != NULL)
 	{
@@ -154,7 +153,7 @@ static int _append_entry(void *arg, int id, const char *url,
 	if ((id >= entry->first) && entry->max)
 	{
 		json_t *object = json_object();
-		if (id >= 0 &&_print_entry(object, url, info, mime) == 0)
+		if (id >= 0 &&_print_entry(object, id, url, info, mime) == 0)
 		{
 			json_t *index = json_integer(id);
 			json_object_set(object, "id", index);
@@ -207,6 +206,34 @@ static int method_list(json_t *json_params, json_t **result, void *userdata)
 	entry.count = 0;
 	media->ops->list(media->ctx, _append_entry, (void *)&entry);
 	*result = json_pack("{s:i,s:i,s:o}", "count", count, "nbitems", entry.count, "playlist", entry.list);
+
+	return 0;
+}
+
+static int method_info(json_t *json_params, json_t **result, void *userdata)
+{
+	int ret;
+	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
+	media_t *media = player_media(ctx->player);
+	cmds_dbg("cmds: filter");
+
+	if (media->ops->find == NULL)
+	{
+		*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
+		return -1;
+	}
+
+	json_t *id_js = json_object_get(json_params, "id");
+	if (id_js && json_is_integer(id_js))
+	{
+		int id = json_integer_value(id_js);
+		*result = json_object();
+		media->ops->find(media->ctx, id, _print_entry, (void *)*result);
+	}
+	else
+	{
+		*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "id not found", json_null());
+	}
 
 	return 0;
 }
@@ -587,7 +614,7 @@ static int _display(void *arg, int id, const char *url, const char *info, const 
 		json_state = json_string(str_stop);
 	}
 	json_object_set(object, "state", json_state);
-	_print_entry(object, url, info, mime);
+	_print_entry(object, id, url, info, mime);
 	json_t *index = json_integer(id);
 	json_object_set(object, "id", index);
 
@@ -904,6 +931,14 @@ static int method_capabilities(json_t *json_params, json_t **result, void *userd
 	params = json_null();
 	json_object_set(action, "params", params);
 	json_array_append(actions, action);
+	action = json_object();
+	value = json_string("info");
+	json_object_set(action, "method", value);
+	params = json_array();
+	value = json_string("id");
+	json_array_append(params, value);
+	json_object_set(action, "params", params);
+	json_array_append(actions, action);
 	if (media->ops->list != NULL)
 	{
 		action = json_object();
@@ -1118,6 +1153,7 @@ static struct jsonrpc_method_entry_t method_table[] = {
 	{ 'r', "next", method_next, "" },
 	{ 'r', "setnext", method_setnext, "o" },
 	{ 'r', "list", method_list, "o" },
+	{ 'r', "info", method_info, "o" },
 	{ 'r', "filter", method_filter, "o" },
 	{ 'r', "append", method_append, "[]" },
 	{ 'r', "remove", method_remove, "o" },

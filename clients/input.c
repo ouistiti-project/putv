@@ -275,21 +275,23 @@ static void *_check_socket(void *arg)
 	input_ctx_t *ctx = (input_ctx_t *)arg;
 	ctx->socketpath = malloc(strlen(ctx->root) + 1 + strlen(ctx->name) + 1);
 	sprintf(ctx->socketpath, "%s/%s", ctx->root, ctx->name);
-	if (!access(ctx->socketpath, R_OK | W_OK))
-	{
-		run_client((void *)ctx);
-	}
 	while (ctx->run)
 	{
+		if (!access(ctx->socketpath, R_OK | W_OK))
+		{
+			run_client((void *)ctx);
+		}
+
 		char buffer[BUF_LEN];
-		int i = 0;
-		int length = read(ctx->inotifyfd, buffer, BUF_LEN);
+		int length;
+		length = read(ctx->inotifyfd, buffer, BUF_LEN);
 
 		if (length < 0)
 		{
 			err("read");
 		}
 
+		int i = 0;
 		while (i < length)
 		{
 			struct inotify_event *event =
@@ -298,10 +300,6 @@ static void *_check_socket(void *arg)
 			{
 				if (event->mask & IN_CREATE)
 				{
-					if (!access(ctx->socketpath, R_OK | W_OK))
-					{
-						run_client((void *)ctx);
-					}
 				}
 #if 0
 				else if (event->mask & IN_DELETE)

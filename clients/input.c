@@ -47,6 +47,7 @@
 #include <libinput.h>
 #endif
 
+#include "daemonize.h"
 #include "client_json.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -321,6 +322,7 @@ static void *_check_socket(void *arg)
 #define DAEMONIZE 0x01
 int main(int argc, char **argv)
 {
+	const char *pidfile = NULL;
 	int mode = 0;
 	input_ctx_t input_data = {
 		.root = "/tmp",
@@ -332,7 +334,7 @@ int main(int argc, char **argv)
 	int opt;
 	do
 	{
-		opt = getopt(argc, argv, "R:n:i:m:hD");
+		opt = getopt(argc, argv, "R:n:i:m:hDp:L:");
 		switch (opt)
 		{
 			case 'R':
@@ -360,10 +362,24 @@ int main(int argc, char **argv)
 			case 'D':
 				mode |= DAEMONIZE;
 			break;
+			case 'p':
+				pidfile = optarg;
+			break;
+			case 'L':
+			{
+				int logfd = open(optarg, O_WRONLY | O_CREAT | O_TRUNC, 00644);
+				if (logfd > 0)
+				{
+					dup2(logfd, 1);
+					dup2(logfd, 2);
+					close(logfd);
+				}
+			}
+			break;
 		}
 	} while(opt != -1);
 
-	if ((mode & DAEMONIZE) && fork() != 0)
+	if ((mode & DAEMONIZE) && daemonize(pidfile) == -1)
 	{
 		return 0;
 	}

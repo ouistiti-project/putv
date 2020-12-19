@@ -3,6 +3,7 @@
 # Starts putv.
 #
 
+BINDIR="/usr/bin/"
 DAEMON="putv"
 PIDFILE="/var/run/$DAEMON.pid"
 MEDIA="file:///media"
@@ -15,12 +16,14 @@ OUTPUT=""
 OPTIONS=""
 [ -r "/etc/default/$DAEMON" ] && . "/etc/default/$DAEMON"
 
-client() {
-  chmod a+rwx ${WEBSOCKETDIR}
-  ${CDISPLAY} -D ${OPTIONS_CLIENTS}
-  if [ -c ${CINPUT_DEVICE} ]; then
-    ${CINPUT} -D ${OPTIONS_CLIENTS} ${OPTIONS_CINPUT}
-  fi
+prepare() {
+	if echo $MEDIA | grep -q db:// ; then
+		DBFILE=$(echo $MEDIA | cut -b 6-)
+		MUSICDIR=$(dirname $DBFILE)
+		NEWFILES=$(find ${MUSICDIR}/ -newer $DBFILE -iname "*.mp3")
+		NEWFILES="$NEWFILES $(find ${MUSICDIR}/ -newer $DBFILE -iname "*.flac")"
+		echo $NEWFILES
+	fi
 }
 
 start() {
@@ -44,7 +47,7 @@ start() {
 		exit 0
 	fi
 	printf 'Starting %s: ' "$DAEMON"
-	start-stop-daemon -S -q -x "/usr/bin/$DAEMON" \
+	start-stop-daemon -S -q -x "${BINDIR}${DAEMON}" \
 		-- $OPTIONS
 	status=$?
 	if [ "$status" -eq 0 ]; then
@@ -75,7 +78,7 @@ restart() {
 }
 
 case "$1" in
-	start|stop|restart)
+	start|stop|restart|prepare)
 		"$1";;
 	reload)
 		# Restart, since there is no true "reload" feature.

@@ -19,9 +19,6 @@ ifeq ($(BR2_PACKAGE_TINYSVCMDNS),y)
 PUTV_DEPENDENCIES += tinysvcmdns
 endif
 
-#PUTV_MAKE_OPTS+=V=1
-#PUTV_MAKE_OPTS+=DEBUG=y
-
 ifeq ($(BR2_PACKAGE_PUTV_WEBIF_HTTPS),y)
 PUTV_DATADIR=/srv/wwwS
 else
@@ -89,10 +86,12 @@ endif
 
 define PUTV_INSTALL_INIT_SYSV
 	$(INSTALL) -D -m 755 $(PUTV_PKGDIR)/putv.sh \
-		$(TARGET_DIR)/etc/init.d/S50putv
+		$(TARGET_DIR)/etc/init.d/S30putv
+	$(INSTALL) -D -m 755 $(PUTV_PKGDIR)/putv_client.sh \
+		$(TARGET_DIR)/etc/init.d/S31putv_client
 
 	$(INSTALL) -D -m 755 $(PUTV_PKGDIR)/gmrender.sh \
-		$(TARGET_DIR)/etc/init.d/S51gmrender
+		$(TARGET_DIR)/etc/init.d/S80gmrender
 endef
 
 $(eval $(kconfig-package))

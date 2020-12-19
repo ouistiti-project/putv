@@ -44,6 +44,7 @@
 #include <arpa/inet.h>
 #include <sys/ioctl.h>
 #include <ifaddrs.h>
+#include <netdb.h>
 
 #include <pthread.h>
 
@@ -131,6 +132,12 @@ static cmds_ctx_t *cmds_tinysvcmdns_init(player_ctx_t *player, void *arg)
 		{
 			if (svr == NULL)
 			{
+				char host[NI_MAXHOST];
+				getnameinfo(ifa_main->ifa_addr,
+						sizeof(struct sockaddr_in),
+						host, NI_MAXHOST,
+						NULL, 0, NI_NUMERICHOST);
+				dbg("tinysvcmdns: address %s", host);
 				svr = mdnsd_start(&((struct sockaddr_in *)ifa_main->ifa_addr)->sin_addr);
 			}
 			if (svr == NULL) {
@@ -226,6 +233,7 @@ static void tinysvcmdns_onchange(void * userctx, event_t event, void *eventarg)
 			src_t *src = player_source(data->playerctx);
 			if (src != NULL && src->ops->mdns != NULL)
 			{
+				//mdnsd_register_cb(ctx->svr, "_http._tcp.local.", src->ops->mdns, src->ctx);
 			}
 		}
 		break;

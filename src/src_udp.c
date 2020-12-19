@@ -77,7 +77,7 @@ struct src_ctx_s
 #include "media.h"
 #include "decoder.h"
 
-#include "mdns.h"
+#include "tinysvcmdns/mdns.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -508,13 +508,22 @@ static decoder_t *src_estream(src_ctx_t *ctx, long index)
 #endif
 }
 
-static void src_mdns(src_ctx_t *ctx, struct rr_entry *entry)
+static void src_mdns(src_ctx_t *ctx, const char *host, struct rr_entry *entry)
 {
+	warn("!!!!!!!!!!!!!! coucou !!!!!!!!!!!!!!!!!!");
+	warn("entry %p", entry);
+	if (entry != NULL)
+	{
+		char *namestr = nlabel_to_str(entry->name);
+		warn("tinysvcmdns: name = %s type = %s", namestr, rr_get_type_name(entry->type));
+	}
+#if 0
 	const char *host = "224.0.0.1";
 	int iport = 4400;
 	int sock = src_connect(ctx, host, iport);
 	if (ctx->sock > 0)
 		src_start(ctx);
+#endif
 }
 
 static void src_destroy(src_ctx_t *ctx)

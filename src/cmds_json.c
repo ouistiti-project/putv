@@ -1203,10 +1203,14 @@ static size_t _cmds_recv(void *buff, size_t size, void *userctx)
 		err("cmds: json recv error %s", strerror(errno));
 		return size;
 	}
+	dbg("cmds: recv 2 data %ld %.*s", size, size, buff);
 
-	int length = strlen(buff) + 1;
+	size_t length = strlen(buff) + 1;
 	if (length < size)
+	{
+		dbg("cmds: recv 3 data %ld", size, length);
 		size = length;
+	}
 	size = recv(sock,
 		buff, size, MSG_DONTWAIT | MSG_NOSIGNAL);
 
@@ -1323,11 +1327,32 @@ static void *_cmds_json_pthreadsend(void *arg)
 			cmds_dbg("cmds: send request");
 			json_request_list_t *request = ctx->requests;
 			ctx->requests = ctx->requests->next;
-			int ret = _jsonrpc_sendresponse(request->info, request->request);
+			int ret = -1;
+			/** run only request not disabled by a previous request **/
+			if (request->info != NULL)
+			{
+				ret = _jsonrpc_sendresponse(request->info, request->request);
+			}
 			if (ret < 0)
 			{
 				err("cmds: sendresponse error %d", ret);
-				_cmds_json_removeinfo(ctx, request->info);
+				/**
+				 * remove all requests on this client threads
+				 */
+				json_request_list_t *it = ctx->requests;
+				for (; it != NULL; it = it->next)
+				{
+					if (request->info == it->info)
+					{
+						/** disabled requests on this client **/
+						it->info = NULL;
+					}
+				}
+
+				/** free the client **/
+				if (request->info != NULL)
+					_cmds_json_removeinfo(ctx, request->info);
+				/** free the request **/
 				json_decref(request->request);
 				free(request);
 				continue;
@@ -1405,10 +1430,7 @@ static int jsonrpc_command(thread_info_t *info)
 		ret = poll(poll_set, numfds, -1);
 		if (poll_set[0].revents & POLLHUP)
 		{
-			pthread_mutex_lock(&ctx->mutex);
 			err("cmds: client hangup");
-			_cmds_json_removeinfo(ctx, info);
-			pthread_mutex_unlock(&ctx->mutex);
 			run = 0;
 			break;
 		}
@@ -1441,9 +1463,14 @@ static int jsonrpc_command(thread_info_t *info)
 		else
 		{
 			dbg("recv nothing");
+			if (info->sock == -1)
+				run = 0;
 		}
 	}
 	warn("cmds: json socket %d leave", sock);
+	pthread_mutex_lock(&ctx->mutex);
+	_cmds_json_removeinfo(ctx, info);
+	pthread_mutex_unlock(&ctx->mutex);
 	return ret;
 }
 

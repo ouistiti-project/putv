@@ -88,20 +88,13 @@ static int answer_subscribe(json_t *json_params, json_t **result, void *userdata
 	return !state;
 }
 
-static int method_next(json_t *json_params, json_t **result, void *userdata)
+static int method_nullparam(json_t *json_params, json_t **result, void *userdata)
 {
 	*result = json_null();
 	return 0;
 }
 
-static int method_state(json_t *json_params, json_t **result, void *userdata)
-{
-	*result = json_null();
-	client_data_t *data = userdata;
-	return 0;
-}
-
-static int answer_state(json_t *json_params, json_t **result, void *userdata)
+static int answer_stdparams(json_t *json_params, json_t **result, void *userdata)
 {
 	client_data_t *data = userdata;
 
@@ -124,60 +117,10 @@ static int method_volume(json_t *json_params, json_t **result, void *userdata)
 	return 0;
 }
 
-static int answer_volume(json_t *json_params, json_t **result, void *userdata)
-{
-	client_data_t *data = userdata;
-	answer_proto(data, json_params);
-	return 0;
-}
-
-static int method_change(json_t *json_params, json_t **result, void *userdata)
+static int method_stdparams(json_t *json_params, json_t **result, void *userdata)
 {
 	client_data_t *data = userdata;
 	*result = data->params;
-	return 0;
-}
-
-static int answer_change(json_t *json_params, json_t **result, void *userdata)
-{
-	client_data_t *data = userdata;
-	answer_proto(data, json_params);
-	return 0;
-}
-
-static int method_append(json_t *json_params, json_t **result, void *userdata)
-{
-	client_data_t *data = userdata;
-	if (json_is_array(data->params))
-	{
-		*result = data->params;
-		return 0;
-	}
-	return -1;
-}
-
-static int answer_append(json_t *json_params, json_t **result, void *userdata)
-{
-	client_data_t *data = userdata;
-	answer_proto(data, json_params);
-	return 0;
-}
-
-static int method_remove(json_t *json_params, json_t **result, void *userdata)
-{
-	client_data_t *data = userdata;
-	if (json_is_object(data->params))
-	{
-		*result = data->params;
-		return 0;
-	}
-	return -1;
-}
-
-static int answer_remove(json_t *json_params, json_t **result, void *userdata)
-{
-	client_data_t *data = userdata;
-	answer_proto(data, json_params);
 	return 0;
 }
 
@@ -187,26 +130,6 @@ static int method_list(json_t *json_params, json_t **result, void *userdata)
 	json_error_t error;
 	*result = json_object();
 	json_object_set(*result, "first", json_integer(data->list->first));
-	return 0;
-}
-
-static int answer_list(json_t *json_params, json_t **result, void *userdata)
-{
-	client_data_t *data = userdata;
-	answer_proto(data, json_params);
-	return 0;
-}
-
-static int method_getposition(json_t *json_params, json_t **result, void *userdata)
-{
-	*result = json_null();
-	return 0;
-}
-
-static int answer_getposition(json_t *json_params, json_t **result, void *userdata)
-{
-	client_data_t *data = userdata;
-	answer_proto(data, json_params);
 	return 0;
 }
 
@@ -231,28 +154,28 @@ struct jsonrpc_method_entry_t table[] =
 {
 	{'r',"subscribe", method_subscribe, "o", 0, NULL},
 	{'a',"subscribe", answer_subscribe, "o", 0, NULL},
-	{'r',"next", method_next, "", 0, NULL},
-	{'a',"next", answer_state, "o", 0, NULL},
-	{'r',"play", method_state, "", 0, NULL},
-	{'a',"play", answer_state, "o", 0, NULL},
-	{'r',"pause", method_state, "", 0, NULL},
-	{'a',"pause", answer_state, "o", 0, NULL},
-	{'r',"stop", method_state, "", 0, NULL},
-	{'a',"stop", answer_state, "o", 0, NULL},
-	{'r',"status", method_state, "", 0, NULL},
-	{'a',"status", answer_state, "o", 0, NULL},
+	{'r',"next", method_nullparam, "", 0, NULL},
+	{'a',"next", answer_stdparams, "o", 0, NULL},
+	{'r',"play", method_nullparam, "", 0, NULL},
+	{'a',"play", answer_stdparams, "o", 0, NULL},
+	{'r',"pause", method_nullparam, "", 0, NULL},
+	{'a',"pause", answer_stdparams, "o", 0, NULL},
+	{'r',"stop", method_nullparam, "", 0, NULL},
+	{'a',"stop", answer_stdparams, "o", 0, NULL},
+	{'r',"status", method_nullparam, "", 0, NULL},
+	{'a',"status", answer_stdparams, "o", 0, NULL},
 	{'r',"volume", method_volume, "o", 0, NULL},
-	{'a',"volume", answer_volume, "o", 0, NULL},
-	{'r',"change", method_change, "o", 0, NULL},
-	{'a',"change", answer_change, "o", 0, NULL},
-	{'r',"append", method_append, "o", 0, NULL},
-	{'a',"append", answer_append, "o", 0, NULL},
-	{'r',"remove", method_remove, "o", 0, NULL},
-	{'a',"remove", answer_remove, "o", 0, NULL},
+	{'a',"volume", answer_stdparams, "o", 0, NULL},
+	{'r',"change", method_stdparams, "o", 0, NULL},
+	{'a',"change", answer_stdparams, "o", 0, NULL},
+	{'r',"append", method_stdparams, "o", 0, NULL},
+	{'a',"append", answer_stdparams, "o", 0, NULL},
+	{'r',"remove", method_stdparams, "o", 0, NULL},
+	{'a',"remove", answer_stdparams, "o", 0, NULL},
 	{'r',"list", method_list, "o", 0, NULL},
-	{'a',"list", answer_list, "o", 0, NULL},
-	{'r',"getposition", method_getposition, "", 0, NULL},
-	{'a',"getposition", answer_getposition, "o", 0, NULL},
+	{'a',"list", answer_stdparams, "o", 0, NULL},
+	{'r',"getposition", method_nullparam, "", 0, NULL},
+	{'a',"getposition", answer_stdparams, "o", 0, NULL},
 	{'n',"onchange", notification_onchange, "o", 0, NULL},
 	{0, NULL},
 };

@@ -52,6 +52,7 @@ typedef struct thread_server_s
 	void *ctx;
 	int sock;
 	thread_info_t firstinfo;
+	pthread_mutex_t lock;
 } thread_server_t;
 
 
@@ -69,7 +70,8 @@ void unixserver_remove(thread_info_t *info)
 {
 	thread_info_t *it = &info->server->firstinfo;
 	dbg("unix_server: remove socket %d", info->sock);
-	if (it == NULL)
+	dbg("unix_server: first %p current %p", it, info);
+	if (it == info)
 	{
 		err("the list must be never empty when removing");
 		return;
@@ -77,9 +79,12 @@ void unixserver_remove(thread_info_t *info)
 	/**
 	 * firstinfo is an empty client socket
 	 */
+	thread_server_t *server = info->server;
+	pthread_mutex_lock(&server->lock);
 	while (it != NULL && info != it->next) it = it->next;
 	if (it != NULL)
 		it->next = info->next;
+	pthread_mutex_unlock(&server->lock);
 	close(info->sock);
 	free(info);
 }
@@ -87,6 +92,7 @@ void unixserver_remove(thread_info_t *info)
 void unixserver_kill(thread_info_t *info)
 {
 	thread_server_t *server = info->server;
+	pthread_mutex_lock(&server->lock);
 	thread_info_t *it = &info->server->firstinfo;
 	while (it->next) {
 		thread_info_t *old = it->next;
@@ -99,6 +105,7 @@ void unixserver_kill(thread_info_t *info)
 		if (it == NULL)
 			break;
 	}
+	pthread_mutex_unlock(&server->lock);
 	close(server->sock);
 	free(server);
 }
@@ -113,6 +120,7 @@ int unixserver_run(client_routine_t routine, void *userctx, const char *socketpa
 	{
 		thread_server_t *server = calloc(1, sizeof(*server));
 		server->sock = sock;
+		pthread_mutex_init(&server->lock, NULL);
 
 		struct sockaddr_un addr;
 		memset(&addr, 0, sizeof(struct sockaddr_un));
@@ -137,9 +145,11 @@ int unixserver_run(client_routine_t routine, void *userctx, const char *socketpa
 					info->sock = newsock;
 					info->userctx = userctx;
 					info->server = server;
+					pthread_mutex_lock(&server->lock);
 					struct thread_info_s *it = &server->firstinfo;
 					while (it->next != NULL) it = it->next;
 					it->next = info;
+					pthread_mutex_unlock(&server->lock);
 					start(routine, info);
 				}
 			} while(newsock > 0);
@@ -152,6 +162,7 @@ int unixserver_run(client_routine_t routine, void *userctx, const char *socketpa
 			free(info);
 			info = next;
 		}
+		pthread_mutex_destroy(&server->lock);
 		free(server);
 	}
 	if (ret) {

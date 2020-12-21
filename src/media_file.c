@@ -109,6 +109,17 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 
 	media = calloc(1, sizeof(*media));
 
+	if (mime)
+		media->mime = mime;
+	else
+		media->mime = utils_getmime(path);
+
+	if (!strcmp(media->mime, mime_directory))
+	{
+		err("media: try to insert directory into file media");
+		free(media);
+		return -1;
+	}
 	if (ctx->media != NULL)
 		media->id = id + 1;
 	ctx->lastid = media->id;
@@ -121,10 +132,6 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 		media->info = strdup(info);
 	else
 		media->info = media_fillinfo(path, mime);
-	if (mime)
-		media->mime = mime;
-	else
-		media->mime = utils_getmime(path);
 	return id;
 }
 

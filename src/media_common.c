@@ -66,6 +66,7 @@ const char const *mime_audiomp3 = "audio/mp3";
 const char const *mime_audioflac = "audio/flac";
 const char const *mime_audioalac = "audio/alac";
 const char const *mime_audiopcm = "audio/pcm";
+const char const *mime_directory = "inode/directory";
 
 const char const *str_title = "title";
 const char const *str_artist = "artist";
@@ -98,18 +99,12 @@ void utils_srandom()
 
 const char *utils_getmime(const char *path)
 {
-#ifdef DECODER_MAD
-	if (!decoder_mad->check(path))
-		return decoder_mad->mime(NULL);
-#endif
-#ifdef DECODER_FLAC
-	if (!decoder_flac->check(path))
-		return decoder_flac->mime(NULL);
-#endif
-#ifdef DECODER_PASSTHROUGH
-	if (!decoder_passthrough->check(path))
-		return decoder_passthrough->mime(NULL);
-#endif
+	const decoder_ops_t *ops = decoder_check(path);
+	if (ops != NULL)
+		return ops->mime(NULL);
+	struct stat statinfo;
+	if (stat(path, &statinfo) == 0 && S_ISDIR(statinfo.st_mode))
+		return mime_directory;
 	return mime_octetstream;
 }
 

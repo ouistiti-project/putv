@@ -25,12 +25,18 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *****************************************************************************/
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <errno.h>
 #include <stdlib.h>
+
+#ifdef DECODER_MODULES
+#include <dlfcn.h>
+#include <dirent.h>
+#endif
 
 #include "player.h"
 #include "decoder.h"
@@ -46,29 +52,53 @@
 
 #define decoder_dbg(...)
 
+static const decoder_ops_t * decoderslist [10];
+
+#ifdef DECODER_MODULES
+static const decoder_ops_t * decoder_load_module(const char *root, const char *name)
+{
+	const decoder_ops_t *ops = NULL;
+	if (name != NULL)
+	{
+		char *file = NULL;
+		if (!strncmp("decoder_", name, 7) &&
+			asprintf(&file, "%s/%s", root, name) > 0)
+		{
+			void *dh = dlopen(file, RTLD_NOW | RTLD_DEEPBIND | RTLD_GLOBAL);
+			if (dh == NULL)
+			{
+				err("ERROR: No such output library: '%s %s'", file, dlerror());
+			}
+			else
+			{
+				ops = dlsym(dh, "decoder_ops");
+				dbg("new decoder %p", ops);
+			}
+			free(file);
+		}
+	}
+	return ops;
+}
+#endif
+
 decoder_t *decoder_build(player_ctx_t *player, const char *mime)
 {
 	decoder_t *decoder = NULL;
-	const decoder_ops_t *ops = NULL;
 	decoder_ctx_t *ctx = NULL;
-#ifdef DECODER_MAD
-	if (mime && !strcmp(mime, decoder_mad->mime(NULL)))
+	const decoder_ops_t *ops = NULL;
+	int i = 0;
+	if (mime)
 	{
-		ops = decoder_mad;
+		while (decoderslist[i] != NULL)
+		{
+			if (!strcmp(mime, decoderslist[i]->mime(NULL)))
+			{
+				ops = decoderslist[i];
+				break;
+			}
+			i++;
+		}
 	}
-#endif
-#ifdef DECODER_FLAC
-	if (mime && !strcmp(mime, decoder_flac->mime(NULL)))
-	{
-		ops = decoder_flac;
-	}
-#endif
-#ifdef DECODER_PASSTHROUGH
-	if (mime && !strcmp(mime, decoder_passthrough->mime(NULL)))
-	{
-		ops = decoder_passthrough;
-	}
-#endif
 
 	if (ops != NULL)
 	{
@@ -82,4 +112,79 @@ decoder_t *decoder_build(player_ctx_t *player, const char *mime)
 		decoder->ctx = ctx;
 	}
 	return decoder;
+}
+
+const char *decoder_mimelist(int first)
+{
+	const char *mime = NULL;
+	static int i = 0;
+	if (first)
+		i = 0;
+	if (decoderslist[i] != NULL)
+	{
+		mime = decoderslist[i]->mime(NULL);
+		i++;
+	}
+	else
+		i = 0;
+	return mime;
+}
+
+const decoder_ops_t *decoder_check(const char *path)
+{
+	int i = 0;
+	const decoder_ops_t *ops = decoderslist[i];
+	while (ops != NULL)
+	{
+		if (ops->check(path))
+			break;
+		i++;
+		ops = decoderslist[i];
+	}
+	return ops;
+}
+
+static void _decoder_init(void) __attribute__((constructor));
+
+static void _decoder_init(void)
+{
+	const decoder_ops_t *decoders[] = {
+#ifndef DECODER_MODULES
+#ifdef DECODER_MAD
+		decoder_mad,
+#endif
+#ifdef DECODER_FLAC
+		decoder_flac,
+#endif
+#endif
+#ifdef DECODER_PASSTHROUGH
+		decoder_passthrough,
+#endif
+		NULL
+	};
+
+	int i;
+	for (i = 0; i < 10 && decoders[i] != NULL; i++)
+	{
+		decoderslist[i] = decoders[i];
+	}
+
+#ifdef DECODER_MODULES
+	struct dirent **namelist;
+	int n;
+
+	n = scandir(PKGLIBDIR, &namelist, NULL, alphasort);
+	while (n > 0)
+	{
+		n--;
+		if (namelist[n]->d_name[0] != '.')
+		{
+			const decoder_ops_t *ops = decoder_load_module(PKGLIBDIR, namelist[n]->d_name);
+			if (ops != NULL)
+				decoderslist[i++] = ops;
+			if (i >= 10)
+				break;
+		}
+	}
+#endif
 }

@@ -75,5 +75,6 @@ int media_change(client_data_t *data, client_event_prototype_t proto, void *prot
 int media_insert(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *media);
 int media_remove(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *media);
 int media_list(client_data_t *data, client_event_prototype_t proto, void *protodata, list_t *list);
+int media_options(client_data_t *data, client_event_prototype_t proto, void *protodata, int random, int loop);
 
 #endif

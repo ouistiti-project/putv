@@ -47,6 +47,7 @@
 #include <libinput.h>
 #endif
 
+#include "daemonize.h"
 #include "client_json.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -79,8 +80,11 @@ struct input_ctx_s
 		STATE_PLAY,
 		STATE_PAUSE,
 		STATE_STOP,
+		STATE_RANDOM = 0x10,
+		STATE_LOOP = 0x20,
 	} state;
 };
+#define STATE_OPTIONSMASK (STATE_RANDOM | STATE_LOOP)
 
 #ifdef USE_LIBINPUT
 static int open_restricted(const char *path, int flags, void *user_data)
@@ -109,8 +113,20 @@ int input_checkstate(void *data, json_t *params)
 		ctx->state = STATE_PAUSE;
 	else if (!strcmp(state, "stop"))
 		ctx->state = STATE_STOP;
-	else
-		ctx->state = STATE_UNKNOWN;
+
+	const char *string[2] = {NULL, NULL};
+	json_unpack(params, "{s?[ss]}", "options", &string[0], &string[1]);
+	int i;
+	for (i = 0; i < 2; i++)
+	{
+		if (string[i] == NULL)
+			continue;
+		if (!strcmp(string[i], "random"))
+			ctx->state |= STATE_RANDOM;
+		if (!strcmp(string[i], "loop"))
+			ctx->state |= STATE_LOOP;
+	}
+
 	return 0;
 }
 
@@ -127,8 +143,8 @@ int input_parseevent(input_ctx_t *ctx, const struct input_event *event)
 	switch (event->code)
 	{
 	case KEY_PLAYPAUSE:
-		dbg("key KEY_PLAYPAUSE");
-		if (ctx->state == STATE_PLAY)
+		dbg("key KEY_PLAYPAUSE %X", ctx->state);
+		if ((ctx->state & ~STATE_OPTIONSMASK) == STATE_PLAY)
 			ret = client_pause(ctx->client, input_checkstate, ctx);
 		else
 			ret = client_play(ctx->client, input_checkstate, ctx);
@@ -161,32 +177,38 @@ int input_parseevent(input_ctx_t *ctx, const struct input_event *event)
 		dbg("key KEY_VOLUMEUP");
 		ret = client_volume(ctx->client, NULL, ctx, json_integer(+5));
 	break;
+	case KEY_SHUFFLE:
+		dbg("key KEY_SHUFFLE");
+		ret = media_options(ctx->client, NULL, ctx, (ctx->state & STATE_RANDOM)?0:1, (ctx->state & STATE_LOOP)?0:1);
+	break;
 	case KEY_PROG1:
 		dbg("key KEY_PROG1");
 		if (ctx->media)
 		{
-			int i = ctx->media_id + 1;
-			if (i == json_array_size(ctx->media))
+			int i = ctx->media_id;
+			if (i >= json_array_size(ctx->media))
 				i = 0;
 			json_t *media = json_array_get(ctx->media, i);
 			if (json_is_object(media))
 			{
-				ret = media_change(ctx->client, NULL, ctx, media);
+				ret = media_change(ctx->client, NULL, ctx, json_incref(media));
 			}
+			ctx->media_id = i + 1;
 		}
 	break;
 	case KEY_PROG2:
 		dbg("key KEY_PROG2");
 		if (ctx->media)
 		{
-			int i = ctx->media_id - 1;
+			int i = ctx->media_id;
 			if (i == -1)
 				i = json_array_size(ctx->media) - 1;
 			json_t *media = json_array_get(ctx->media, i);
 			if (json_is_object(media))
 			{
-				ret = media_change(ctx->client, NULL, ctx, media);
+				ret = media_change(ctx->client, NULL, ctx, json_incref(media));
 			}
+			ctx->media_id = i - 1;
 		}
 	break;
 	default:
@@ -202,6 +224,7 @@ int run_client(void *arg)
 	client_data_t data = {0};
 	client_unix(ctx->socketpath, &data);
 	client_async(&data, 1);
+	client_eventlistener(&data, "onchange", input_checkstate, ctx);
 	ctx->client = &data;
 
 	pthread_t thread;
@@ -275,21 +298,23 @@ static void *_check_socket(void *arg)
 	input_ctx_t *ctx = (input_ctx_t *)arg;
 	ctx->socketpath = malloc(strlen(ctx->root) + 1 + strlen(ctx->name) + 1);
 	sprintf(ctx->socketpath, "%s/%s", ctx->root, ctx->name);
-	if (!access(ctx->socketpath, R_OK | W_OK))
-	{
-		run_client((void *)ctx);
-	}
 	while (ctx->run)
 	{
+		if (!access(ctx->socketpath, R_OK | W_OK))
+		{
+			run_client((void *)ctx);
+		}
+
 		char buffer[BUF_LEN];
-		int i = 0;
-		int length = read(ctx->inotifyfd, buffer, BUF_LEN);
+		int length;
+		length = read(ctx->inotifyfd, buffer, BUF_LEN);
 
 		if (length < 0)
 		{
 			err("read");
 		}
 
+		int i = 0;
 		while (i < length)
 		{
 			struct inotify_event *event =
@@ -298,10 +323,6 @@ static void *_check_socket(void *arg)
 			{
 				if (event->mask & IN_CREATE)
 				{
-					if (!access(ctx->socketpath, R_OK | W_OK))
-					{
-						run_client((void *)ctx);
-					}
 				}
 #if 0
 				else if (event->mask & IN_DELETE)
@@ -323,6 +344,7 @@ static void *_check_socket(void *arg)
 #define DAEMONIZE 0x01
 int main(int argc, char **argv)
 {
+	const char *pidfile = NULL;
 	int mode = 0;
 	input_ctx_t input_data = {
 		.root = "/tmp",
@@ -334,7 +356,7 @@ int main(int argc, char **argv)
 	int opt;
 	do
 	{
-		opt = getopt(argc, argv, "R:n:i:m:hD");
+		opt = getopt(argc, argv, "R:n:i:m:hDp:L:");
 		switch (opt)
 		{
 			case 'R':
@@ -362,10 +384,24 @@ int main(int argc, char **argv)
 			case 'D':
 				mode |= DAEMONIZE;
 			break;
+			case 'p':
+				pidfile = optarg;
+			break;
+			case 'L':
+			{
+				int logfd = open(optarg, O_WRONLY | O_CREAT | O_TRUNC, 00644);
+				if (logfd > 0)
+				{
+					dup2(logfd, 1);
+					dup2(logfd, 2);
+					close(logfd);
+				}
+			}
+			break;
 		}
 	} while(opt != -1);
 
-	if ((mode & DAEMONIZE) && fork() != 0)
+	if ((mode & DAEMONIZE) && daemonize(pidfile) == -1)
 	{
 		return 0;
 	}

@@ -39,6 +39,8 @@
 #include <arpa/inet.h>
 #endif
 
+#define DEFAULT_TTL_FOR_RECORD_WITH_HOSTNAME 120
+
 #define MALLOC_ZERO_STRUCT(x, type) \
 	x = malloc(sizeof(struct type)); \
 	memset(x, 0, sizeof(struct type));

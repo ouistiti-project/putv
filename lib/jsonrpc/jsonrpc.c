@@ -76,12 +76,12 @@ json_t *jsonrpc_error_object_predefined(int code, json_t *data)
 	return jsonrpc_error_object(code, message, data);
 }
 
-json_t *jsonrpc_ignore_error_response(json_t *json_id, json_t *json_error)
+json_t *jsonrpc_ignore_error_response(json_t *json_id, json_t *json_error, void *userdata)
 {
 	return NULL;
 }
 
-json_t *jsonrpc_request_error_response(json_t *json_id, json_t *json_error)
+json_t *jsonrpc_request_error_response(json_t *json_id, json_t *json_error, void *userdata)
 {
 	/* json_error reference is stolen */
 
@@ -279,20 +279,20 @@ json_t *jsonrpc_handle_request_single(json_t *json_request,
 	}
 
 	if (json_error) {
-		json_response = jsonrpc_error_response(json_id, json_error);
+		json_response = jsonrpc_error_response(json_id, json_error, userdata);
 		goto done;
 	}
 
 	if (entry == NULL || entry->name == NULL) {
 		json_response = jsonrpc_error_response(json_id,
-				jsonrpc_error_object_predefined(JSONRPC_METHOD_NOT_FOUND, NULL));
+				jsonrpc_error_object_predefined(JSONRPC_METHOD_NOT_FOUND, NULL), userdata);
 		goto done;
 	}
 
 	if (entry->params_spec) {
 		json_t *error_obj = jsonrpc_validate_params(json_params, entry->params_spec);
 		if (error_obj) {
-			json_response = jsonrpc_error_response(json_id, error_obj);
+			json_response = jsonrpc_error_response(json_id, error_obj, userdata);
 			goto done;
 		}
 	}
@@ -302,7 +302,7 @@ json_t *jsonrpc_handle_request_single(json_t *json_request,
 		if (rc==0) {
 			json_response = jsonrpc_result_response(json_id, json_result);
 		} else {
-			json_response = jsonrpc_error_response(json_id, json_result);
+			json_response = jsonrpc_error_response(json_id, json_result, userdata);
 		}
 	}
 
@@ -332,12 +332,12 @@ json_t *jsonrpc_jresponse(json_t *json_request,
 	json_t *json_response;
 	if (!json_request) {
 		json_response = jsonrpc_error_response(NULL,
-				jsonrpc_error_object_predefined(JSONRPC_PARSE_ERROR, NULL));
+				jsonrpc_error_object_predefined(JSONRPC_PARSE_ERROR, NULL), userdata);
 	} else if json_is_array(json_request) {
 		size_t len = json_array_size(json_request);
 		if (len==0) {
 			json_response = jsonrpc_error_response(NULL,
-					jsonrpc_error_object_predefined(JSONRPC_INVALID_REQUEST, NULL));
+					jsonrpc_error_object_predefined(JSONRPC_INVALID_REQUEST, NULL), userdata);
 		} else {
 			size_t k;
 			json_response = NULL;

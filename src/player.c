@@ -465,7 +465,10 @@ int player_run(player_ctx_t *ctx)
 		/******************
 		 * event manager  *
 		 ******************/
-		event_player_state_t event = {.playerctx = ctx, .state = ctx->state};
+		event_player_state_t event = {
+				.playerctx = ctx,
+				.state = ctx->state,
+		};
 		player_sendevent(ctx, PLAYER_EVENT_CHANGE, &event);
 
 		if (last_state != (ctx->state & ~STATE_PAUSE_MASK))
@@ -490,7 +493,7 @@ const char *player_filtername(player_ctx_t *ctx)
 	return ctx->filtername;
 }
 
-const src_t *player_source(player_ctx_t *ctx)
+src_t *player_source(player_ctx_t *ctx)
 {
 	return ctx->src;
 }

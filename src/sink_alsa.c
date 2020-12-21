@@ -390,9 +390,8 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 	if (ctx->mixerchannel == NULL)
 	{
 		warn("sink: alsa mixer not found %s", ctx->mixerch);
-		sink_ops_t *ops = (sink_ops_t *)sink_alsa;
-		ops->getvolume = NULL;
-		ops->setvolume = NULL;
+		((sink_ops_t *)sink_alsa)->getvolume = NULL;
+		((sink_ops_t *)sink_alsa)->setvolume = NULL;
 	}
 #endif
 

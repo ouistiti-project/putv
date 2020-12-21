@@ -50,7 +50,7 @@ void player_removeevent(player_ctx_t *ctx, int id);
 int player_eventlistener(player_ctx_t *ctx, event_listener_cb_t callback, void *cbctx, char *name);
 int player_mediaid(player_ctx_t *ctx);
 const char *player_filtername(player_ctx_t *ctx);
-const src_t *player_source(player_ctx_t *ctx);
+src_t *player_source(player_ctx_t *ctx);
 void player_sendevent(player_ctx_t *ctx, event_t event, void *data);
 
 int player_play(void* arg, int id, const char *url, const char *info, const char *mime);

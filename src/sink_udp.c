@@ -63,6 +63,7 @@ struct sink_ctx_s
 	int nchannels;
 	int sock;
 	int counter;
+	char *sink_txt[10];
 #ifdef MUX
 	mux_t *mux;
 #endif
@@ -249,6 +250,15 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 		ctx->player = player;
 		ctx->sock = sock;
 		memcpy(&ctx->saddr, &saddr, sizeof(saddr));
+		int i = 0;
+		if (asprintf(&ctx->sink_txt[i++], "h=%s", host) < 0)
+		{
+			i--; ctx->sink_txt[i++] = NULL;
+		}
+		if (asprintf(&ctx->sink_txt[i++], "p=%i", iport) < 0)
+		{
+			i--; ctx->sink_txt[i++] = NULL;
+		}
 
 		unsigned int size = mtu;
 		jitter_t *jitter = jitter_scattergather_init(jitter_name, 6, size);
@@ -423,11 +433,21 @@ static int sink_run(sink_ctx_t *ctx)
 	return 0;
 }
 
+static const char *sink_service(sink_ctx_t *ctx, int *port, const char **txt[])
+{
+	*port = htons(ctx->saddr.sin_port);
+	*txt = ctx->sink_txt;
+	return "_rtp._udp";
+}
+
 static void sink_destroy(sink_ctx_t *ctx)
 {
 	if (ctx->thread)
 		pthread_join(ctx->thread, NULL);
 	jitter_scattergather_destroy(ctx->in);
+	int i = 0;
+	while (ctx->sink_txt[i] != NULL)
+		free(ctx->sink_txt[i++]);
 #ifdef UDP_DUMP
 	if (ctx->dumpfd > 0)
 		close(ctx->dumpfd);
@@ -441,5 +461,6 @@ const sink_ops_t *sink_udp = &(sink_ops_t)
 	.jitter = sink_jitter,
 	.attach = sink_attach,
 	.run = sink_run,
+	.service = sink_service,
 	.destroy = sink_destroy,
 };

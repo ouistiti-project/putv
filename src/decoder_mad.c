@@ -90,8 +90,7 @@ struct decoder_ctx_s
 #define JITTER_init jitter_ringbuffer_init
 #define JITTER_destroy jitter_ringbuffer_destroy
 
-static void decoder_appendnsamples(decoder_ctx_t *ctx, uint32_t nsamples);
-static jitter_t *decoder_jitter(decoder_ctx_t *ctx, jitte_t jitte);
+static jitter_t *_decoder_jitter(decoder_ctx_t *ctx, jitte_t jitte);
 
 static
 enum mad_flow input(void *data,
@@ -298,6 +297,7 @@ enum mad_flow header(void *data, struct mad_header const *header)
 
 static const char *jitter_name = "mad decoder";
 
+#if 0
 static void _decoder_listener(void *arg, const src_t *src, event_t event, void *eventarg)
 {
 	decoder_ctx_t *ctx = (decoder_ctx_t *)arg;
@@ -306,13 +306,14 @@ static void _decoder_listener(void *arg, const src_t *src, event_t event, void *
 		case SRC_EVENT_NEW_ES:
 		{
 			event_new_es_t *event_data = (event_new_es_t *)eventarg;
-			decoder_jitter(ctx, event_data->jitte);
+			_decoder_jitter(ctx, event_data->jitte);
 		}
 		break;
 	}
 }
+#endif
 
-static decoder_ctx_t *mad_init(player_ctx_t *player)
+static decoder_ctx_t *_decoder_init(player_ctx_t *player)
 {
 	decoder_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->ops = decoder_mad;
@@ -325,7 +326,7 @@ static decoder_ctx_t *mad_init(player_ctx_t *player)
 	return ctx;
 }
 
-static jitter_t *decoder_jitter(decoder_ctx_t *ctx, jitte_t jitte)
+static jitter_t *_decoder_jitter(decoder_ctx_t *ctx, jitte_t jitte)
 {
 	if (ctx->in == NULL)
 	{
@@ -381,7 +382,7 @@ static void *mad_thread(void *arg)
 	return (void *)(intptr_t)result;
 }
 
-static int mad_run(decoder_ctx_t *ctx, jitter_t *jitter)
+static int _decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 {
 	int ret = 0;
 	ctx->out = jitter;
@@ -407,31 +408,31 @@ static int mad_run(decoder_ctx_t *ctx, jitter_t *jitter)
 	return ret;
 }
 
-static int decoder_check(const char *path)
+static int _decoder_check(const char *path)
 {
 	char *ext = strrchr(path, '.');
 	if (ext)
-		return strcmp(ext, ".mp3");
-	return -1;
+		return !strcmp(ext, ".mp3");
+	return 0;
 }
 
-static const char *mad_mime(decoder_ctx_t *ctx)
+static const char *_decoder_mime(decoder_ctx_t *ctx)
 {
 	return mime_audiomp3;
 }
 
-static uint32_t decoder_position(decoder_ctx_t *ctx)
+static uint32_t _decoder_position(decoder_ctx_t *ctx)
 {
 	uint32_t position = mad_timer_count(ctx->position, 0);
 	return position;
 }
 
-static uint32_t decoder_duration(decoder_ctx_t *ctx)
+static uint32_t _decoder_duration(decoder_ctx_t *ctx)
 {
 	return 0;
 }
 
-static void mad_destroy(decoder_ctx_t *ctx)
+static void _decoder_destroy(decoder_ctx_t *ctx)
 {
 	if (ctx->out)
 		ctx->out->ops->flush(ctx->out->ctx);
@@ -451,16 +452,21 @@ static void mad_destroy(decoder_ctx_t *ctx)
 	free(ctx);
 }
 
-const decoder_ops_t *decoder_mad = &(const decoder_ops_t)
+const decoder_ops_t _decoder_mad =
 {
 	.name = "mad",
-	.check = decoder_check,
-	.init = mad_init,
-	.jitter = decoder_jitter,
-	.run = mad_run,
-	.position = decoder_position,
-	.duration = decoder_duration,
-	.destroy = mad_destroy,
-	.mime = mad_mime,
+	.check = _decoder_check,
+	.init = _decoder_init,
+	.jitter = _decoder_jitter,
+	.run = _decoder_run,
+	.position = _decoder_position,
+	.duration = _decoder_duration,
+	.destroy = _decoder_destroy,
+	.mime = _decoder_mime,
 };
 
+const decoder_ops_t *decoder_mad = &_decoder_mad;
+
+#ifdef DECODER_MODULES
+extern const decoder_ops_t decoder_ops __attribute__ ((weak, alias ("_decoder_mad")));
+#endif

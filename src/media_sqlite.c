@@ -48,6 +48,7 @@ struct media_ctx_s
 	int mediaid;
 	unsigned int options;
 	int listid;
+	int oldlistid;
 	int fill;
 };
 
@@ -1117,14 +1118,19 @@ static int media_list(media_ctx_t *ctx, media_parse_t cb, void *data)
 	sqlite3 *db = ctx->db;
 	int count = 0;
 	sqlite3_stmt *statement;
+	int index;
 
 #ifndef MEDIA_SQLITE_EXT
-	char *sql = "select \"url\", \"mimeid\", \"id\", \"info\" from \"media\" inner join playlist on media.id=playlist.id";
+	char *sql = "select \"url\", \"mimeid\", \"id\", \"info\" from \"media\" inner join playlist on media.id=playlist.id where playlist.listid=@LISTID;";
 #else
-	char *sql = "select \"url\", \"mimeid\", \"opusid\", \"coverid\" from \"media\" inner join playlist on media.id=playlist.id, \"album\" on album.id=media.albumid ";
+	char *sql = "select \"url\", \"mimeid\", \"opusid\", \"coverid\" from \"media\" inner join playlist on media.id=playlist.id, \"album\" on album.id=media.albumid where playlist.listid=@LISTID;";
 #endif
 	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
 	SQLITE3_CHECK(ret, -1, sql);
+
+	index = sqlite3_bind_parameter_index(statement, "@LISTID");
+	ret = sqlite3_bind_int(statement, index, ctx->listid);
+	SQLITE3_CHECK(ret, 1, sql);
 
 	count = _media_execute(ctx, statement, cb, data);
 	sqlite3_finalize(statement);
@@ -1220,33 +1226,56 @@ static int _media_setlist(void *arg, int id, const char *url, const char *info, 
 	media_ctx_t *ctx = (media_ctx_t *)arg;
 	int ret;
 	sqlite3 *db = ctx->db;
-
-	char *sql = "insert into playlist (\"id\", \"listid\") values (@ID, @LISTID);";
-	sqlite3_stmt *st_insert;
-	ret = sqlite3_prepare_v2(db, sql, -1, &st_insert, NULL);
-	SQLITE3_CHECK(ret, 1, sql);
-
+	sqlite3_stmt *statement;
 	int index;
+	char *sql;
 
-	index = sqlite3_bind_parameter_index(st_insert, "@LISTID");
-	ret = sqlite3_bind_int(st_insert, index, ctx->listid);
+	/** insert the new entry into the playlist **/
+	sql = "select id from \"playlist\" where id=@ID and listid=@LISTID;";
+	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
 	SQLITE3_CHECK(ret, 1, sql);
 
-	index = sqlite3_bind_parameter_index(st_insert, "@ID");
-	ret = sqlite3_bind_int(st_insert, index, id);
+	index = sqlite3_bind_parameter_index(statement, "@ID");
+	ret = sqlite3_bind_int(statement, index, id);
 	SQLITE3_CHECK(ret, 1, sql);
 
-	ret = sqlite3_step(st_insert);
+	index = sqlite3_bind_parameter_index(statement, "@LISTID");
+	ret = sqlite3_bind_int(statement, index, ctx->listid);
+	SQLITE3_CHECK(ret, 1, sql);
+
+	ret = sqlite3_step(statement);
+
+	sqlite3_finalize(statement);
+	if (ret == SQLITE_ROW)
+	{
+		return 0;
+	}
+
+	/** insert the new entry into the playlist **/
+	sql = "insert into playlist (\"id\", \"listid\") values (@ID, @LISTID);";
+	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
+	SQLITE3_CHECK(ret, 1, sql);
+
+	index = sqlite3_bind_parameter_index(statement, "@LISTID");
+	ret = sqlite3_bind_int(statement, index, ctx->listid);
+	SQLITE3_CHECK(ret, 1, sql);
+
+	index = sqlite3_bind_parameter_index(statement, "@ID");
+	ret = sqlite3_bind_int(statement, index, id);
+	SQLITE3_CHECK(ret, 1, sql);
+
+	ret = sqlite3_step(statement);
 	if (ret != SQLITE_DONE)
 	{
 		err("media sqlite: error on insert %d", ret);
 	}
 	else
 		ret = 0;
+	sqlite3_finalize(statement);
 	return ret;
 }
 
-static int _media_changelist(media_ctx_t *ctx, char *playlist)
+static int _media_createlist(media_ctx_t *ctx, char *playlist, int fill)
 {
 	int ret;
 	int listid = 1;
@@ -1322,13 +1351,152 @@ static int _media_changelist(media_ctx_t *ctx, char *playlist)
 			dbg("new playlist %s %d", playlist, listid);
 			int tempolist = ctx->listid;
 			ctx->listid = listid;
-			if (ctx->fill == 1)
+			if (fill == 1)
 				media_list(ctx, _media_setlist, ctx);
 			ctx->listid = tempolist;
 		}
+		sqlite3_finalize(st_insert);
 #endif
 	}
 	sqlite3_finalize(st_select);
+	return listid;
+}
+
+#ifndef MEDIA_SQLITE_EXT
+#define media_filter(...) NULL
+#else
+#define TABLE_ALBUM 0
+#define TABLE_ARTIST 1
+#define TABLE_SPEED 2
+#define TABLE_TITLE 3
+#define TABLE_GENRE 4
+static int _media_filter(media_ctx_t *ctx, int table, const char *word)
+{
+	int ret = 0;
+	sqlite3 *db = ctx->db;
+	sqlite3_stmt *statement;
+	int count = 0;
+	int index;
+	char *sql[] = {
+		"select \"url\", \"mimeid\", \"opusid\", \"coverid\" from \"media\" "
+		"inner join opus on opus.id = media.opusid "
+		"where opus.albumid in ("
+			"select album.id from album "
+				"inner join "
+					"word on word.id=album.wordid "
+				"where LOWER(word.name) like LOWER(@NAME)"
+			");",
+		"select \"url\", \"mimeid\", \"opusid\", \"coverid\" from \"media\" "
+		"inner join opus on opus.id = media.opusid "
+		"where opus.artistid in ("
+			"select artist.id from artist "
+				"inner join "
+					"word on word.id=artist.wordid "
+				"where LOWER(word.name) like LOWER(@NAME)"
+			");",
+		"select \"url\", \"mimeid\", \"opusid\", \"coverid\" from \"media\" "
+		"inner join opus on opus.id = media.opusid "
+		"where opus.speedid in ("
+			"select speed.id from speed "
+				"inner join "
+					"word on word.id=speed.wordid "
+				"where LOWER(word.name) like LOWER(@NAME)"
+			");",
+		"select \"url\", \"mimeid\", \"opusid\", \"coverid\" from \"media\" "
+		"inner join opus on opus.id = media.opusid "
+		"where titleid in ("
+			"select word.id from word "
+				"where LOWER(word.name) like LOWER(@NAME)"
+			");",
+		"select \"url\", \"mimeid\", \"opusid\", \"coverid\" from \"media\" "
+		"where genreid in ("
+			"select word.id from word "
+				"where LOWER(word.name) like LOWER(@NAME)"
+			");",
+	};
+	ret = sqlite3_prepare_v2(db, sql[table], -1, &statement, NULL);
+	SQLITE3_CHECK(ret, -1, sql[table]);
+
+	index = sqlite3_bind_parameter_index(statement, "@NAME");
+	ret = sqlite3_bind_text(statement, index, word, -1 , SQLITE_STATIC);
+	SQLITE3_CHECK(ret, 1, sql[table]);
+
+	count = _media_execute(ctx, statement, _media_setlist, ctx);
+	sqlite3_finalize(statement);
+	return count;
+}
+
+static int media_filter(media_ctx_t *ctx, media_filter_t *filter)
+{
+	int listid = _media_createlist(ctx, "filter", 0);
+	if (ctx->listid != listid)
+		ctx->oldlistid = ctx->listid;
+	ctx->listid = listid;
+
+	int ret = 0;
+	sqlite3 *db = ctx->db;
+	int count = 0;
+	sqlite3_stmt *statement;
+	char *sql;
+	int index;
+
+	/** free the current filter **/
+	sql = "delete from playlist "
+			"where listid=@LISTID;";
+	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
+	SQLITE3_CHECK(ret, -1, sql);
+
+	index = sqlite3_bind_parameter_index(statement, "@LISTID");
+	ret = sqlite3_bind_int(statement, index, ctx->listid);
+	SQLITE3_CHECK(ret, 1, sql);
+
+	ret = sqlite3_step(statement);
+	sqlite3_finalize(statement);
+	if (ret != SQLITE_DONE)
+	{
+		err("media sqlite: error on delete %d", ret);
+		return 0;
+	}
+	if (filter == NULL)
+	{
+		ctx->listid = ctx->oldlistid;
+		return 0;
+	}
+	/** fill the new filter **/
+	if (filter->album != NULL)
+	{
+		count += _media_filter(ctx, TABLE_ALBUM, filter->album);
+	}
+	if (filter->artist != NULL)
+	{
+		count += _media_filter(ctx, TABLE_ARTIST, filter->artist);
+	}
+	if (filter->title != NULL)
+	{
+		count += _media_filter(ctx, TABLE_TITLE, filter->title);
+	}
+	if (filter->speed != NULL)
+	{
+		count += _media_filter(ctx, TABLE_SPEED, filter->speed);
+	}
+	if (filter->genre != NULL)
+	{
+		count += _media_filter(ctx, TABLE_GENRE, filter->genre);
+	}
+	if (filter->keyword != NULL)
+	{
+		count += _media_filter(ctx, TABLE_ALBUM, filter->keyword);
+		count += _media_filter(ctx, TABLE_ARTIST, filter->keyword);
+		count += _media_filter(ctx, TABLE_TITLE, filter->keyword);
+		count += _media_filter(ctx, TABLE_GENRE, filter->keyword);
+	}
+	return count;
+}
+#endif
+
+static int _media_changelist(media_ctx_t *ctx, char *playlist)
+{
+	int listid = _media_createlist(ctx, playlist, ctx->fill);
 	return listid;
 }
 
@@ -1361,6 +1529,10 @@ static int _media_opendb(media_ctx_t *ctx, const char *url)
 	if (ctx->query != NULL)
 	{
 		char *fill = strstr(ctx->query, "fill=true");
+		if (fill != NULL)
+		{
+			ctx->fill = 1;
+		}
 		char *playlist = strstr(ctx->query, "playlist=");
 		if (playlist != NULL)
 		{
@@ -1371,10 +1543,6 @@ static int _media_opendb(media_ctx_t *ctx, const char *url)
 			if (end != NULL)
 				*end = '\0';
 			ctx->listid = _media_changelist(ctx, tempo);
-		}
-		if (fill != NULL)
-		{
-			ctx->fill = 1;
 		}
 	}
 	return ret;
@@ -1431,6 +1599,50 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url, ...)
 				NULL,
 			};
 #else
+/**
+ * Database format:
+ * |   Table   |   Field   |  Comments               |
+ * ---------------------------------------------------
+ * |  media    |    url    | URL or file path to the |
+ * |           |           | data                    |
+ * |           |   mime    | mime string about the   |
+ * |           |           | type of data (ref mime) |
+ * |           |  opusid   | (ref opus)              |
+ * |           |  albumid  | opus may be on several  |
+ * |           |           | albums, media comes from|
+ * |           |           | one and only one album  |
+ * |           |  comment  | specific test about the |
+ * |           |           | data (radio, story...)  |
+ * ---------------------------------------------------
+ * |   opus    | titleid   | title of the opus       |
+ * |           |           | (ref word)              |
+ * |           |  albumid  | opus is first available |
+ * |           |           | from one album          |
+ * |           | artistid  | name of the artist      |
+ * |           |           | (ref artist => word)    |
+ * |           | genreid   | genre of the opus       |
+ * |           |           | (ref word)              |
+ * |           | coverid   | url to the cover image  |
+ * |           |           | for the opus (ref cover)|
+ * |           |   like    | note to the opus        |
+ * |           |   speed   | speed of the music      |
+ * |           |           | (ref speed)             |
+ * |           |  introid  | link the opeing opus of |
+ * |           |           | this one (ref opus)     |
+ * |           |  comment  | text about the opus     |
+ * ---------------------------------------------------
+ * |   album   |  wordid   | name of the album       |
+ * |           |           | (ref word)              |
+ * |           | artistid  | artist of the album may |
+ * |           |           | be different of the opus|
+ * |           |           | (ref artist)            |
+ * |           |  genreid  | genre of the opus       |
+ * |           |           | (ref word)              |
+ * |           |  coverid  | url to the cover image  |
+ * |           |           | for the album(ref cover)|
+ * |           |  comment  | text about the album    |
+ * ---------------------------------------------------
+ */
 			const char *query[] = {
 "create table mimes (\"id\" INTEGER PRIMARY KEY, \"name\" TEXT UNIQUE NOT NULL);",
 "insert into mimes (id, name) values (0, \"octet/stream\");",
@@ -1445,12 +1657,13 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url, ...)
 	"FOREIGN KEY (albumid) REFERENCES album(id) ON UPDATE SET NULL);",
 "create table opus (id INTEGER PRIMARY KEY,  titleid INTEGER UNIQUE NOT NULL, " \
 	"artistid INTEGER, otherid INTEGER, albumid INTEGER, " \
-	"genreid INTEGER, coverid INTEGER, like INTEGER, introid INTEGER, comment BLOB, " \
+	"genreid INTEGER, coverid INTEGER, like INTEGER, speedid INTEGER DEFAULT(2), introid INTEGER, comment BLOB, " \
 	"FOREIGN KEY (titleid) REFERENCES word(id), " \
 	"FOREIGN KEY (introid) REFERENCES opus(id), " \
 	"FOREIGN KEY (artistid) REFERENCES artist(id) ON UPDATE SET NULL," \
 	"FOREIGN KEY (albumid) REFERENCES album(id) ON UPDATE SET NULL," \
 	"FOREIGN KEY (genreid) REFERENCES word(id) ON UPDATE SET NULL," \
+	"FOREIGN KEY (speedid) REFERENCES speed(id) ON UPDATE SET NULL," \
 	"FOREIGN KEY (coverid) REFERENCES cover(id) ON UPDATE SET NULL);",
 "create table album (id INTEGER PRIMARY KEY, wordid INTEGER UNIQUE NOT NULL, artistid INTEGER, " \
 	"genreid INTEGER, coverid INTEGER, comment BLOB, " \
@@ -1462,6 +1675,11 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url, ...)
 	"FOREIGN KEY (wordid) REFERENCES word(id));",
 "create table genre (id INTEGER PRIMARY KEY, wordid INTEGER, " \
 	"FOREIGN KEY (wordid) REFERENCES word(id));",
+"create table speed (id INTEGER PRIMARY KEY, wordid INTEGER, " \
+	"FOREIGN KEY (wordid) REFERENCES word(id));",
+"insert into speed (id, wordid) values (1, 3);",
+"insert into speed (id, wordid) values (2, 4);",
+"insert into speed (id, wordid) values (3, 5);",
 "create table cover (id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL);",
 "create table playlist (id INTEGER, listid INTEGER, " \
 	"FOREIGN KEY (id) REFERENCES media(id) ON UPDATE SET NULL, " \
@@ -1469,6 +1687,9 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url, ...)
 "create table word (id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL);",
 "insert into word (id, name) values (1, \"default\");",
 "insert into word (id, name) values (2, \"unknown\");",
+"insert into word (id, name) values (3, \"cool\");",
+"insert into word (id, name) values (4, \"ambiant\");",
+"insert into word (id, name) values (5, \"dance\");",
 "create table listname (id INTEGER PRIMARY KEY, wordid INTEGER, " \
 	"FOREIGN KEY (wordid) REFERENCES word(id));",
 "insert into listname (id, wordid) values (1, 1);",
@@ -1513,6 +1734,7 @@ const media_ops_t *media_sqlite = &(const media_ops_t)
 	.play = media_play,
 	.list = media_list,
 	.find = media_find,
+	.filter = media_filter,
 	.insert = media_insert,
 	.append = media_insert,
 	.remove = media_remove,

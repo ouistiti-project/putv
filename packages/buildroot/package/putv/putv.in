@@ -16,9 +16,3 @@ esac
 
 CINPUT_DEVICE="/dev/input/event0"
 CINPUT_JSON="/home/ouiradio.json"
-
-CDISPLAY=${BINDIR}/putv_display
-CINPUT=${BINDIR}/putv_input
-OPTIONS_CLIENTS="-R ${WEBSOCKETDIR} -n ${DAEMON}"
-OPTIONS_CINPUT="-i ${CINPUT_DEVICE} -m ${CINPUT_JSON}"
-

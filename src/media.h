@@ -11,6 +11,7 @@ extern const char const *mime_audiomp3;
 extern const char const *mime_audioflac;
 extern const char const *mime_audioalac;
 extern const char const *mime_audiopcm;
+extern const char const *mime_directory;
 
 extern const char const *str_title;
 extern const char const *str_artist;
@@ -45,6 +46,18 @@ typedef enum option_state_e
 	OPTION_ENABLE,
 } option_state_t;
 
+struct media_filter_s
+{
+	const char *keyword;
+	const char *artist;
+	const char *album;
+	const char *title;
+	const char *speed;
+	const char *genre;
+	int like;
+};
+typedef struct media_filter_s media_filter_t;
+
 typedef struct media_ops_s media_ops_t;
 struct media_ops_s
 {
@@ -77,6 +90,10 @@ struct media_ops_s
 	 * mandatory
 	 */
 	int (*find)(media_ctx_t *ctx, int id, media_parse_t cb, void *data);
+	/**
+	 * optional
+	 */
+	int (*filter)(media_ctx_t *ctx, media_filter_t *filter);
 	/**
 	 * optional
 	 */

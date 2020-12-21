@@ -13,6 +13,8 @@ typedef struct jitter_s jitter_t;
 typedef void src_ctx_t;
 #endif
 
+struct rr_entry;
+
 typedef struct src_ops_s src_ops_t;
 struct src_ops_s
 {
@@ -25,6 +27,7 @@ struct src_ops_s
 	void (*eventlistener)(src_ctx_t *ctx, event_listener_cb_t listener, void *arg);
 	int (*attach)(src_ctx_t *ctx, long index, decoder_t *decoder);
 	decoder_t *(*estream)(src_ctx_t *ctx, long index);
+	void(*mdns)(src_ctx_t *ctx, const char *host, struct rr_entry *entry);
 	void (*destroy)(src_ctx_t *);
 	/**
 	 * for demux only

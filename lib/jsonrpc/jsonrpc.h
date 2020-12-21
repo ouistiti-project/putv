@@ -12,7 +12,7 @@ typedef int (*jsonrpc_method_prototype)(json_t *json_params, json_t **result, vo
 
 /**
  * description of the methods:
- * 
+ *
  * Server:
  *  The server commonly uses 'jsonrpc_handler' to receive requests and send responses.
  *  It may uses to 'jsonrpc_request' to send notification.
@@ -75,7 +75,7 @@ struct jsonrpc_method_entry_t
 
 /**
  * @brief generate a response to a jsonRPC
- * 
+ *
  * This function unpack a string to get informations about the RPC.
  * The requested method is searched into the method_table and
  * the associated function is called.
@@ -85,7 +85,7 @@ struct jsonrpc_method_entry_t
  * @param input_len		length of the input string.
  * @param method_table	table of methods to manage.
  * @param userdata		argument fot the callback associated to every methods.
- * 
+ *
  * @return the response string to send. The "answer" and the "notification"
  * don't generate string.
  */
@@ -105,7 +105,7 @@ json_t *jsonrpc_jresponse(json_t *json_request,
  * This function will generate the request. jsonrpc_handler will manage
  * the response. To do that the method_table must contain an entry for
  * the request ("r" type) and an entry for the answer ("a" type).
- * 
+ *
  * @param method		name of the RPC to generate.
  * @param methodlen		length of the string.
  * @param method_table	table of methods to manage (same of method_handler).
@@ -123,7 +123,9 @@ json_t *jsonrpc_jrequest(const char *method,
 json_t *jsonrpc_error_object(int code, const char *message, json_t *data);
 json_t *jsonrpc_error_object_predefined(int code, json_t *data);
 
-typedef json_t *(*jsonrpc_error_response_t)(json_t *json_id, json_t *json_error);
+typedef json_t *(*jsonrpc_error_response_t)(json_t *json_id, json_t *json_error, void *userdata);
+json_t *jsonrpc_ignore_error_response(json_t *json_id, json_t *json_error, void *userdata);
+json_t *jsonrpc_request_error_response(json_t *json_id, json_t *json_error, void *userdata);
 #define ERRORHANDLER_REQUEST 1
 #define ERRORHANDLER_IGNORE 0
 void jsonrpc_set_errorhandler(jsonrpc_error_response_t error_response);

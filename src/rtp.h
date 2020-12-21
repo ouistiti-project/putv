@@ -22,6 +22,8 @@ struct rtpheader_s {           // in network byte order
 
 typedef struct rtpheader_s rtpheader_t;
 
+struct demux_ctx_s;
+typedef struct demux_ctx_s demux_ctx_t;
 extern void demux_rtp_addprofile(demux_ctx_t *ctx, char pt, const char *mime);
 
 #endif

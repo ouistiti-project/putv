@@ -208,7 +208,7 @@ int main(int argc, char **argv)
 		killdaemon(pidfile);
 		return 0;
 	}
-	if (mode & DAEMONIZE && daemonize(pidfile) == -1)
+	if ((mode & DAEMONIZE) && daemonize(pidfile) == -1)
 	{
 		return 0;
 	}

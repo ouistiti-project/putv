@@ -33,6 +33,8 @@ struct decoder_s
 };
 
 decoder_t *decoder_build(player_ctx_t *player, const char *mime);
+const char *decoder_mimelist(int first);
+const decoder_ops_t *decoder_check(const char *path);
 
 extern const decoder_ops_t *decoder_mad;
 extern const decoder_ops_t *decoder_flac;

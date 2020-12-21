@@ -70,7 +70,8 @@ void unixserver_remove(thread_info_t *info)
 {
 	thread_info_t *it = &info->server->firstinfo;
 	dbg("unix_server: remove socket %d", info->sock);
-	if (it == NULL)
+	dbg("unix_server: first %p current %p", it, info);
+	if (it == info)
 	{
 		err("the list must be never empty when removing");
 		return;

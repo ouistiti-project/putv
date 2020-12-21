@@ -4,6 +4,7 @@ TRUSTDOCS?=htdocs/trust/
 data-y+=$(HTDOCS)ouiradio.html
 $(HTDOCS)ouiradio.html_ALIAS-$(HTINDEX)+=$(HTDOCS)index.html
 data-y+=$(HTDOCS)ouiradio.json
+data-n+=$(HTDOCS)apps.json
 data-y+=$(HTDOCS)js/jsonrpc.js
 
 data-y+=$(TRUSTDOCS)css/bootstrap.min.css

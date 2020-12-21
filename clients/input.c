@@ -166,28 +166,30 @@ int input_parseevent(input_ctx_t *ctx, const struct input_event *event)
 		dbg("key KEY_PROG1");
 		if (ctx->media)
 		{
-			int i = ctx->media_id + 1;
-			if (i == json_array_size(ctx->media))
+			int i = ctx->media_id;
+			if (i >= json_array_size(ctx->media))
 				i = 0;
 			json_t *media = json_array_get(ctx->media, i);
 			if (json_is_object(media))
 			{
-				ret = media_change(ctx->client, NULL, ctx, media);
+				ret = media_change(ctx->client, NULL, ctx, json_incref(media));
 			}
+			ctx->media_id = i + 1;
 		}
 	break;
 	case KEY_PROG2:
 		dbg("key KEY_PROG2");
 		if (ctx->media)
 		{
-			int i = ctx->media_id - 1;
+			int i = ctx->media_id;
 			if (i == -1)
 				i = json_array_size(ctx->media) - 1;
 			json_t *media = json_array_get(ctx->media, i);
 			if (json_is_object(media))
 			{
-				ret = media_change(ctx->client, NULL, ctx, media);
+				ret = media_change(ctx->client, NULL, ctx, json_incref(media));
 			}
+			ctx->media_id = i - 1;
 		}
 	break;
 	default:

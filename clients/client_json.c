@@ -616,6 +616,7 @@ int client_loop(client_data_t *data)
 				else
 				{
 					err("client: receive mal formated json %s", error.text);
+					data->pid = 0;
 				}
 			} while (data->message != NULL);
 #else

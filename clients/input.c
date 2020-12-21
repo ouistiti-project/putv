@@ -80,8 +80,11 @@ struct input_ctx_s
 		STATE_PLAY,
 		STATE_PAUSE,
 		STATE_STOP,
+		STATE_RANDOM = 0x10,
+		STATE_LOOP = 0x20,
 	} state;
 };
+#define STATE_OPTIONSMASK (STATE_RANDOM | STATE_LOOP)
 
 #ifdef USE_LIBINPUT
 static int open_restricted(const char *path, int flags, void *user_data)
@@ -110,8 +113,20 @@ int input_checkstate(void *data, json_t *params)
 		ctx->state = STATE_PAUSE;
 	else if (!strcmp(state, "stop"))
 		ctx->state = STATE_STOP;
-	else
-		ctx->state = STATE_UNKNOWN;
+
+	const char *string[2] = {NULL, NULL};
+	json_unpack(params, "{s?[ss]}", "options", &string[0], &string[1]);
+	int i;
+	for (i = 0; i < 2; i++)
+	{
+		if (string[i] == NULL)
+			continue;
+		if (!strcmp(string[i], "random"))
+			ctx->state |= STATE_RANDOM;
+		if (!strcmp(string[i], "loop"))
+			ctx->state |= STATE_LOOP;
+	}
+
 	return 0;
 }
 
@@ -128,8 +143,8 @@ int input_parseevent(input_ctx_t *ctx, const struct input_event *event)
 	switch (event->code)
 	{
 	case KEY_PLAYPAUSE:
-		dbg("key KEY_PLAYPAUSE");
-		if (ctx->state == STATE_PLAY)
+		dbg("key KEY_PLAYPAUSE %X", ctx->state);
+		if ((ctx->state & ~STATE_OPTIONSMASK) == STATE_PLAY)
 			ret = client_pause(ctx->client, input_checkstate, ctx);
 		else
 			ret = client_play(ctx->client, input_checkstate, ctx);
@@ -161,6 +176,10 @@ int input_parseevent(input_ctx_t *ctx, const struct input_event *event)
 	case KEY_VOLUMEUP:
 		dbg("key KEY_VOLUMEUP");
 		ret = client_volume(ctx->client, NULL, ctx, json_integer(+5));
+	break;
+	case KEY_SHUFFLE:
+		dbg("key KEY_SHUFFLE");
+		ret = media_options(ctx->client, NULL, ctx, (ctx->state & STATE_RANDOM)?0:1, (ctx->state & STATE_LOOP)?0:1);
 	break;
 	case KEY_PROG1:
 		dbg("key KEY_PROG1");
@@ -205,6 +224,7 @@ int run_client(void *arg)
 	client_data_t data = {0};
 	client_unix(ctx->socketpath, &data);
 	client_async(&data, 1);
+	client_eventlistener(&data, "onchange", input_checkstate, ctx);
 	ctx->client = &data;
 
 	pthread_t thread;

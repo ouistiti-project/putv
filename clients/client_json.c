@@ -176,6 +176,8 @@ struct jsonrpc_method_entry_t table[] =
 	{'a',"list", answer_stdparams, "o", 0, NULL},
 	{'r',"getposition", method_nullparam, "", 0, NULL},
 	{'a',"getposition", answer_stdparams, "o", 0, NULL},
+	{'r',"options", method_stdparams, "", 0, NULL},
+	{'a',"options", answer_stdparams, "o", 0, NULL},
 	{'n',"onchange", notification_onchange, "o", 0, NULL},
 	{0, NULL},
 };
@@ -448,6 +450,27 @@ int media_list(client_data_t *data, client_event_prototype_t proto, void *protod
 	data->data = protodata;
 	data->list = list;
 	long int pid = client_cmd(data, "list");
+	if (pid == -1)
+	{
+		pthread_mutex_unlock(&data->mutex);
+		return -1;
+	}
+	client_wait(data, (unsigned long int)pid);
+	pthread_mutex_unlock(&data->mutex);
+	return 0;
+}
+
+int media_options(client_data_t *data, client_event_prototype_t proto, void *protodata, int random, int loop)
+{
+	if (data->pid > 0)
+		return -2;
+	pthread_mutex_lock(&data->mutex);
+	data->proto = proto;
+	data->data = protodata;
+	data->params = json_object();
+	json_object_set_new(data->params, "random", json_boolean(random));
+	json_object_set_new(data->params, "loop", json_boolean(loop));
+	long int pid = client_cmd(data, "options");
 	if (pid == -1)
 	{
 		pthread_mutex_unlock(&data->mutex);

@@ -472,6 +472,7 @@ int media_change(client_data_t *data, client_event_prototype_t proto, void *prot
 		pthread_mutex_unlock(&data->mutex);
 		return -1;
 	}
+	dbg("client: new media %s", json_string_value(json_object_get(media, "name")));
 	client_wait(data, (unsigned long int)pid);
 	pthread_mutex_unlock(&data->mutex);
 	return 0;
@@ -576,6 +577,13 @@ static size_t recv_cb(void *buffer, size_t len, void *arg)
 }
 #endif
 
+json_t *client_error_response(json_t *json_id, json_t *json_error, void *arg)
+{
+	client_data_t *data = (client_data_t *)arg;
+	data->pid = 0;
+	return jsonrpc_request_error_response(json_id, json_error, arg);
+}
+
 int client_loop(client_data_t *data)
 {
 	client_event_t *event = data->events;
@@ -585,6 +593,7 @@ int client_loop(client_data_t *data)
 		event = event->next;
 	}
 	data->run = 1;
+	jsonrpc_set_errorhandler(client_error_response);
 	while (data->sock > 0  && data->run)
 	{
 		fd_set rfds;

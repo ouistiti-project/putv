@@ -640,15 +640,18 @@ static int method_change(json_t *json_params, json_t **result, void *userdata)
 		int now = 1;
 		int loop = 0;
 		int random = 0;
-		value = json_object_get(json_params, "loop");
-		if (json_is_boolean(value))
+		value = json_object_get(json_params, "options");
+		if (json_is_array(value))
 		{
-			loop = json_boolean_value(value);
-		}
-		value = json_object_get(json_params, "random");
-		if (json_is_boolean(value))
-		{
-			random = json_boolean_value(value);
+			int index;
+			json_t *option = NULL;
+			json_array_foreach(value, index, option)
+			{
+				if (json_is_string(option) && !strcmp(json_string_value(option), "loop"))
+					loop = 1;
+				if (json_is_string(option) && !strcmp(json_string_value(option), "random"))
+					random = 1;
+			}
 		}
 		value = json_object_get(json_params, "next");
 		if (json_is_boolean(value))

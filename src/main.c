@@ -66,6 +66,8 @@
 #include "cmds.h"
 #include "daemonize.h"
 
+#define STINGIFY(text) #text
+
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #ifdef DEBUG
@@ -347,7 +349,7 @@ int main(int argc, char **argv)
 #ifdef NETIF2
 	const char *txt2[] =
 	{
-		"path="INDEX_HTML,
+		"path="STRINGIFY(INDEX_HTML),
 		"if="NETIF2,
 		NULL,
 	};

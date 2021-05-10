@@ -275,7 +275,7 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 	src_t *src = NULL;
 
 	dbg("player: prepare %d %s %s", id, url, mime);
-	src = src_build(ctx, url, mime, id);
+	src = src_build(ctx, url, mime, id, info);
 	if (src != NULL)
 	{
 		if (ctx->nextsrc != NULL)

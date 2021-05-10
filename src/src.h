@@ -44,7 +44,7 @@ struct src_s
 	char *info;
 };
 
-src_t *src_build(player_ctx_t *player, const char *url, const char *mime, int id);
+src_t *src_build(player_ctx_t *player, const char *url, const char *mime, int id, const char *info);
 void src_destroy(src_t *src);
 
 extern const src_ops_t *src_file;

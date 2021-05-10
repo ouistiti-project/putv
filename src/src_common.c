@@ -53,7 +53,8 @@
 #define src_dbg(...)
 
 static src_t *_src_build(const src_ops_t *const src_list[],
-		player_ctx_t *player, const char *url, const char *mime)
+		player_ctx_t *player, const char *url,
+		const char *mime, const char *info)
 {
 	const src_ops_t *src_ops = NULL;
 	int i = 0;
@@ -95,11 +96,12 @@ static src_t *_src_build(const src_ops_t *const src_list[],
 	src->ops = src_ops;
 	src->ctx = src_ctx;
 	src->mediaid = -1;
+	src->info = strdup(info);
 
 	return src;
 }
 
-src_t *src_build(player_ctx_t *player, const char *url, const char *mime, int id)
+src_t *src_build(player_ctx_t *player, const char *url, const char *mime, int id, const char *info)
 {
 	const src_ops_t *const src_list[] = {
 	#ifdef SRC_FILE
@@ -120,7 +122,7 @@ src_t *src_build(player_ctx_t *player, const char *url, const char *mime, int id
 		NULL
 	};
 
-	src_t *src = _src_build(src_list, player, url, mime);
+	src_t *src = _src_build(src_list, player, url, mime, info);
 	if (src != NULL)
 		src->mediaid = id;
 	return src;
@@ -129,6 +131,8 @@ src_t *src_build(player_ctx_t *player, const char *url, const char *mime, int id
 void src_destroy(src_t *src)
 {
 	src->ops->destroy(src->ctx);
+	if (src->info != NULL)
+		free(src->info);
 	free(src);
 }
 
@@ -144,5 +148,5 @@ demux_t *demux_build(player_ctx_t *player, const char *url, const char *mime)
 		NULL
 	};
 
-	return _src_build(src_list, player, url, mime);
+	return _src_build(src_list, player, url, mime, NULL);
 }

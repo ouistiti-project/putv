@@ -118,7 +118,7 @@ static uint write_cb(char *in, uint size, uint nmemb, src_ctx_t *ctx)
 		writelen += len;
 		nmemb -= len;
 		ctx->out->ops->push(ctx->out->ctx, len, NULL);
-		pthread_yield();
+		sched_yield();
 	}
 	src_dbg("src: curl read %ld", writelen);
 	return writelen;

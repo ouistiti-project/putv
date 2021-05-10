@@ -139,7 +139,7 @@ media_t *player_media(player_ctx_t *ctx)
 void player_destroy(player_ctx_t *ctx)
 {
 	player_state(ctx, STATE_ERROR);
-	pthread_yield();
+	sched_yield();
 	pthread_cond_destroy(&ctx->cond);
 	pthread_cond_destroy(&ctx->cond_int);
 	pthread_mutex_destroy(&ctx->mutex);

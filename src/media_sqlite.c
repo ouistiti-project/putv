@@ -876,7 +876,7 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 #ifndef MEDIA_SQLITE_EXT
 		char *sql = "insert into \"media\" (\"url\", \"mimeid\", \"info\") values(@PATH , @MIMEID , @INFO);";
 #else
-		char *sql = "insert into \"media\" (\"url\", \"mimeid\", \"opusid\", \"albumid\") values(@PATH , @MIMEID, @OPUSID, @ALBUMID );";
+		char *sql = "insert into \"media\" (\"url\", \"mimeid\", \"opusid\", \"albumid\", \"comment\") values(@PATH , @MIMEID, @OPUSID, @ALBUMID, @COMMENT );";
 #endif
 
 		ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
@@ -889,21 +889,33 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 
 #ifndef MEDIA_SQLITE_EXT
 		index = sqlite3_bind_parameter_index(statement, "@INFO");
-		if (info != NULL)
+		if (info != NULL && index > 0)
 			ret = sqlite3_bind_text(statement, index, info, -1, SQLITE_STATIC);
 		else
 			ret = sqlite3_bind_null(statement, index);
 #else
 		index = sqlite3_bind_parameter_index(statement, "@OPUSID");
 		ret = sqlite3_bind_int(statement, index, opusid);
+
+		index = sqlite3_bind_parameter_index(statement, "@ALBUMID");
 		if (albumid != -1)
 		{
-			index = sqlite3_bind_parameter_index(statement, "@ALBUMID");
 			ret = sqlite3_bind_int(statement, index, albumid);
 		}
 		else
 		{
-			index = sqlite3_bind_parameter_index(statement, "@ALBUMID");
+			ret = sqlite3_bind_null(statement, index);
+		}
+
+		index = sqlite3_bind_parameter_index(statement, "@COMMENT");
+		const char *comment = NULL;
+		comment = media_parseinfo(info, str_comment);
+		if (comment != NULL && index > 0)
+		{
+			ret = sqlite3_bind_text(statement, index, comment, -1, SQLITE_STATIC);
+		}
+		else
+		{
 			ret = sqlite3_bind_null(statement, index);
 		}
 #endif

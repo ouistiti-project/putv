@@ -564,6 +564,32 @@ int media_parseoggmetadata(const char *path, json_t *object)
 }
 #endif
 
+static const char *_last_info = NULL;
+static json_t *_last_jinfo = NULL;
+const char *media_parseinfo(const char *info, const char *key)
+{
+	const char *value = NULL;
+	json_error_t error;
+	if (_last_info != NULL && info != _last_info)
+	{
+		json_decref(_last_jinfo);
+		_last_jinfo = NULL;
+	}
+	if (_last_jinfo == NULL)
+	{
+		_last_jinfo = json_loads(info, 0, &error);
+		_last_info = info;
+	}
+	if (json_is_object(_last_jinfo))
+	{
+		json_t *jvalue;
+		jvalue = json_object_get(_last_jinfo, key);
+		if (jvalue != NULL && json_is_string(jvalue))
+			value = json_string_value(jvalue);
+	}
+	return value;
+}
+
 static char *current_path;
 media_t *media_build(player_ctx_t *player, const char *url)
 {

@@ -133,6 +133,7 @@ struct media_s
 
 media_t *media_build(player_ctx_t *player, const char *path);
 const char *media_path();
+const char *media_parseinfo(const char *info, const char *key);
 
 typedef struct json_t json_t;
 #ifdef USE_ID3TAG

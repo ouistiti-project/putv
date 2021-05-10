@@ -41,9 +41,11 @@ struct src_s
 	const src_ops_t *ops;
 	src_ctx_t *ctx;
 	int mediaid;
+	char *info;
 };
 
 src_t *src_build(player_ctx_t *player, const char *url, const char *mime, int id);
+void src_destroy(src_t *src);
 
 extern const src_ops_t *src_file;
 extern const src_ops_t *src_curl;

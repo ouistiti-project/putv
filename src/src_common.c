@@ -126,6 +126,12 @@ src_t *src_build(player_ctx_t *player, const char *url, const char *mime, int id
 	return src;
 }
 
+void src_destroy(src_t *src)
+{
+	src->ops->destroy(src->ctx);
+	free(src);
+}
+
 demux_t *demux_build(player_ctx_t *player, const char *url, const char *mime)
 {
 	const src_ops_t *const src_list[] = {

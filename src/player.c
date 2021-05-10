@@ -280,8 +280,7 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 	{
 		if (ctx->nextsrc != NULL)
 		{
-			ctx->nextsrc->ops->destroy(ctx->nextsrc->ctx);
-			free(ctx->nextsrc);
+			src_destroy(ctx->nextsrc);
 			ctx->nextsrc = NULL;
 		}
 		ctx->nextsrc = src;
@@ -388,14 +387,12 @@ static int _player_stateengine(player_ctx_t *ctx, int state)
 				ctx->outstream[i]->ops->flush(ctx->outstream[i]->ctx);
 			if (ctx->src != NULL)
 			{
-				ctx->src->ops->destroy(ctx->src->ctx);
-				free(ctx->src);
+				src_destroy(ctx->src);
 				ctx->src = NULL;
 			}
 			if (ctx->nextsrc != NULL)
 			{
-				ctx->nextsrc->ops->destroy(ctx->nextsrc->ctx);
-				free(ctx->nextsrc);
+				src_destroy(ctx->nextsrc);
 				ctx->nextsrc = NULL;
 			}
 
@@ -408,8 +405,7 @@ static int _player_stateengine(player_ctx_t *ctx, int state)
 			if (ctx->src != NULL)
 			{
 				dbg("player: wait");
-				ctx->src->ops->destroy(ctx->src->ctx);
-				free(ctx->src);
+				src_destroy(ctx->src);
 				ctx->src = NULL;
 			}
 			ctx->src = ctx->nextsrc;

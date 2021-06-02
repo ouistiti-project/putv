@@ -177,7 +177,7 @@ static void *src_thread(void *arg)
 	return 0;
 }
 
-static int src_prepare(src_ctx_t *ctx)
+static int src_prepare(src_ctx_t *ctx, const char *info)
 {
 	src_dbg("src: prepare");
 	/**

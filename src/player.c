@@ -236,7 +236,7 @@ static void _player_new_es(player_ctx_t *ctx, void *eventarg)
 	else {
 		src->ops->attach(src->ctx, event_data->pid, event_data->decoder);
 		if (event_data->decoder->ops->prepare)
-			event_data->decoder->ops->prepare(event_data->decoder->ctx);
+			event_data->decoder->ops->prepare(event_data->decoder->ctx, src->info);
 	}
 }
 
@@ -290,7 +290,7 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 		{
 			src->ops->eventlistener(src->ctx, _player_listener, ctx);
 			if (src->ops->prepare != NULL)
-				src->ops->prepare(src->ctx);
+				src->ops->prepare(src->ctx, src->info);
 		}
 		else
 		{

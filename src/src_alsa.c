@@ -292,7 +292,7 @@ static void *src_thread(void *arg)
 	return NULL;
 }
 
-static int src_prepare(src_ctx_t *ctx)
+static int src_prepare(src_ctx_t *ctx, const char *info)
 {
 	const src_t src = { .ops = src_alsa, .ctx = ctx};
 	event_new_es_t event = {.pid = ctx->pid, .src = &src, .mime = mime_audiopcm, .jitte = JITTE_LOW};

@@ -149,7 +149,7 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 	return NULL;
 }
 
-static int src_prepare(src_ctx_t *ctx)
+static int src_prepare(src_ctx_t *ctx, const char *info)
 {
 	src_dbg("src: prepare");
 	const src_t src = { .ops = src_file, .ctx = ctx};

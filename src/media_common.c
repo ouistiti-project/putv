@@ -82,12 +82,14 @@ const char const *str_duration = "duration";
 
 void utils_srandom()
 {
-	unsigned int seed;
+	unsigned int seed = 0;
 	if (!access(RANDOM_DEVICE, R_OK))
 	{
 		int fd = open(RANDOM_DEVICE, O_RDONLY);
 		sched_yield();
-		read(fd, &seed, sizeof(seed));
+		int ret = read(fd, &seed, sizeof(seed));
+		if (ret != sizeof(seed))
+			seed = time(NULL);
 		close(fd);
 	}
 	else
@@ -287,7 +289,9 @@ static char *media_regfile(char *path, const char *mime, const unsigned char *da
 	fd = open(path, O_WRONLY | O_CREAT | O_EXCL, 0666);
 	if (fd > 0)
 	{
-		write(fd, data, length);
+		int ret = write(fd, data, length);
+		if (ret != length)
+			err("media: write image file error");
 		close(fd);
 	}
 	return path;

@@ -20,6 +20,7 @@ extern const char const *str_track;
 extern const char const *str_year;
 extern const char const *str_genre;
 extern const char const *str_date;
+extern const char const *str_regain;
 extern const char const *str_comment;
 extern const char const *str_cover;
 
@@ -134,6 +135,7 @@ struct media_s
 media_t *media_build(player_ctx_t *player, const char *path);
 const char *media_path();
 const char *media_parseinfo(const char *info, const char *key);
+unsigned int media_boost(const char *info);
 
 typedef struct json_t json_t;
 #ifdef USE_ID3TAG

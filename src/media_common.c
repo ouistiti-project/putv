@@ -590,6 +590,15 @@ const char *media_parseinfo(const char *info, const char *key)
 	return value;
 }
 
+unsigned int media_boost(const char *info)
+{
+	const char *sboost = media_parseinfo(info, str_regain);
+	unsigned int boost = strtol(sboost, NULL, 10);
+	if (boost > 2)
+		boost = 2;
+	return boost;
+}
+
 static char *current_path;
 media_t *media_build(player_ctx_t *player, const char *url)
 {

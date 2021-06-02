@@ -124,7 +124,7 @@ static uint write_cb(char *in, uint size, uint nmemb, src_ctx_t *ctx)
 	return writelen;
 }
 
-static src_ctx_t *src_init(player_ctx_t *player, const char * arg, const char *mime)
+static src_ctx_t *_src_init(player_ctx_t *player, const char * arg, const char *mime)
 {
 	src_ctx_t *ctx;
 	CURL *curl;
@@ -155,7 +155,7 @@ static src_ctx_t *src_init(player_ctx_t *player, const char * arg, const char *m
 	return ctx;
 }
 
-static void *src_thread(void *arg)
+static void *_src_thread(void *arg)
 {
 	src_ctx_t *ctx = (src_ctx_t *)arg;
 	src_dbg("src: curl running");
@@ -177,7 +177,7 @@ static void *src_thread(void *arg)
 	return 0;
 }
 
-static int src_prepare(src_ctx_t *ctx, const char *info)
+static int _src_prepare(src_ctx_t *ctx, const char *info)
 {
 	src_dbg("src: prepare");
 	/**
@@ -185,7 +185,7 @@ static int src_prepare(src_ctx_t *ctx, const char *info)
 	 * The thread starts for the preparation and
 	 * will be waiting until the running state
 	 */
-	int ret = pthread_create(&ctx->thread, NULL, src_thread, ctx);
+	int ret = pthread_create(&ctx->thread, NULL, _src_thread, ctx);
 	pthread_mutex_lock(&ctx->mutex);
 	ctx->state = SRC_RUN;
 	pthread_cond_broadcast(&ctx->cond);
@@ -206,7 +206,7 @@ static int src_prepare(src_ctx_t *ctx, const char *info)
 	return ret;
 }
 
-static int src_run(src_ctx_t *ctx)
+static int _src_run(src_ctx_t *ctx)
 {
 	src_dbg("src: running");
 	pthread_mutex_lock(&ctx->mutex);
@@ -224,7 +224,7 @@ static int src_run(src_ctx_t *ctx)
 	return 0;
 }
 
-static const char *src_mime(src_ctx_t *ctx, int index)
+static const char *_src_mime(src_ctx_t *ctx, int index)
 {
 	if (index > 0)
 		return NULL;
@@ -238,7 +238,7 @@ static const char *src_mime(src_ctx_t *ctx, int index)
 	return mime;
 }
 
-static void src_eventlistener(src_ctx_t *ctx, event_listener_cb_t cb, void *arg)
+static void _src_eventlistener(src_ctx_t *ctx, event_listener_cb_t cb, void *arg)
 {
 	event_listener_t *listener = calloc(1, sizeof(*listener));
 	listener->cb = cb;
@@ -258,7 +258,7 @@ static void src_eventlistener(src_ctx_t *ctx, event_listener_cb_t cb, void *arg)
 	}
 }
 
-static int src_attach(src_ctx_t *ctx, long index, decoder_t *decoder)
+static int _src_attach(src_ctx_t *ctx, long index, decoder_t *decoder)
 {
 	if (index > 0)
 		return -1;
@@ -269,12 +269,12 @@ static int src_attach(src_ctx_t *ctx, long index, decoder_t *decoder)
 				(curl_off_t)ctx->out->ctx->size * ctx->out->ctx->count);
 }
 
-static decoder_t *src_estream(src_ctx_t *ctx, long index)
+static decoder_t *_src_estream(src_ctx_t *ctx, long index)
 {
 	return ctx->estream;
 }
 
-static void src_destroy(src_ctx_t *ctx)
+static void _src_destroy(src_ctx_t *ctx)
 {
 	dbg("src: destroy");
 	if (ctx->out != NULL)
@@ -305,12 +305,12 @@ const src_ops_t *src_curl = &(src_ops_t)
 {
 	.name = "curl",
 	.protocol = "http://|https://|file://",
-	.init = src_init,
-	.prepare = src_prepare,
-	.run = src_run,
-	.mime = src_mime,
-	.eventlistener = src_eventlistener,
-	.attach = src_attach,
-	.estream = src_estream,
-	.destroy = src_destroy,
+	.init = _src_init,
+	.prepare = _src_prepare,
+	.run = _src_run,
+	.mime = _src_mime,
+	.eventlistener = _src_eventlistener,
+	.attach = _src_attach,
+	.estream = _src_estream,
+	.destroy = _src_destroy,
 };

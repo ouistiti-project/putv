@@ -519,6 +519,7 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 					const char *string = sqlite3_column_text(st_select, 0);
 					json_t *jstring = json_string(string);
 					json_object_set_new(json_info, str_title, jstring);
+					json_decref(jstring);
 				}
 			}
 			sqlite3_finalize(st_select);
@@ -548,6 +549,7 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 					const char *string = sqlite3_column_text(st_select, 0);
 					json_t *jstring = json_string(string);
 					json_object_set_new(json_info, str_artist, jstring);
+					json_decref(jstring);
 				}
 			}
 			sqlite3_finalize(st_select);
@@ -578,6 +580,7 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 					const char *string = sqlite3_column_text(st_select, 0);
 					json_t *jstring = json_string(string);
 					json_object_set_new(json_info, str_album, jstring);
+					json_decref(jstring);
 				}
 				type = sqlite3_column_type(st_select, 1);
 				if (type == SQLITE_INTEGER)
@@ -612,6 +615,7 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 					const char *string = sqlite3_column_text(st_select, 0);
 					json_t *jstring = json_string(string);
 					json_object_set_new(json_info, str_genre, jstring);
+					json_decref(jstring);
 				}
 			}
 			sqlite3_finalize(st_select);
@@ -632,6 +636,7 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 				json_t *jstring = json_string(cover);
 				json_object_set_new(json_info, str_cover, jstring);
 				free(cover);
+				json_decref(jstring);
 			}
 		}
 	}

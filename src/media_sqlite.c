@@ -412,10 +412,8 @@ static int opus_insertalbum(media_ctx_t *ctx, int albumid, int artistid, int cov
 
 #include <jansson.h>
 
-static int opus_parse_info(const char *info, char **ptitle, char **partist, char **palbum, char **pgenre, char **pcover)
+static int opus_parse_info(json_t *jinfo, char **ptitle, char **partist, char **palbum, char **pgenre, char **pcover, char **pcomment)
 {
-	json_error_t error;
-	json_t *jinfo = json_loads(info, 0, &error);
 	if (json_is_object(jinfo))
 	{
 		json_t *value;
@@ -434,8 +432,10 @@ static int opus_parse_info(const char *info, char **ptitle, char **partist, char
 		value = json_object_get(jinfo, str_cover);
 		if (value != NULL && json_is_string(value))
 			*pcover = strdup(json_string_value(value));
+		value = json_object_get(jinfo, str_comment);
+		if (value != NULL && json_is_string(value))
+			*pcomment = strdup(json_string_value(value));
 	}
-	json_decref(jinfo);
 	return 0;
 }
 
@@ -666,10 +666,13 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int *palbumid, const 
 	char *album = NULL;
 	int albumid = -1;
 	char *cover = NULL;
+	char *comment = NULL;
 	int coverid = -1;
 	int exist = 1;
+	json_error_t error;
 
-	opus_parse_info(info, &title, &artist, &album, &genre, &cover);
+	json_t *jinfo = json_loads(info, 0, &error);
+	opus_parse_info(jinfo, &title, &artist, &album, &genre, &cover, &comment);
 
 	warn("%s , %s , %s", title, album, artist);
 	if (title != NULL)
@@ -742,7 +745,7 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int *palbumid, const 
 	ret = sqlite3_step(st_select);
 	if (ret != SQLITE_ROW)
 	{
-		char *sql = "insert into \"opus\" (\"titleid\",\"artistid\",\"albumid\",\"genreid\",\"coverid\",\"like\") values (@TITLEID,@ARTISTID,@ALBUMID,@GENREID,@COVERID, 5)";
+		char *sql = "insert into \"opus\" (\"titleid\",\"artistid\",\"albumid\",\"genreid\",\"coverid\",\"like\",\"comment\") values (@TITLEID,@ARTISTID,@ALBUMID,@GENREID,@COVERID, 5, @COMMENT)";
 		sqlite3_stmt *st_insert;
 		ret = sqlite3_prepare_v2(db, sql, -1, &st_insert, NULL);
 		SQLITE3_CHECK(ret, -1, sql);
@@ -763,6 +766,9 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int *palbumid, const 
 		SQLITE3_CHECK(ret, -1, sql);
 		index = sqlite3_bind_parameter_index(st_insert, "@COVERID");
 		ret = sqlite3_bind_int(st_insert, index, coverid);
+		SQLITE3_CHECK(ret, -1, sql);
+		index = sqlite3_bind_parameter_index(st_insert, "@COMMENT");
+		ret = sqlite3_bind_text(st_insert, index, comment, -1, SQLITE_STATIC);
 		SQLITE3_CHECK(ret, -1, sql);
 		ret = sqlite3_step(st_insert);
 		if (ret != SQLITE_DONE)
@@ -831,6 +837,7 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int *palbumid, const 
 		}
 	}
 	sqlite3_finalize(st_select);
+	json_decref(jinfo);
 	return opusid;
 }
 #endif

@@ -474,7 +474,6 @@ char *opus_getcover(media_ctx_t *ctx, int coverid)
 
 static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 {
-	json_t *json_info = json_object();
 
 	sqlite3 *db = ctx->db;
 	char *sql = "select titleid, artistid, albumid, genreid, coverid from opus where id=@ID";
@@ -484,6 +483,7 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 	SQLITE3_CHECK(ret, NULL, sql);
 
 	int index;
+	json_t *json_info = json_object();
 
 	index = sqlite3_bind_parameter_index(st_select, "@ID");
 	ret = sqlite3_bind_int(st_select, index, opusid);
@@ -646,12 +646,17 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 }
 
 
-static char *opus_get(media_ctx_t *ctx, int opusid, int coverid)
+static char *opus_get(media_ctx_t *ctx, int opusid, int coverid, const char *info)
 {
-	char *info;
-	json_t *jinfo = opus_getjson(ctx, opusid, coverid);
-	info = json_dumps(jinfo, JSON_INDENT(2));
-	return info;
+	char *newinfo = NULL;
+	json_t *jnewinfo = opus_getjson(ctx, opusid, coverid);
+	json_error_t error;
+	json_t *jinfo = json_loads(info, 0, &error);
+	json_object_update_missing(jinfo, jnewinfo);
+	newinfo = json_dumps(jinfo, JSON_INDENT(2));
+	json_decref(jinfo);
+	json_decref(jnewinfo);
+	return newinfo;
 }
 
 static int opus_insert(media_ctx_t *ctx, const char *info, int *palbumid, const char *filename)
@@ -1089,9 +1094,13 @@ static int _media_execute(media_ctx_t *ctx, sqlite3_stmt *statement, media_parse
 		type = sqlite3_column_type(statement, index);
 		if (type == SQLITE_INTEGER)
 			coverid = sqlite3_column_int(statement, index);
+		index++;
+		type = sqlite3_column_type(statement, index);
+		if (type == SQLITE_TEXT)
+			info = sqlite3_column_blob(statement, index);
 		if (id != -1)
 		{
-			info = opus_get(ctx, id, coverid);
+			info = opus_get(ctx, id, coverid, info);
 		}
 #endif
 		media_dbg("media: %d %s", id, url);

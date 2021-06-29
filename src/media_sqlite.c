@@ -847,6 +847,31 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int *palbumid, const 
 }
 #endif
 
+#ifdef MEDIA_SQLITE_EXT
+static int _media_updateopusid(media_ctx_t *ctx, int id, int opusid)
+{
+	int ret = 0;
+	sqlite3 *db = ctx->db;
+	int index;
+	sqlite3_stmt *statement;
+	char *sql = "update \"media\" set \"opusid\"=@OPUSID where id = @ID;";
+
+	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
+	SQLITE3_CHECK(ret, -1, sql);
+
+	index = sqlite3_bind_parameter_index(statement, "@OPUSID");
+	ret = sqlite3_bind_int(statement, index, opusid);
+	SQLITE3_CHECK(ret, -1, sql);
+
+	index = sqlite3_bind_parameter_index(statement, "@ID");
+	ret = sqlite3_bind_int(statement, index, id);
+	SQLITE3_CHECK(ret, -1, sql);
+
+	sqlite3_finalize(statement);
+	return ret;
+}
+#endif
+
 static int media_insert(media_ctx_t *ctx, const char *path, const char *info, const char *mime)
 {
 	int id;
@@ -952,22 +977,8 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 #ifdef MEDIA_SQLITE_EXT
 	else
 	{
-		int index;
-		sqlite3_stmt *statement;
-		char *sql = "update \"media\" set \"opusid\"=@OPUSID where id = @ID;";
-
-		ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
-		SQLITE3_CHECK(ret, -1, sql);
-
-		index = sqlite3_bind_parameter_index(statement, "@OPUSID");
-		ret = sqlite3_bind_int(statement, index, opusid);
-		SQLITE3_CHECK(ret, -1, sql);
-
-		index = sqlite3_bind_parameter_index(statement, "@ID");
-		ret = sqlite3_bind_int(statement, index, id);
-		SQLITE3_CHECK(ret, -1, sql);
-
-		sqlite3_finalize(statement);
+		_media_updateopusid(ctx, id, opusid);
+		opusid = id;
 	}
 #endif
 	free(tpath);

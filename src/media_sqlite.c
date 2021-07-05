@@ -872,14 +872,37 @@ static int _media_updateopusid(media_ctx_t *ctx, int id, int opusid)
 }
 #endif
 
+static int _media_updateinfo(media_ctx_t *ctx, int id, const char *info)
+{
+	int ret = 0;
+	sqlite3 *db = ctx->db;
+	int index;
+	sqlite3_stmt *statement;
+	char *sql = "update \"media\" set \"info\"=@INFO where id = @ID;";
+
+	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
+	SQLITE3_CHECK(ret, -1, sql);
+
+	index = sqlite3_bind_parameter_index(statement, "@INFO");
+	ret = sqlite3_bind_text(statement, index, info, -1, SQLITE_STATIC);
+	SQLITE3_CHECK(ret, -1, sql);
+
+	index = sqlite3_bind_parameter_index(statement, "@ID");
+	ret = sqlite3_bind_int(statement, index, id);
+	SQLITE3_CHECK(ret, -1, sql);
+
+	sqlite3_finalize(statement);
+	return ret;
+}
+
 static int media_insert(media_ctx_t *ctx, const char *path, const char *info, const char *mime)
 {
 	int id;
-	int opusid = -1;
 	int ret = 0;
 	sqlite3 *db = ctx->db;
 
 #ifdef MEDIA_SQLITE_EXT
+	int opusid = -1;
 	int albumid = -1;
 	const char *filename = strrchr(path, '/');
 	if (filename != NULL)
@@ -972,17 +995,21 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 			media_dbg("putv: new media[%d] %s", id, path);
 		}
 		sqlite3_finalize(statement);
-		opusid = id;
-	}
 #ifdef MEDIA_SQLITE_EXT
+		id = opusid;
+#endif
+	}
 	else
 	{
+		if (info != NULL)
+			_media_updateinfo(ctx, id, info);
+#ifdef MEDIA_SQLITE_EXT
 		_media_updateopusid(ctx, id, opusid);
-		opusid = id;
-	}
+		id = opusid;
 #endif
+	}
 	free(tpath);
-	if (opusid != -1)
+	if (id != -1)
 	{
 		int index;
 		sqlite3_stmt *statement;
@@ -992,7 +1019,7 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 		SQLITE3_CHECK(ret, -1, sql);
 
 		index = sqlite3_bind_parameter_index(statement, "@ID");
-		ret = sqlite3_bind_int(statement, index, opusid);
+		ret = sqlite3_bind_int(statement, index, id);
 		index = sqlite3_bind_parameter_index(statement, "@LISTID");
 		ret = sqlite3_bind_int(statement, index, ctx->listid);
 
@@ -1006,7 +1033,7 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 		sqlite3_finalize(statement);
 	}
 
-	return opusid;
+	return id;
 }
 
 static const char *_media_getmime(media_ctx_t *ctx, int mimeid)

@@ -377,7 +377,7 @@ int main(int argc, char **argv)
 				fprintf(stderr, " -D         daemonize\n");
 				fprintf(stderr, " -R <DIR>   change the socket directory directory\n");
 				fprintf(stderr, " -n <NAME>  change the socket name\n");
-				fprintf(stderr, " -m <FILE>  load Json file to mqnqge media\n");
+				fprintf(stderr, " -m <FILE>  load Json file to manage media\n");
 				fprintf(stderr, " -i <PATH>  input device\n");
 				return -1;
 			break;

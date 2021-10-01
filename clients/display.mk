@@ -6,8 +6,8 @@ putv_display_SOURCES+=display_console.c
 putv_display_SOURCES+=client_json.c
 putv_display_CFLAGS+=-I../lib/jsonrpc
 putv_display_LDFLAGS+=-L../lib/jsonrpc
-putv_display_LIBS+=jansson
-putv_display_LIBRARY+=jsonrpc
+putv_display_LIBRARY+=jansson
+putv_display_LIBS+=jsonrpc
 
 putv_display_SOURCES-$(DISPLAY_DIRECTFB)+=display_directfb.c
 putv_display_CFLAGS-$(DISPLAY_DIRECTFB)+=-I=/usr/include/directfb

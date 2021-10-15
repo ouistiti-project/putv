@@ -48,19 +48,19 @@ $(PUTV)_SOURCES-$(DEMUX_RTP)+=demux_rtp.c
 $(PUTV)_SOURCES-$(DECODER_PASSTHROUGH)+=decoder_passthrough.c
 ifneq ($(DECODER_MODULES),y)
 $(PUTV)_SOURCES-$(DECODER_MAD)+=decoder_mad.c
-$(PUTV)_LIBS-$(DECODER_MAD)+=mad
+$(PUTV)_LIBRARY-$(DECODER_MAD)+=mad
 $(PUTV)_SOURCES-$(DECODER_FLAC)+=decoder_flac.c
-$(PUTV)_LIBS-$(DECODER_FLAC)+=FLAC
+$(PUTV)_LIBRARY-$(DECODER_FLAC)+=flac
 endif
 $(PUTV)_LIBS-$(DECODER_MODULES)+=dl
 $(PUTV)_SOURCES-$(ENCODER_PASSTHROUGH)+=encoder_passthrough.c
 $(PUTV)_CFLAGS-$(ENCODER_PASSTHROUGH)+=-DENCODER=encoder_passthrough
 $(PUTV)_SOURCES-$(ENCODER_LAME)+=encoder_lame.c
 $(PUTV)_CFLAGS-$(ENCODER_LAME)+=-DENCODER=encoder_lame
-$(PUTV)_LIBRARY-$(ENCODER_LAME)+=mp3lame
+$(PUTV)_LIBS-$(ENCODER_LAME)+=mp3lame
 $(PUTV)_SOURCES-$(ENCODER_FLAC)+=encoder_flac.c
 $(PUTV)_CFLAGS-$(ENCODER_FLAC)+=-DENCODER=encoder_flac
-$(PUTV)_LIBS-$(ENCODER_FLAC)+=FLAC
+$(PUTV)_LIBRARY-$(ENCODER_FLAC)+=flac
 $(PUTV)_SOURCES-$(MUX)+=mux_common.c
 $(PUTV)_SOURCES-$(MUX)+=mux_passthrough.c
 $(PUTV)_SOURCES-$(MUX_RTP)+=mux_rtp.c

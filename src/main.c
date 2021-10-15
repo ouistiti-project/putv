@@ -124,6 +124,12 @@ void help(const char *name)
 	fprintf(stderr, "\t...[-f <filtername>][-x][-D][-a][-r][-l][-L <logfile>]\n");
 	fprintf(stderr, "\t...[-d <directory>]\n");
 	fprintf(stderr, "\t...[-P [0-99]]\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "\t -m <media>\tSet the media supporting audio files\n");
+	fprintf(stderr, "\t -o <output>\tSet the audio sink parameter\n");
+	fprintf(stderr, "\t -a\t\tAuto play enabled\n");
+	fprintf(stderr, "\t -r\t\tShuffle enabled\n");
+	fprintf(stderr, "\t -l\t\tLoop enabled\n");
 }
 
 #define DAEMONIZE 0x01

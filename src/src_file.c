@@ -67,7 +67,7 @@ struct src_ctx_s
 
 #define src_dbg(...)
 
-static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
+static int _src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 {
 	int ret = 0;
 	fd_set rfds;
@@ -101,7 +101,7 @@ static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 	return ret;
 }
 
-static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mime)
+static src_ctx_t *_src_init(player_ctx_t *player, const char *url, const char *mime)
 {
 	int fd = -1;
 	if (!strcmp(url, "-"))
@@ -149,7 +149,7 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 	return NULL;
 }
 
-static int src_prepare(src_ctx_t *ctx)
+static int _src_prepare(src_ctx_t *ctx, const char *info)
 {
 	src_dbg("src: prepare");
 	const src_t src = { .ops = src_file, .ctx = ctx};
@@ -165,7 +165,7 @@ static int src_prepare(src_ctx_t *ctx)
 	 */
 }
 
-static int src_run(src_ctx_t *ctx)
+static int _src_run(src_ctx_t *ctx)
 {
 	dbg("src: run");
 	const src_t src = { .ops = src_file, .ctx = ctx};
@@ -182,7 +182,7 @@ static int src_run(src_ctx_t *ctx)
 	return 0;
 }
 
-static void src_eventlistener(src_ctx_t *ctx, event_listener_cb_t cb, void *arg)
+static void _src_eventlistener(src_ctx_t *ctx, event_listener_cb_t cb, void *arg)
 {
 	event_listener_t *listener = calloc(1, sizeof(*listener));
 	listener->cb = cb;
@@ -202,30 +202,30 @@ static void src_eventlistener(src_ctx_t *ctx, event_listener_cb_t cb, void *arg)
 	}
 }
 
-static int src_attach(src_ctx_t *ctx, long index, decoder_t *decoder)
+static int _src_attach(src_ctx_t *ctx, long index, decoder_t *decoder)
 {
 	if (index > 0)
 		return -1;
 	ctx->estream = decoder;
 	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx, JITTE_LOW);
 	src_dbg("src: add producter to %s", ctx->out->ctx->name);
-	ctx->out->ctx->produce = (produce_t)src_read;
+	ctx->out->ctx->produce = (produce_t)_src_read;
 	ctx->out->ctx->producter = (void *)ctx;
 }
 
-static decoder_t *src_estream(src_ctx_t *ctx, long index)
+static decoder_t *_src_estream(src_ctx_t *ctx, long index)
 {
 	return ctx->estream;
 }
 
-const char *src_mime(src_ctx_t *ctx, int index)
+const char *_src_mime(src_ctx_t *ctx, int index)
 {
 	if (index > 0)
 		return NULL;
 	return ctx->mime;
 }
 
-static void src_destroy(src_ctx_t *ctx)
+static void _src_destroy(src_ctx_t *ctx)
 {
 	if (ctx->estream != NULL)
 		ctx->estream->ops->destroy(ctx->estream->ctx);
@@ -244,12 +244,12 @@ const src_ops_t *src_file = &(src_ops_t)
 {
 	.name = "file",
 	.protocol = "file://",
-	.init = src_init,
-	.prepare = src_prepare,
-	.run = src_run,
-	.eventlistener = src_eventlistener,
-	.attach = src_attach,
-	.estream = src_estream,
-	.destroy = src_destroy,
-	.mime = src_mime,
+	.init = _src_init,
+	.prepare = _src_prepare,
+	.run = _src_run,
+	.eventlistener = _src_eventlistener,
+	.attach = _src_attach,
+	.estream = _src_estream,
+	.destroy = _src_destroy,
+	.mime = _src_mime,
 };

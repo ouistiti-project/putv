@@ -32,6 +32,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <net/if.h>
 #include <netinet/in.h>
@@ -77,7 +78,9 @@ struct src_ctx_s
 #include "media.h"
 #include "decoder.h"
 
+#ifdef TINYSVCMDNS
 #include "tinysvcmdns/mdns.h"
+#endif
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -100,7 +103,7 @@ struct src_ctx_s
  */
 static const char *jitter_name = "udp socket";
 
-static int src_connect(src_ctx_t *ctx, const char *host, int iport)
+static int _src_connect(src_ctx_t *ctx, const char *host, int iport)
 {
 	int count = 2;
 
@@ -216,7 +219,7 @@ err:
 	return -1;
 }
 
-static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mime)
+static src_ctx_t *_src_init(player_ctx_t *player, const char *url, const char *mime)
 {
 	char *protocol = NULL;
 	char *host = NULL;
@@ -256,7 +259,7 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 	}
 	if (host != NULL)
 	{
-		int sock = src_connect(ctx, host, iport);
+		int sock = _src_connect(ctx, host, iport);
 		ctx->sock = sock;
 		ctx->host = strdup(host);
 		ctx->port = iport;
@@ -274,7 +277,7 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 	return ctx;
 }
 
-static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
+static int _src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 {
 	int ret;
 	fd_set rfds;
@@ -332,7 +335,7 @@ static int src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 	return ret;
 }
 
-static void *src_thread(void *arg)
+static void *_src_thread(void *arg)
 {
 	src_ctx_t *ctx = (src_ctx_t *)arg;
 
@@ -358,7 +361,7 @@ static void *src_thread(void *arg)
 			ctx->state = STATE_ERROR;
 			break;
 		}
-		ret = src_read(ctx, buff, ctx->out->ctx->size);
+		ret = _src_read(ctx, buff, ctx->out->ctx->size);
 		if (ret > 0)
 		{
 			ctx->out->ops->push(ctx->out->ctx, ret, NULL);
@@ -379,7 +382,7 @@ static void *src_thread(void *arg)
 	return NULL;
 }
 
-static int src_wait(src_ctx_t *ctx)
+static int _src_wait(src_ctx_t *ctx)
 {
 #ifdef DEMUX_PASSTHROUGH
 	ctx->out = ctx->demux->ops->jitter(ctx->demux->ctx, JITTE_HIGH);
@@ -401,7 +404,7 @@ static int src_wait(src_ctx_t *ctx)
 	return 0;
 }
 
-static int src_start(src_ctx_t *ctx)
+static int _src_start(src_ctx_t *ctx)
 {
 #ifdef USE_REALTIME
 	int ret;
@@ -433,30 +436,30 @@ static int src_start(src_ctx_t *ctx)
 	}
 	if (ret < 0)
 		err("setinheritsched error %s", strerror(errno));
-	pthread_create(&ctx->thread, &attr, src_thread, ctx);
+	pthread_create(&ctx->thread, &attr, _src_thread, ctx);
 	pthread_attr_destroy(&attr);
 #else
-	pthread_create(&ctx->thread, NULL, src_thread, ctx);
+	pthread_create(&ctx->thread, NULL, _src_thread, ctx);
 #endif
 	return 0;
 }
 
-static int src_run(src_ctx_t *ctx)
+static int _src_run(src_ctx_t *ctx)
 {
-	src_wait(ctx);
+	_src_wait(ctx);
 	if (ctx->sock > 0)
-		src_start(ctx);
+		_src_start(ctx);
 	return 0;
 }
 
-static const char *src_mime(src_ctx_t *ctx, int index)
+static const char *_src_mime(src_ctx_t *ctx, int index)
 {
 	if (index > 0)
 		return NULL;
 	return ctx->mime;
 }
 
-static void src_eventlistener(src_ctx_t *ctx, event_listener_cb_t cb, void *arg)
+static void _src_eventlistener(src_ctx_t *ctx, event_listener_cb_t cb, void *arg)
 {
 #ifdef DEMUX_PASSTHROUGH
 	ctx->demux->ops->eventlistener(ctx->demux->ctx, cb, arg);
@@ -480,7 +483,7 @@ static void src_eventlistener(src_ctx_t *ctx, event_listener_cb_t cb, void *arg)
 #endif
 }
 
-static int src_attach(src_ctx_t *ctx, long index, decoder_t *decoder)
+static int _src_attach(src_ctx_t *ctx, long index, decoder_t *decoder)
 {
 	int ret = 0;
 	dbg("src: attach");
@@ -499,7 +502,7 @@ static int src_attach(src_ctx_t *ctx, long index, decoder_t *decoder)
 	return ret;
 }
 
-static decoder_t *src_estream(src_ctx_t *ctx, long index)
+static decoder_t *_src_estream(src_ctx_t *ctx, long index)
 {
 #ifdef DEMUX_PASSTHROUGH
 	return ctx->demux->ops->estream(ctx->demux->ctx, index);
@@ -508,7 +511,8 @@ static decoder_t *src_estream(src_ctx_t *ctx, long index)
 #endif
 }
 
-static void src_mdns(src_ctx_t *ctx, const char *host, struct rr_entry *entry)
+#ifdef TINYSVCMDNS
+static void _src_mdns(src_ctx_t *ctx, const char *host, struct rr_entry *entry)
 {
 	warn("!!!!!!!!!!!!!! coucou !!!!!!!!!!!!!!!!!!");
 	warn("entry %p", entry);
@@ -525,8 +529,11 @@ static void src_mdns(src_ctx_t *ctx, const char *host, struct rr_entry *entry)
 		src_start(ctx);
 #endif
 }
+#else
+#define _src_mdns NULL
+#endif
 
-static void src_destroy(src_ctx_t *ctx)
+static void _src_destroy(src_ctx_t *ctx)
 {
 #ifdef UDP_THREAD
 	if (ctx->thread)
@@ -558,11 +565,11 @@ const src_ops_t *src_udp = &(src_ops_t)
 {
 	.name = "udp",
 	.protocol = "udp://|rtp://",
-	.init = src_init,
-	.run = src_run,
-	.eventlistener = src_eventlistener,
-	.attach = src_attach,
-	.estream = src_estream,
-	.mdns = src_mdns,
-	.destroy = src_destroy,
+	.init = _src_init,
+	.run = _src_run,
+	.eventlistener = _src_eventlistener,
+	.attach = _src_attach,
+	.estream = _src_estream,
+	.mdns = _src_mdns,
+	.destroy = _src_destroy,
 };

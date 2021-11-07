@@ -82,7 +82,7 @@ struct sink_ctx_s
 #define ALSA_MIXER "Master"
 #endif
 
-const sink_ops_t *sink_alsa;
+extern const sink_ops_t *sink_alsa;
 
 #ifdef SINK_ALSA_MIXER
 void _mixer_setvolume(sink_ctx_t *ctx, unsigned int volume)

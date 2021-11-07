@@ -273,7 +273,7 @@ static void *sink_thread(void *arg)
 			pthread_cond_wait(&ctx->ack, &ctx->mutex);
 		ctx->ackstate = 0;
 		pthread_mutex_unlock(&ctx->mutex);
-		pthread_yield();
+		sched_yield();
 #else
 		int i;
 		int ret;
@@ -302,7 +302,7 @@ static void *sink_thread(void *arg)
 #endif
 		sink_dbg("sink: boom %d", ctx->counter);
 		ctx->in->ops->pop(ctx->in->ctx, length);
-		pthread_yield();
+		sched_yield();
 	}
 	dbg("sink: thread end");
 	return NULL;

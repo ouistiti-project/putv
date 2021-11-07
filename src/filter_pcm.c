@@ -205,12 +205,20 @@ int sampled_change(filter_ctx_t *ctx, sample_t sample, int bitspersample, unsign
 	return ctx->samplesize;
 }
 
+static sample_t filter_boost(int regain, sample_t sample, int bitspersample)
+{
+	long mask = 1 << (bitspersample - 2);
+
+	sample = (sample << regain) & ~mask;
+	sample |= mask;
+	return sample;
+}
+
 static int filter_interleave(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *buffer, size_t size)
 {
 	int j;
 	int i;
 	int bufferlen = 0;
-
 	for (i = 0; i < audio->nsamples; i++)
 	{
 		sample_t sample;
@@ -223,10 +231,8 @@ static int filter_interleave(filter_ctx_t *ctx, filter_audio_t *audio, unsigned 
 				sample = audio->samples[(j % audio->nchannels)][i];
 			else
 				sample = audio->samples[0][i];
-			if (audio->regain > 0)
-					sample = sample << audio->regain;
-			else if (audio->regain < 0)
-				sample = sample >> -audio->regain;
+			if (audio->regain != 0)
+				sample = filter_boost(audio->regain, sample, audio->bitspersample);
 			int len = ctx->sampled(ctx, sample, audio->bitspersample,
 						buffer + bufferlen);
 			bufferlen += len;
@@ -258,10 +264,8 @@ static int filter_mixemono(filter_ctx_t *ctx, filter_audio_t *audio, unsigned ch
 		}
 		for (j = 0; j < ctx->nchannels; j++)
 		{
-			if (audio->regain)
-			{
-				sample = sample << audio->regain;
-			}
+			if (audio->regain != 0)
+				sample = filter_boost(audio->regain, sample, audio->bitspersample);
 			int len = ctx->sampled(ctx, sample, audio->bitspersample,
 						buffer + bufferlen);
 			bufferlen += len;
@@ -292,10 +296,8 @@ static int filter_mono(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *
 		for (j = 0; j < ctx->nchannels; j++)
 		{
 			sample = audio->samples[ctx->channel][i];
-			if (audio->regain)
-			{
-				sample = sample << audio->regain;
-			}
+			if (audio->regain != 0)
+				sample = filter_boost(audio->regain, sample, audio->bitspersample);
 			int len = ctx->sampled(ctx, sample, audio->bitspersample,
 						buffer + bufferlen);
 			bufferlen += len;

@@ -262,7 +262,7 @@ static int _decoder_check(const char *path)
 	return 0;
 }
 
-static int _decoder_prepare(decoder_ctx_t *ctx)
+static int _decoder_prepare(decoder_ctx_t *ctx, const char *info)
 {
 	decoder_dbg("decoder: prepare");
 	int ret;

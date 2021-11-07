@@ -310,11 +310,11 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 		 * has to send an event to the consumer
 		 * that a new buffer is ready */
 		pthread_cond_broadcast(&private->condpeer);
-#ifdef HEARTBEAT
+#if defined(HEARTBEAT)
 		if (jitter->heartbeat != NULL)
 		{
 			if (private->in->beat)
-				pthread_yield();
+				sched_yield();
 		}
 #endif
 	}

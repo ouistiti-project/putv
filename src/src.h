@@ -21,7 +21,7 @@ struct src_ops_s
 	const char *name;
 	const char *protocol;
 	src_ctx_t *(*init)(player_ctx_t *, const char *path, const char *mime);
-	int (*prepare)(src_ctx_t *);
+	int (*prepare)(src_ctx_t *, const char *info);
 	int (*run)(src_ctx_t *);
 	const char *(*mime)(src_ctx_t *ctx, int index);
 	void (*eventlistener)(src_ctx_t *ctx, event_listener_cb_t listener, void *arg);
@@ -41,9 +41,11 @@ struct src_s
 	const src_ops_t *ops;
 	src_ctx_t *ctx;
 	int mediaid;
+	char *info;
 };
 
-src_t *src_build(player_ctx_t *player, const char *url, const char *mime, int id);
+src_t *src_build(player_ctx_t *player, const char *url, const char *mime, int id, const char *info);
+void src_destroy(src_t *src);
 
 extern const src_ops_t *src_file;
 extern const src_ops_t *src_curl;

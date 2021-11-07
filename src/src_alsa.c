@@ -171,7 +171,7 @@ static int _pcm_close(src_ctx_t *ctx)
 }
 
 static const char *jitter_name = "alsa";
-static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mime)
+static src_ctx_t *_src_init(player_ctx_t *player, const char *url, const char *mime)
 {
 	int count = 2;
 	const char *soundcard;
@@ -207,7 +207,7 @@ static src_ctx_t *src_init(player_ctx_t *player, const char *url, const char *mi
 	return ctx;
 }
 
-static void *src_thread(void *arg)
+static void *_src_thread(void *arg)
 {
 	int ret;
 	src_ctx_t *ctx = (src_ctx_t *)arg;
@@ -292,7 +292,7 @@ static void *src_thread(void *arg)
 	return NULL;
 }
 
-static int src_prepare(src_ctx_t *ctx)
+static int _src_prepare(src_ctx_t *ctx, const char *info)
 {
 	const src_t src = { .ops = src_alsa, .ctx = ctx};
 	event_new_es_t event = {.pid = ctx->pid, .src = &src, .mime = mime_audiopcm, .jitte = JITTE_LOW};
@@ -307,7 +307,7 @@ static int src_prepare(src_ctx_t *ctx)
 	return 0;
 }
 
-static int src_run(src_ctx_t *ctx)
+static int _src_run(src_ctx_t *ctx)
 {
 	const src_t src = { .ops = src_alsa, .ctx = ctx};
 	event_decode_es_t event_decode = {.pid = ctx->pid, .src = &src, .decoder = ctx->estream};
@@ -317,18 +317,18 @@ static int src_run(src_ctx_t *ctx)
 		listener->cb(listener->arg, SRC_EVENT_DECODE_ES, (void *)&event_decode);
 		listener = listener->next;
 	}
-	pthread_create(&ctx->thread, NULL, src_thread, ctx);
+	pthread_create(&ctx->thread, NULL, _src_thread, ctx);
 	return 0;
 }
 
-static const char *src_mime(src_ctx_t *ctx, int index)
+static const char *_src_mime(src_ctx_t *ctx, int index)
 {
 	if (index > 0)
 		return NULL;
 	return mime_audiopcm;
 }
 
-static void src_eventlistener(src_ctx_t *ctx, event_listener_cb_t cb, void *arg)
+static void _src_eventlistener(src_ctx_t *ctx, event_listener_cb_t cb, void *arg)
 {
 	event_listener_t *listener = calloc(1, sizeof(*listener));
 	listener->cb = cb;
@@ -348,7 +348,7 @@ static void src_eventlistener(src_ctx_t *ctx, event_listener_cb_t cb, void *arg)
 	}
 }
 
-static int src_attach(src_ctx_t *ctx, long index, decoder_t *decoder)
+static int _src_attach(src_ctx_t *ctx, long index, decoder_t *decoder)
 {
 	if (index > 0)
 		return -1;
@@ -358,12 +358,12 @@ static int src_attach(src_ctx_t *ctx, long index, decoder_t *decoder)
 	return 0;
 }
 
-static decoder_t *src_estream(src_ctx_t *ctx, long index)
+static decoder_t *_src_estream(src_ctx_t *ctx, long index)
 {
 	return ctx->estream;
 }
 
-static void src_destroy(src_ctx_t *ctx)
+static void _src_destroy(src_ctx_t *ctx)
 {
 	if (ctx->estream != NULL)
 		ctx->estream->ops->destroy(ctx->estream->ctx);
@@ -384,11 +384,11 @@ const src_ops_t *src_alsa = &(src_ops_t)
 {
 	.name = "alsa",
 	.protocol = "pcm://|alsa://",
-	.init = src_init,
-	.run = src_run,
-	.eventlistener = src_eventlistener,
-	.prepare = src_prepare,
-	.attach = src_attach,
-	.estream = src_estream,
-	.destroy = src_destroy,
+	.init = _src_init,
+	.run = _src_run,
+	.eventlistener = _src_eventlistener,
+	.prepare = _src_prepare,
+	.attach = _src_attach,
+	.estream = _src_estream,
+	.destroy = _src_destroy,
 };

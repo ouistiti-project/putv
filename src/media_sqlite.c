@@ -412,10 +412,8 @@ static int opus_insertalbum(media_ctx_t *ctx, int albumid, int artistid, int cov
 
 #include <jansson.h>
 
-static int opus_parse_info(const char *info, char **ptitle, char **partist, char **palbum, char **pgenre, char **pcover)
+static int opus_parse_info(json_t *jinfo, char **ptitle, char **partist, char **palbum, char **pgenre, char **pcover, char **pcomment)
 {
-	json_error_t error;
-	json_t *jinfo = json_loads(info, 0, &error);
 	if (json_is_object(jinfo))
 	{
 		json_t *value;
@@ -434,8 +432,10 @@ static int opus_parse_info(const char *info, char **ptitle, char **partist, char
 		value = json_object_get(jinfo, str_cover);
 		if (value != NULL && json_is_string(value))
 			*pcover = strdup(json_string_value(value));
+		value = json_object_get(jinfo, str_comment);
+		if (value != NULL && json_is_string(value))
+			*pcomment = strdup(json_string_value(value));
 	}
-	json_decref(jinfo);
 	return 0;
 }
 
@@ -474,7 +474,6 @@ char *opus_getcover(media_ctx_t *ctx, int coverid)
 
 static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 {
-	json_t *json_info = json_object();
 
 	sqlite3 *db = ctx->db;
 	char *sql = "select titleid, artistid, albumid, genreid, coverid from opus where id=@ID";
@@ -484,6 +483,7 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 	SQLITE3_CHECK(ret, NULL, sql);
 
 	int index;
+	json_t *json_info = json_object();
 
 	index = sqlite3_bind_parameter_index(st_select, "@ID");
 	ret = sqlite3_bind_int(st_select, index, opusid);
@@ -519,6 +519,7 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 					const char *string = sqlite3_column_text(st_select, 0);
 					json_t *jstring = json_string(string);
 					json_object_set_new(json_info, str_title, jstring);
+					json_decref(jstring);
 				}
 			}
 			sqlite3_finalize(st_select);
@@ -548,6 +549,7 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 					const char *string = sqlite3_column_text(st_select, 0);
 					json_t *jstring = json_string(string);
 					json_object_set_new(json_info, str_artist, jstring);
+					json_decref(jstring);
 				}
 			}
 			sqlite3_finalize(st_select);
@@ -578,6 +580,7 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 					const char *string = sqlite3_column_text(st_select, 0);
 					json_t *jstring = json_string(string);
 					json_object_set_new(json_info, str_album, jstring);
+					json_decref(jstring);
 				}
 				type = sqlite3_column_type(st_select, 1);
 				if (type == SQLITE_INTEGER)
@@ -612,6 +615,7 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 					const char *string = sqlite3_column_text(st_select, 0);
 					json_t *jstring = json_string(string);
 					json_object_set_new(json_info, str_genre, jstring);
+					json_decref(jstring);
 				}
 			}
 			sqlite3_finalize(st_select);
@@ -632,6 +636,7 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 				json_t *jstring = json_string(cover);
 				json_object_set_new(json_info, str_cover, jstring);
 				free(cover);
+				json_decref(jstring);
 			}
 		}
 	}
@@ -641,12 +646,17 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 }
 
 
-static char *opus_get(media_ctx_t *ctx, int opusid, int coverid)
+static char *opus_get(media_ctx_t *ctx, int opusid, int coverid, const char *info)
 {
-	char *info;
-	json_t *jinfo = opus_getjson(ctx, opusid, coverid);
-	info = json_dumps(jinfo, JSON_INDENT(2));
-	return info;
+	char *newinfo = NULL;
+	json_t *jnewinfo = opus_getjson(ctx, opusid, coverid);
+	json_error_t error;
+	json_t *jinfo = json_loads(info, 0, &error);
+	json_object_update_missing(jinfo, jnewinfo);
+	newinfo = json_dumps(jinfo, JSON_INDENT(2));
+	json_decref(jinfo);
+	json_decref(jnewinfo);
+	return newinfo;
 }
 
 static int opus_insert(media_ctx_t *ctx, const char *info, int *palbumid, const char *filename)
@@ -661,10 +671,13 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int *palbumid, const 
 	char *album = NULL;
 	int albumid = -1;
 	char *cover = NULL;
+	char *comment = NULL;
 	int coverid = -1;
 	int exist = 1;
+	json_error_t error;
 
-	opus_parse_info(info, &title, &artist, &album, &genre, &cover);
+	json_t *jinfo = json_loads(info, 0, &error);
+	opus_parse_info(jinfo, &title, &artist, &album, &genre, &cover, &comment);
 
 	warn("%s , %s , %s", title, album, artist);
 	if (title != NULL)
@@ -737,7 +750,7 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int *palbumid, const 
 	ret = sqlite3_step(st_select);
 	if (ret != SQLITE_ROW)
 	{
-		char *sql = "insert into \"opus\" (\"titleid\",\"artistid\",\"albumid\",\"genreid\",\"coverid\",\"like\") values (@TITLEID,@ARTISTID,@ALBUMID,@GENREID,@COVERID, 5)";
+		char *sql = "insert into \"opus\" (\"titleid\",\"artistid\",\"albumid\",\"genreid\",\"coverid\",\"like\",\"comment\") values (@TITLEID,@ARTISTID,@ALBUMID,@GENREID,@COVERID, 5, @COMMENT)";
 		sqlite3_stmt *st_insert;
 		ret = sqlite3_prepare_v2(db, sql, -1, &st_insert, NULL);
 		SQLITE3_CHECK(ret, -1, sql);
@@ -758,6 +771,9 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int *palbumid, const 
 		SQLITE3_CHECK(ret, -1, sql);
 		index = sqlite3_bind_parameter_index(st_insert, "@COVERID");
 		ret = sqlite3_bind_int(st_insert, index, coverid);
+		SQLITE3_CHECK(ret, -1, sql);
+		index = sqlite3_bind_parameter_index(st_insert, "@COMMENT");
+		ret = sqlite3_bind_text(st_insert, index, comment, -1, SQLITE_STATIC);
 		SQLITE3_CHECK(ret, -1, sql);
 		ret = sqlite3_step(st_insert);
 		if (ret != SQLITE_DONE)
@@ -826,18 +842,67 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int *palbumid, const 
 		}
 	}
 	sqlite3_finalize(st_select);
+	json_decref(jinfo);
 	return opusid;
 }
 #endif
 
+#ifdef MEDIA_SQLITE_EXT
+static int _media_updateopusid(media_ctx_t *ctx, int id, int opusid)
+{
+	int ret = 0;
+	sqlite3 *db = ctx->db;
+	int index;
+	sqlite3_stmt *statement;
+	char *sql = "update \"media\" set \"opusid\"=@OPUSID where id = @ID;";
+
+	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
+	SQLITE3_CHECK(ret, -1, sql);
+
+	index = sqlite3_bind_parameter_index(statement, "@OPUSID");
+	ret = sqlite3_bind_int(statement, index, opusid);
+	SQLITE3_CHECK(ret, -1, sql);
+
+	index = sqlite3_bind_parameter_index(statement, "@ID");
+	ret = sqlite3_bind_int(statement, index, id);
+	SQLITE3_CHECK(ret, -1, sql);
+
+	sqlite3_finalize(statement);
+	return ret;
+}
+#endif
+
+static int _media_updateinfo(media_ctx_t *ctx, int id, const char *info)
+{
+	int ret = 0;
+	sqlite3 *db = ctx->db;
+	int index;
+	sqlite3_stmt *statement;
+	char *sql = "update \"media\" set \"info\"=@INFO where id = @ID;";
+
+	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
+	SQLITE3_CHECK(ret, -1, sql);
+
+	index = sqlite3_bind_parameter_index(statement, "@INFO");
+	ret = sqlite3_bind_text(statement, index, info, -1, SQLITE_STATIC);
+	SQLITE3_CHECK(ret, -1, sql);
+
+	index = sqlite3_bind_parameter_index(statement, "@ID");
+	ret = sqlite3_bind_int(statement, index, id);
+	SQLITE3_CHECK(ret, -1, sql);
+
+	sqlite3_finalize(statement);
+	return ret;
+}
+
 static int media_insert(media_ctx_t *ctx, const char *path, const char *info, const char *mime)
 {
 	int id;
-	int opusid = -1;
 	int ret = 0;
 	sqlite3 *db = ctx->db;
 
 #ifdef MEDIA_SQLITE_EXT
+	int opusid = -1;
 	int albumid = -1;
 	const char *filename = strrchr(path, '/');
 	if (filename != NULL)
@@ -876,7 +941,7 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 #ifndef MEDIA_SQLITE_EXT
 		char *sql = "insert into \"media\" (\"url\", \"mimeid\", \"info\") values(@PATH , @MIMEID , @INFO);";
 #else
-		char *sql = "insert into \"media\" (\"url\", \"mimeid\", \"opusid\", \"albumid\") values(@PATH , @MIMEID, @OPUSID, @ALBUMID );";
+		char *sql = "insert into \"media\" (\"url\", \"mimeid\", \"opusid\", \"albumid\", \"info\") values(@PATH , @MIMEID, @OPUSID, @ALBUMID, @INFO );";
 #endif
 
 		ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
@@ -887,27 +952,28 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 		ret = sqlite3_bind_text(statement, index, tpath, -1, SQLITE_STATIC);
 		SQLITE3_CHECK(ret, -1, sql);
 
-#ifndef MEDIA_SQLITE_EXT
 		index = sqlite3_bind_parameter_index(statement, "@INFO");
-		if (info != NULL)
+		if (info != NULL && index > 0)
 			ret = sqlite3_bind_text(statement, index, info, -1, SQLITE_STATIC);
 		else
 			ret = sqlite3_bind_null(statement, index);
-#else
+		SQLITE3_CHECK(ret, -1, sql);
+#ifdef MEDIA_SQLITE_EXT
 		index = sqlite3_bind_parameter_index(statement, "@OPUSID");
 		ret = sqlite3_bind_int(statement, index, opusid);
+		SQLITE3_CHECK(ret, -1, sql);
+
+		index = sqlite3_bind_parameter_index(statement, "@ALBUMID");
 		if (albumid != -1)
 		{
-			index = sqlite3_bind_parameter_index(statement, "@ALBUMID");
 			ret = sqlite3_bind_int(statement, index, albumid);
 		}
 		else
 		{
-			index = sqlite3_bind_parameter_index(statement, "@ALBUMID");
 			ret = sqlite3_bind_null(statement, index);
 		}
-#endif
 		SQLITE3_CHECK(ret, -1, sql);
+#endif
 		index = sqlite3_bind_parameter_index(statement, "@MIMEID");
 		int mimeid = 0;
 		int exist;
@@ -929,31 +995,21 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 			media_dbg("putv: new media[%d] %s", id, path);
 		}
 		sqlite3_finalize(statement);
-		opusid = id;
-	}
 #ifdef MEDIA_SQLITE_EXT
+		id = opusid;
+#endif
+	}
 	else
 	{
-		int index;
-		sqlite3_stmt *statement;
-		char *sql = "update \"media\" set \"opusid\"=@OPUSID where id = @ID;";
-
-		ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
-		SQLITE3_CHECK(ret, -1, sql);
-
-		index = sqlite3_bind_parameter_index(statement, "@OPUSID");
-		ret = sqlite3_bind_int(statement, index, opusid);
-		SQLITE3_CHECK(ret, -1, sql);
-
-		index = sqlite3_bind_parameter_index(statement, "@ID");
-		ret = sqlite3_bind_int(statement, index, id);
-		SQLITE3_CHECK(ret, -1, sql);
-
-		sqlite3_finalize(statement);
-	}
+		if (info != NULL)
+			_media_updateinfo(ctx, id, info);
+#ifdef MEDIA_SQLITE_EXT
+		_media_updateopusid(ctx, id, opusid);
+		id = opusid;
 #endif
+	}
 	free(tpath);
-	if (opusid != -1)
+	if (id != -1)
 	{
 		int index;
 		sqlite3_stmt *statement;
@@ -963,7 +1019,7 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 		SQLITE3_CHECK(ret, -1, sql);
 
 		index = sqlite3_bind_parameter_index(statement, "@ID");
-		ret = sqlite3_bind_int(statement, index, opusid);
+		ret = sqlite3_bind_int(statement, index, id);
 		index = sqlite3_bind_parameter_index(statement, "@LISTID");
 		ret = sqlite3_bind_int(statement, index, ctx->listid);
 
@@ -977,7 +1033,7 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 		sqlite3_finalize(statement);
 	}
 
-	return opusid;
+	return id;
 }
 
 static const char *_media_getmime(media_ctx_t *ctx, int mimeid)
@@ -1065,9 +1121,13 @@ static int _media_execute(media_ctx_t *ctx, sqlite3_stmt *statement, media_parse
 		type = sqlite3_column_type(statement, index);
 		if (type == SQLITE_INTEGER)
 			coverid = sqlite3_column_int(statement, index);
+		index++;
+		type = sqlite3_column_type(statement, index);
+		if (type == SQLITE_TEXT)
+			info = sqlite3_column_blob(statement, index);
 		if (id != -1)
 		{
-			info = opus_get(ctx, id, coverid);
+			info = opus_get(ctx, id, coverid, info);
 		}
 #endif
 		media_dbg("media: %d %s", id, url);
@@ -1098,7 +1158,7 @@ static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data)
 #ifndef MEDIA_SQLITE_EXT
 	char *sql = "select \"url\", \"mimeid\", \"id\", \"info\" from \"media\"  where id = @ID";
 #else
-	char *sql = "select \"url\", \"mimeid\", \"opusid\", \"coverid\" from \"media\" inner join \"album\" on album.id=media.albumid where opusid = @ID";
+	char *sql = "select \"url\", \"mimeid\", \"opusid\", \"coverid\", \"info\" from \"media\" inner join \"album\" on album.id=media.albumid where opusid = @ID";
 #endif
 	ret = sqlite3_prepare_v2(ctx->db, sql, -1, &statement, NULL);
 	SQLITE3_CHECK(ret, -1, sql);
@@ -1651,7 +1711,7 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url, ...)
 "insert into mimes (id, name) values (3, \"audio/alac\");",
 "insert into mimes (id, name) values (4, \"audio/pcm\");",
 "create table media (id INTEGER PRIMARY KEY, url TEXT UNIQUE NOT NULL, mimeid INTEGER, info BLOB, " \
-	"opusid INTEGER, albumid INTEGER, comment BLOB, " \
+	"opusid INTEGER, albumid INTEGER, info BLOB" \
 	"FOREIGN KEY (mimeid) REFERENCES mimes(id) ON UPDATE SET NULL," \
 	"FOREIGN KEY (opusid) REFERENCES opus(id) ON UPDATE SET NULL," \
 	"FOREIGN KEY (albumid) REFERENCES album(id) ON UPDATE SET NULL);",

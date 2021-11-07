@@ -139,7 +139,7 @@ media_t *player_media(player_ctx_t *ctx)
 void player_destroy(player_ctx_t *ctx)
 {
 	player_state(ctx, STATE_ERROR);
-	pthread_yield();
+	sched_yield();
 	pthread_cond_destroy(&ctx->cond);
 	pthread_cond_destroy(&ctx->cond_int);
 	pthread_mutex_destroy(&ctx->mutex);
@@ -236,7 +236,7 @@ static void _player_new_es(player_ctx_t *ctx, void *eventarg)
 	else {
 		src->ops->attach(src->ctx, event_data->pid, event_data->decoder);
 		if (event_data->decoder->ops->prepare)
-			event_data->decoder->ops->prepare(event_data->decoder->ctx);
+			event_data->decoder->ops->prepare(event_data->decoder->ctx, src->info);
 	}
 }
 
@@ -275,13 +275,12 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 	src_t *src = NULL;
 
 	dbg("player: prepare %d %s %s", id, url, mime);
-	src = src_build(ctx, url, mime, id);
+	src = src_build(ctx, url, mime, id, info);
 	if (src != NULL)
 	{
 		if (ctx->nextsrc != NULL)
 		{
-			ctx->nextsrc->ops->destroy(ctx->nextsrc->ctx);
-			free(ctx->nextsrc);
+			src_destroy(ctx->nextsrc);
 			ctx->nextsrc = NULL;
 		}
 		ctx->nextsrc = src;
@@ -290,7 +289,7 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 		{
 			src->ops->eventlistener(src->ctx, _player_listener, ctx);
 			if (src->ops->prepare != NULL)
-				src->ops->prepare(src->ctx);
+				src->ops->prepare(src->ctx, src->info);
 		}
 		else
 		{
@@ -388,14 +387,12 @@ static int _player_stateengine(player_ctx_t *ctx, int state)
 				ctx->outstream[i]->ops->flush(ctx->outstream[i]->ctx);
 			if (ctx->src != NULL)
 			{
-				ctx->src->ops->destroy(ctx->src->ctx);
-				free(ctx->src);
+				src_destroy(ctx->src);
 				ctx->src = NULL;
 			}
 			if (ctx->nextsrc != NULL)
 			{
-				ctx->nextsrc->ops->destroy(ctx->nextsrc->ctx);
-				free(ctx->nextsrc);
+				src_destroy(ctx->nextsrc);
 				ctx->nextsrc = NULL;
 			}
 
@@ -408,8 +405,7 @@ static int _player_stateengine(player_ctx_t *ctx, int state)
 			if (ctx->src != NULL)
 			{
 				dbg("player: wait");
-				ctx->src->ops->destroy(ctx->src->ctx);
-				free(ctx->src);
+				src_destroy(ctx->src);
 				ctx->src = NULL;
 			}
 			ctx->src = ctx->nextsrc;

@@ -30,6 +30,7 @@
 #include <string.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <net/if.h>
 #include <netinet/in.h>

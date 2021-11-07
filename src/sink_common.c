@@ -12,11 +12,11 @@
 
 #define sink_dbg(...)
 
-const sink_ops_t *sink_alsa;
-const sink_ops_t *sink_tinyalsa;
-const sink_ops_t *sink_file;
-const sink_ops_t *sink_udp;
-const sink_ops_t *sink_unix;
+extern const sink_ops_t *sink_alsa;
+extern const sink_ops_t *sink_tinyalsa;
+extern const sink_ops_t *sink_file;
+extern const sink_ops_t *sink_udp;
+extern const sink_ops_t *sink_unix;
 
 static sink_t _sink = {0};
 sink_t *sink_build(player_ctx_t *player, const char *arg)

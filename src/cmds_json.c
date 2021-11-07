@@ -215,7 +215,7 @@ static int method_info(json_t *json_params, json_t **result, void *userdata)
 	int ret;
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 	media_t *media = player_media(ctx->player);
-	cmds_dbg("cmds: filter");
+	cmds_dbg("cmds: info");
 
 	if (media->ops->find == NULL)
 	{
@@ -1206,18 +1206,15 @@ static size_t _cmds_recv(void *buff, size_t size, void *userctx)
 		err("cmds: json recv error %s", strerror(errno));
 		return size;
 	}
-	dbg("cmds: recv 2 data %ld %.*s", size, size, buff);
 
 	size_t length = strlen(buff) + 1;
 	if (length < size)
 	{
-		dbg("cmds: recv 3 data %ld", size, length);
 		size = length;
 	}
 	size = recv(sock,
 		buff, size, MSG_DONTWAIT | MSG_NOSIGNAL);
 
-	dbg("cmds: recv data %ld", size);
 	cmds_dbg("cmds: recv data %.*s", (int)size, (char *)buff);
 	return size;
 }

@@ -1,4 +1,5 @@
 #include <string.h>
+#include <stdio.h>
 
 #include "sink.h"
 
@@ -16,6 +17,7 @@ extern const sink_ops_t *sink_alsa;
 extern const sink_ops_t *sink_tinyalsa;
 extern const sink_ops_t *sink_file;
 extern const sink_ops_t *sink_udp;
+extern const sink_ops_t *sink_rtp;
 extern const sink_ops_t *sink_unix;
 
 static sink_t _sink = {0};
@@ -33,6 +35,7 @@ sink_t *sink_build(player_ctx_t *player, const char *arg)
 #endif
 #ifdef SINK_UDP
 		sink_udp,
+		sink_rtp,
 #endif
 #ifdef SINK_UNIX
 		sink_unix,
@@ -43,7 +46,20 @@ sink_t *sink_build(player_ctx_t *player, const char *arg)
 	const sink_ops_t *sinkops = NULL;
 	if (!strcmp(arg, "none"))
 		return NULL;
-	sinkops = sinklist[0];
+	int i = 0;
+	while (sinklist[i] != NULL)
+	{
+		dbg("sink: test %s", sinklist[i]->name);
+		int len = strlen(sinklist[i]->name);
+		if (!strncmp(sinklist[i]->name, arg, len))
+			break;
+		i++;
+	}
+	if (sinklist[i] == NULL)
+		i = 0;
+	sinkops = sinklist[i];
+	if (arg[0] == '\0')
+		arg = sinklist[i]->default_;
 	_sink.ctx = sinkops->init(player, arg);
 	if (_sink.ctx == NULL)
 		return NULL;

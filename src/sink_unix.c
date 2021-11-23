@@ -414,6 +414,7 @@ static void sink_destroy(sink_ctx_t *ctx)
 const sink_ops_t *sink_unix = &(sink_ops_t)
 {
 	.name = "unix",
+	.default_ = "unix:///tmp/stream",
 	.init = sink_init,
 	.jitter = sink_jitter,
 	.attach = sink_attach,

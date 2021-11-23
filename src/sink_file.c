@@ -75,6 +75,8 @@ static int sink_write(sink_ctx_t *ctx, unsigned char *buff, int len)
 static sink_ctx_t *sink_init(player_ctx_t *ctx, const char *path)
 {
 	int fd;
+	if (!strncmp(path, "file://", 7))
+		path += 7;
 	if (!strcmp(path, "-"))
 		fd = 1;
 	else
@@ -124,6 +126,7 @@ static void sink_destroy(sink_ctx_t *sink)
 const sink_ops_t *sink_file = &(sink_ops_t)
 {
 	.name = "file",
+	.default_ = "file:///tmp/default.wav",
 	.init = sink_init,
 	.jitter = sink_jitter,
 	.attach = sink_attach,

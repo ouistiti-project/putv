@@ -328,6 +328,8 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 	jitter_format_t format = SINK_ALSA_FORMAT;
 	sink_ctx_t *ctx = calloc(1, sizeof(*ctx));
 
+	if (!strncmp(jitter_name, soundcard,4) && soundcard[4] == ':')
+		soundcard += 5;
 	ctx->soundcard = strdup(soundcard);
 	ctx->mixerch = ALSA_MIXER;
 #ifdef SINK_ALSA_CONFIG
@@ -603,6 +605,7 @@ static void alsa_destroy(sink_ctx_t *ctx)
 const sink_ops_t *sink_alsa = &(sink_ops_t)
 {
 	.name = "alsa",
+	.default_ = "alsa:default",
 	.init = alsa_init,
 	.jitter = alsa_jitter,
 	.attach = sink_attach,

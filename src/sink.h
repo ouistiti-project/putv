@@ -10,6 +10,7 @@ typedef void sink_ctx_t;
 typedef struct sink_ops_s sink_ops_t;
 struct sink_ops_s
 {
+	const char *name;
 	sink_ctx_t *(*init)(player_ctx_t *, const char *soundcard);
 	int (*attach)(sink_ctx_t *, const char *mime);
 	jitter_t *(*jitter)(sink_ctx_t *, int index);

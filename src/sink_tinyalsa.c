@@ -151,6 +151,7 @@ static void alsa_destroy(sink_ctx_t *ctx)
 
 const sink_ops_t *sink_tinyalsa = &(sink_ops_t)
 {
+	.name = "tinyalsa",
 	.init = alsa_init,
 	.jitter = alsa_jitter,
 	.attach = sink_attach,

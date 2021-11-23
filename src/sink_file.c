@@ -123,6 +123,7 @@ static void sink_destroy(sink_ctx_t *sink)
 
 const sink_ops_t *sink_file = &(sink_ops_t)
 {
+	.name = "file",
 	.init = sink_init,
 	.jitter = sink_jitter,
 	.attach = sink_attach,

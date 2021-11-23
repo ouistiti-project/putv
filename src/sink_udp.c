@@ -458,6 +458,7 @@ static void sink_destroy(sink_ctx_t *ctx)
 
 const sink_ops_t *sink_udp = &(sink_ops_t)
 {
+	.name = "udp",
 	.init = sink_init,
 	.jitter = sink_jitter,
 	.attach = sink_attach,

@@ -19,6 +19,7 @@ extern const sink_ops_t *sink_file;
 extern const sink_ops_t *sink_udp;
 extern const sink_ops_t *sink_rtp;
 extern const sink_ops_t *sink_unix;
+extern const sink_ops_t *sink_pulse;
 
 static sink_t _sink = {0};
 sink_t *sink_build(player_ctx_t *player, const char *arg)
@@ -39,6 +40,9 @@ sink_t *sink_build(player_ctx_t *player, const char *arg)
 #endif
 #ifdef SINK_UNIX
 		sink_unix,
+#endif
+#ifdef SINK_PULSE
+		sink_pulse,
 #endif
 		NULL
 	};

@@ -202,7 +202,6 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *arg)
 	jitter->ctx->thredhold = NB_BUFFER/2;
 	jitter->format = ctx->format;
 	ctx->player = player;
-	dbg("%s %d", __FUNCTION__, __LINE__);
 
 	return ctx;
 }
@@ -305,6 +304,7 @@ static void sink_destroy(sink_ctx_t *ctx)
 const sink_ops_t *sink_pulse = &(sink_ops_t)
 {
 	.name = "pulse",
+	.default_ = "pulse:",
 	.init = sink_init,
 	.jitter = sink_jitter,
 	.attach = sink_attach,

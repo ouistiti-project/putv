@@ -63,6 +63,7 @@ int client_unix(const char *socketpath, client_data_t *data);
 void client_async(client_data_t *data,int async);
 int client_eventlistener(client_data_t *data, const char *name, client_event_prototype_t proto, void *protodata);
 int client_loop(client_data_t *data);
+void client_disconnect(client_data_t *data);
 
 int client_next(client_data_t *data, client_event_prototype_t proto, void *protodata);
 int client_play(client_data_t *data, client_event_prototype_t proto, void *protodata);

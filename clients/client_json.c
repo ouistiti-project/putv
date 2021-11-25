@@ -491,8 +491,11 @@ static size_t recv_cb(void *buffer, size_t len, void *arg)
 	if (data->message == NULL)
 	{
 		ret = recv(data->sock, buffer, len, MSG_NOSIGNAL);
-		if (ret == 0)
-			data->run = 0;
+		if (ret <= 0)
+		{
+			client_disconnect(data);
+			return -1;
+		}
 	}
 	else
 	{
@@ -583,4 +586,10 @@ int client_loop(client_data_t *data)
 	pthread_cond_destroy(&data->cond);
 	pthread_mutex_destroy(&data->mutex);
 	return 0;
+}
+
+void client_disconnect(client_data_t *data)
+{
+	data->run = 0;
+	shutdown(data->sock, SHUT_RD);
 }

@@ -330,8 +330,6 @@ int run_client(void *arg)
 static void *_check_socket(void *arg)
 {
 	cmdline_ctx_t *ctx = (cmdline_ctx_t *)arg;
-	ctx->socketpath = malloc(strlen(ctx->root) + 1 + strlen(ctx->name) + 1);
-	sprintf(ctx->socketpath, "%s/%s", ctx->root, ctx->name);
 	if (!access(ctx->socketpath, R_OK | W_OK))
 	{
 		run_client((void *)ctx);
@@ -373,7 +371,6 @@ static void *_check_socket(void *arg)
 			i += EVENT_SIZE + event->len;
 		}
 	}
-	free(ctx->socketpath);
 }
 #endif
 
@@ -426,19 +423,19 @@ int main(int argc, char **argv)
 		cmdline_data.media = NULL;
 	}
 	cmdline_data.media = media;
+	cmdline_data.socketpath = malloc(strlen(cmdline_data.root) + 1 + strlen(cmdline_data.name) + 1);
+	sprintf(cmdline_data.socketpath, "%s/%s", cmdline_data.root, cmdline_data.name);
+	cmdline_data.run = 1;
 #ifdef USE_INOTIFY
 	cmdline_data.inotifyfd = inotify_init();
 	int dirfd = inotify_add_watch(cmdline_data.inotifyfd, cmdline_data.root,
 					IN_MODIFY | IN_CREATE | IN_DELETE);
-	cmdline_data.run = 1;
 	_check_socket((void *)&cmdline_data);
 #else
-	cmdline_data.socketpath = malloc(strlen(cmdline_data.root) + 1 + strlen(cmdline_data.name) + 1);
-	sprintf(cmdline_data.socketpath, "%s/%s", cmdline_data.root, cmdline_data.name);
 
 	run_client((void *)&cmdline_data);
-	free(cmdline_data.socketpath);
 #endif
+	free(cmdline_data.socketpath);
 	json_decref(cmdline_data.media);
 	return 0;
 }

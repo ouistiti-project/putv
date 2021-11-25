@@ -390,7 +390,7 @@ int main(int argc, char **argv)
 	int opt;
 	do
 	{
-		opt = getopt(argc, argv, "R:n:i:m:hD");
+		opt = getopt(argc, argv, "R:n:m:h");
 		switch (opt)
 		{
 			case 'R':
@@ -399,31 +399,19 @@ int main(int argc, char **argv)
 			case 'n':
 				cmdline_data.name = optarg;
 			break;
-			case 'i':
-				cmdline_data.cmdline_path = optarg;
-			break;
 			case 'm':
 				media_path = optarg;
 			break;
 			case 'h':
-				fprintf(stderr, "input -R <dir> -n <socketname> -D -m <jsonfile>");
-				fprintf(stderr, "send events from input to putv applications\n");
-				fprintf(stderr, " -D         daemonize");
+				fprintf(stderr, "cmdline -R <dir> -n <socketname> [-m <jsonfile>]");
+				fprintf(stderr, "cmdline for putv applications\n");
 				fprintf(stderr, " -R <DIR>   change the socket directory directory");
 				fprintf(stderr, " -n <NAME>  change the socket name");
 				fprintf(stderr, " -m <FILE>  load Json file to mqnqge media");
 				return -1;
 			break;
-			case 'D':
-				mode |= DAEMONIZE;
-			break;
 		}
 	} while(opt != -1);
-
-	if ((mode & DAEMONIZE) && fork() != 0)
-	{
-		return 0;
-	}
 
 	json_error_t error;
 	json_t *media;

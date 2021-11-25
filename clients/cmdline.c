@@ -170,7 +170,22 @@ static int method_random(cmdline_ctx_t *ctx, char *arg)
 
 static int method_quit(cmdline_ctx_t *ctx, char *arg)
 {
+	client_disconnect(ctx->client);
 	ctx->run = 0;
+	return 0;
+}
+
+static int method_help(cmdline_ctx_t *ctx, char *arg)
+{
+	fprintf(stdout, "putv commands:\n");
+	fprintf(stdout, " play   : start or resume the stream on putv server\n");
+	fprintf(stdout, " stop   : stop the stream on putv server\n");
+	fprintf(stdout, " pause  : suspend the stream on putv server\n");
+	fprintf(stdout, " next   : request the next source on putv server\n");
+	fprintf(stdout, " volume : request to change the level of volume on putv server\n");
+	fprintf(stdout, "        <0..100>\n");
+	fprintf(stdout, " media  : request to change the media\n");
+	fprintf(stdout, "        <media url>\n");
 	return 0;
 }
 
@@ -255,7 +270,12 @@ int run_client(void *arg)
 				if (!strncmp(buffer + i, "quit",4))
 				{
 					method = method_quit;
-					ctx->run = 0;
+					i += 4;
+				}
+				if (!strncmp(buffer + i, "help", 4))
+				{
+					method = method_help;
+					i += 4;
 				}
 				if (!strncmp(buffer + i, "append", 6))
 				{

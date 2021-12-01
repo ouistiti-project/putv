@@ -493,6 +493,7 @@ static size_t recv_cb(void *buffer, size_t len, void *arg)
 		ret = recv(data->sock, buffer, len, MSG_NOSIGNAL);
 		if (ret <= 0)
 		{
+			strncpy(buffer, "{}",len);
 			client_disconnect(data);
 			return -1;
 		}

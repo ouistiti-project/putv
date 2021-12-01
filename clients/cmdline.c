@@ -189,6 +189,31 @@ static int method_help(cmdline_ctx_t *ctx, char *arg)
 	return 0;
 }
 
+int printevent(cmdline_ctx_t *ctx, json_t *json_params)
+{
+	char *state;
+	int id;
+	json_t *info = json_object();
+
+	json_unpack(json_params, "{ss,si,so}", "state", &state,"id", &id, "info", &info);
+	fprintf(stdout, "\n%s\n", state);
+	const unsigned char *key = NULL;
+	json_t *value;
+	json_object_foreach(info, key, value)
+	{
+		if (json_is_string(value))
+		{
+			const char *string = json_string_value(value);
+			if (string != NULL)
+			{
+				fprintf(stdout, "%s : %s\n", key, string);
+			}
+		}
+	}
+	fprintf(stdout, "> ");
+	fflush(stdout);
+}
+
 int run_client(void *arg)
 {
 	cmdline_ctx_t *ctx = (cmdline_ctx_t *)arg;
@@ -199,6 +224,7 @@ int run_client(void *arg)
 	ctx->client = &data;
 
 	pthread_t thread;
+	client_eventlistener(&data, "onchange", printevent, ctx);
 	pthread_create(&thread, NULL, (__start_routine_t)client_loop, (void *)&data);
 
 	int fd = 0;
@@ -207,11 +233,14 @@ int run_client(void *arg)
 		int ret;
 		fd_set rfds;
 		struct timeval timeout = {1, 0};
+		struct timeval *ptimeout = NULL;
 
 		FD_ZERO(&rfds);
 		FD_SET(fd, &rfds);
 		int maxfd = fd;
-		ret = select(maxfd + 1, &rfds, NULL, NULL, &timeout);
+		fprintf (stdout, "> ");
+		fflush(stdout);
+		ret = select(maxfd + 1, &rfds, NULL, NULL, ptimeout);
 		if (ret > 0 && FD_ISSET(fd, &rfds))
 		{
 			int length;

@@ -202,7 +202,7 @@ static encoder_ctx_t *encoder_init(player_ctx_t *player)
 		ctx->samplerate,
 		ctx->samplesize,
 		ctx->nchannels);
-	jitter_t *jitter = jitter_scattergather_init(jitter_name, NB_BUFFERS, buffsize);
+	jitter_t *jitter = jitter_init(JITTER_TYPE_SG, jitter_name, NB_BUFFERS, buffsize);
 	ctx->in = jitter;
 	jitter->format = format;
 	jitter->ctx->frequence = 0; // automatic freq
@@ -348,7 +348,7 @@ static void encoder_destroy(encoder_ctx_t *ctx)
 	ctx->heartbeat.ops->destroy(ctx->heartbeat.ctx);
 #endif
 	/* release the decoder */
-	jitter_scattergather_destroy(ctx->in);
+	jitter_destroy(ctx->in);
 	free(ctx);
 }
 

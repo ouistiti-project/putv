@@ -13,6 +13,7 @@ bin-y+=$(PUTV)
 $(PUTV)_SOURCES+=main.c
 $(PUTV)_SOURCES+=daemonize.c
 $(PUTV)_SOURCES+=player.c
+$(PUTV)_SOURCES+=jitter_common.c
 $(PUTV)_SOURCES+=jitter_sg.c
 $(PUTV)_SOURCES+=jitter_ring.c
 $(PUTV)_LIBS+=pthread

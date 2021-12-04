@@ -398,7 +398,7 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 #endif
 
 	dbg("sink: alsa card %s mixer %s", ctx->soundcard, ctx->mixerch);
-	jitter_t *jitter = jitter_scattergather_init(jitter_name, NB_BUFFER, size);
+	jitter_t *jitter = jitter_init(JITTER_TYPE_SG, jitter_name, NB_BUFFER, size);
 #ifdef SAMPLERATE_AUTO
 	jitter->ctx->frequence = 0;
 #else
@@ -597,7 +597,7 @@ static void alsa_destroy(sink_ctx_t *ctx)
 #endif
 
 	free(ctx->noise);
-	jitter_scattergather_destroy(ctx->in);
+	jitter_destroy(ctx->in);
 	free(ctx->soundcard);
 	free(ctx);
 }

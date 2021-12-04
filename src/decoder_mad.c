@@ -86,10 +86,7 @@ struct decoder_ctx_s
 #define DECODER_HEARTBEAT
 #endif
 
-//#define JITTER_init jitter_scattergather_init
-//#define JITTER_destroy jitter_scattergather_destroy
-#define JITTER_init jitter_ringbuffer_init
-#define JITTER_destroy jitter_ringbuffer_destroy
+#define JITTER_TYPE JITTER_TYPE_RING
 
 static jitter_t *_decoder_jitter(decoder_ctx_t *ctx, jitte_t jitte);
 
@@ -339,8 +336,7 @@ static jitter_t *_decoder_jitter(decoder_ctx_t *ctx, jitte_t jitte)
 	{
 		int factor = jitte;
 		int nbbuffer = NBUFFER << factor;
-		jitter_t *jitter = JITTER_init(jitter_name, nbbuffer, BUFFERSIZE);
-		//jitter_t *jitter = jitter_ringbuffer_init(jitter_name, NBUFFER, BUFFERSIZE);
+		jitter_t *jitter = jitter_init(JITTER_TYPE, jitter_name, nbbuffer, BUFFERSIZE);
 		jitter->format = MPEG2_3_MP3;
 		jitter->ctx->thredhold = nbbuffer / 2;
 
@@ -455,7 +451,7 @@ static void _decoder_destroy(decoder_ctx_t *ctx)
 		ctx->filter->ops->destroy(ctx->filter->ctx);
 		free(ctx->filter);
 	}
-	JITTER_destroy(ctx->in);
+	jitter_destroy(ctx->in);
 	free(ctx);
 }
 

@@ -131,7 +131,7 @@ static jitter_t *demux_jitter(demux_ctx_t *ctx, jitte_t jitte)
 	if (ctx->in == NULL)
 	{
 		int nbbuffers = NB_BUFFERS << jitte;
-		ctx->in = jitter_scattergather_init(jitter_name, nbbuffers, BUFFERSIZE);
+		ctx->in = jitter_init(JITTER_TYPE_SG, jitter_name, nbbuffers, BUFFERSIZE);
 #ifdef USE_REALTIME
 		ctx->in->ops->lock(ctx->in->ctx);
 #endif
@@ -472,6 +472,8 @@ static void demux_destroy(demux_ctx_t *ctx)
 		free(profile);
 		profile = next;
 	}
+	if (ctx->in != NULL)
+		ctx->in->destroy(ctx->in);
 	free(ctx);
 }
 

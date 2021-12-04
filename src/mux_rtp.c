@@ -144,7 +144,7 @@ static void *mux_thread(void *arg)
 static int mux_run(mux_ctx_t *ctx, jitter_t *sink_jitter)
 {
 	int size = sink_jitter->ctx->size - sizeof(rtpheader_t) - sizeof(uint32_t);
-	jitter_t *jitter = jitter_scattergather_init(jitter_name, 6, size);
+	jitter_t *jitter = jitter_init(JITTER_TYPE_SG, jitter_name, 6, size);
 	jitter->ctx->frequence = 0;
 	jitter->ctx->thredhold = 3;
 #if defined(MUX_RTP_MP3)
@@ -184,7 +184,7 @@ static void mux_destroy(mux_ctx_t *ctx)
 {
 	if (ctx->thread)
 		pthread_join(ctx->thread, NULL);
-	jitter_scattergather_destroy(ctx->in);
+	jitter_destroy(ctx->in);
 	free(ctx);
 }
 

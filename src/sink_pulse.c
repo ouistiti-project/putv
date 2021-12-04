@@ -197,7 +197,7 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *arg)
 		return NULL;
 	}
 
-	jitter_t *jitter = jitter_scattergather_init(jitter_name, NB_BUFFER, size);
+	jitter_t *jitter = jitter_init(JITTER_TYPE_SG, jitter_name, NB_BUFFER, size);
 	jitter->ctx->frequence = DEFAULT_SAMPLERATE;
 	jitter->ctx->thredhold = NB_BUFFER/2;
 	jitter->format = ctx->format;
@@ -297,7 +297,7 @@ static void sink_destroy(sink_ctx_t *ctx)
 		pthread_join(ctx->thread, NULL);
 	_pa_close(ctx);
 
-	jitter_scattergather_destroy(ctx->in);
+	jitter_destroy(ctx->in);
 	free(ctx);
 }
 

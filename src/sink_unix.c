@@ -127,7 +127,7 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 	ctx->filepath = path;
 
 	unsigned int size;
-	jitter_t *jitter = jitter_scattergather_init(jitter_name, 6, size);
+	jitter_t *jitter = jitter_init(JITTER_TYPE_SG, jitter_name, 6, size);
 	jitter->ctx->frequence = 0;
 	jitter->ctx->thredhold = 2;
 	jitter->format = format;
@@ -401,7 +401,7 @@ static void sink_destroy(sink_ctx_t *ctx)
 	{
 		pthread_join(ctx->thread, NULL);
 	}
-	jitter_scattergather_destroy(ctx->in);
+	jitter_destroy(ctx->in);
 #ifdef SINK_UNIX_ASYNC
 	pthread_mutex_destroy(&ctx->mutex);
 	pthread_cond_destroy(&ctx->event);

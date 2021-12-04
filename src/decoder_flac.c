@@ -105,7 +105,7 @@ static jitter_t *_decoder_jitter(decoder_ctx_t *ctx, jitte_t jitte)
 	{
 		int factor = jitte;
 		int nbbuffer = NBUFFER << factor;
-		jitter_t *jitter = jitter_ringbuffer_init(jitter_name, nbbuffer, BUFFERSIZE);
+		jitter_t *jitter = jitter_init(JITTER_TYPE_RING, jitter_name, nbbuffer, BUFFERSIZE);
 		ctx->in = jitter;
 		jitter->ctx->thredhold = nbbuffer / 2;
 		jitter->format = FLAC;
@@ -325,7 +325,7 @@ static void _decoder_destroy(decoder_ctx_t *ctx)
 		pthread_join(ctx->thread, NULL);
 	/* release the decoder */
 	FLAC__stream_decoder_delete(ctx->decoder);
-	jitter_ringbuffer_destroy(ctx->in);
+	jitter_destroy(ctx->in);
 	if (ctx->filter)
 	{
 		ctx->filter->ops->destroy(ctx->filter->ctx);

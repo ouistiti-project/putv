@@ -1,5 +1,3 @@
-PUTV=putv
-
 HEARTBEAT=n
 
 MEDIA_SQLITE=y

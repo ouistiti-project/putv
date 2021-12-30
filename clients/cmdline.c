@@ -382,6 +382,7 @@ static void *_check_socket(void *arg)
 			{
 				if (event->mask & IN_CREATE)
 				{
+					sleep(1);
 					if (!access(ctx->socketpath, R_OK | W_OK))
 					{
 						run_client((void *)ctx);

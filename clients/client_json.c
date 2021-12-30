@@ -195,7 +195,10 @@ int client_unix(const char *socketpath, client_data_t *data)
 		strncpy(addr.sun_path, socketpath, sizeof(addr.sun_path));
 		int ret = connect(sock, (const struct sockaddr *)&addr, sizeof(addr.sun_path));
 		if (ret != 0)
+		{
 			sock = 0;
+			err("client: connect error %s", strerror(errno));
+		}
 		data->sock = sock;
 		pthread_cond_init(&data->cond, NULL);
 		pthread_mutex_init(&data->mutex, NULL);
@@ -569,6 +572,7 @@ int client_loop(client_data_t *data)
 				{
 					err("client: receive mal formated json %s", error.text);
 					data->pid = 0;
+					data->run = 0;
 				}
 			} while (data->message != NULL);
 #else
@@ -579,11 +583,18 @@ int client_loop(client_data_t *data)
 			buffer[ret] = 0;
 			if (ret > 0)
 				jsonrpc_handler(buffer, strlen(buffer), table, data);
-			if (ret == 0)
+			else //if (ret == 0)
 				data->run = 0;
 #endif
 		}
 	}
+	dbg("client: end loop");
+	if (data->sock > 0)
+	{
+		shutdown(data->sock, SHUT_WR);
+		close(data->sock);
+	}
+	data->sock = 0;
 	pthread_cond_destroy(&data->cond);
 	pthread_mutex_destroy(&data->mutex);
 	return 0;

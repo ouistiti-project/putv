@@ -307,6 +307,7 @@ static int method_remove(json_t *json_params, json_t **result, void *userdata)
 		*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
 		return -1;
 	}
+	int id = -1;
 
 	if (json_is_array(json_params))
 	{
@@ -332,7 +333,7 @@ static int method_remove(json_t *json_params, json_t **result, void *userdata)
 		value = json_object_get(json_params, "id");
 		if (json_is_integer(value))
 		{
-			int id = json_integer_value(value);
+			id = json_integer_value(value);
 			ret = media->ops->remove(media->ctx, id, NULL);
 		}
 		value = json_object_get(json_params, "url");
@@ -351,6 +352,8 @@ static int method_remove(json_t *json_params, json_t **result, void *userdata)
 	else
 	{
 		*result = json_pack("{s:s,s:s}", "status", "DONE", "message", "media removed");
+		if (id != -1)
+			json_object_set(*result, "id", json_integer(id));
 		ret = 0;
 	}
 	return ret;

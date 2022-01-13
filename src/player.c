@@ -113,9 +113,12 @@ int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop
 	return 0;
 }
 
-void player_next(player_ctx_t *ctx)
+int player_next(player_ctx_t *ctx, int change)
 {
-	if (ctx->media != NULL)
+	int nextid = -1;
+	if (ctx->nextsrc != NULL)
+		nextid = ctx->nextsrc->mediaid;
+	if (ctx->media != NULL && change)
 	{
 		/**
 		 * next command just request the main loop to complete
@@ -125,6 +128,7 @@ void player_next(player_ctx_t *ctx)
 		 */
 		player_state(ctx, STATE_CHANGE);
 	}
+	return nextid;
 }
 
 media_t *player_media(player_ctx_t *ctx)

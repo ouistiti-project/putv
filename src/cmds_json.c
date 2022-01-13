@@ -505,7 +505,7 @@ static int method_next(json_t *json_params, json_t **result, void *userdata)
 	int ret = -1;
 	cmds_dbg("cmds: next");
 
-	player_next(ctx->player);
+	int id = player_next(ctx->player, 1);
 	switch (player_state(ctx->player, STATE_UNKNOWN))
 	{
 	case STATE_STOP:
@@ -724,7 +724,7 @@ static int method_onchange(json_t *json_params, json_t **result, void *userdata)
 		*result = json_pack("{s:s}", "state", str_stop);
 	}
 
-	int next = media->ops->play(media->ctx, NULL, NULL);
+	int next = player_next(ctx->player, 0);
 	json_object_set(*result, "next", json_integer(next));
 
 	int count = media->ops->count(media->ctx);
@@ -735,9 +735,13 @@ static int method_onchange(json_t *json_params, json_t **result, void *userdata)
 
 	json_t *options = json_array();
 	if (media->ops->loop && media->ops->loop(media->ctx, OPTION_REQUEST) == OPTION_ENABLE)
+	{
 		json_array_append(options, json_string("loop"));
+	}
 	if (media->ops->random && media->ops->random(media->ctx, OPTION_REQUEST) == OPTION_ENABLE)
+	{
 		json_array_append(options, json_string("random"));
+	}
 	json_object_set(*result, "options", options);
 
 	if (ctx->sink && ctx->sink->ops->getvolume != NULL)

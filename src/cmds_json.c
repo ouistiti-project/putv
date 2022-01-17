@@ -1210,9 +1210,11 @@ static size_t _cmds_recv(void *buff, size_t size, void *userctx)
 
 	size = recv(sock,
 		buff, size, MSG_PEEK | MSG_DONTWAIT | MSG_NOSIGNAL);
-	if (size <= 0)
+	if ((ssize_t)size <= 0)
 	{
 		err("cmds: json recv error %s", strerror(errno));
+		close(sock);
+		info->sock = -1;
 		return size;
 	}
 
@@ -1279,8 +1281,9 @@ static int _jsonrpc_sendresponse(thread_info_t *info, json_t *request)
 	if (response != NULL)
 	{
 		char *buff = json_dumps(response, JSONRPC_DEBUG_FORMAT );
-		cmds_dbg("cmds: send response %ld %s", strlen(buff), buff);
-		ret = send(sock, buff, strlen(buff) + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
+		int length = strlen(buff);
+		cmds_dbg("cmds: send response %ld %s", length, buff);
+		ret = send(sock, buff, length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
 		dbg("cmds: send response %d", ret);
 		fsync(sock);
 		json_decref(response);
@@ -1295,21 +1298,22 @@ static int _jsonrpc_sendresponse(thread_info_t *info, json_t *request)
 
 static void _cmds_json_removeinfo(cmds_ctx_t *ctx, thread_info_t *info)
 {
-		thread_info_t *it = ctx->info;
-		if (ctx->info == info)
+	thread_info_t *it = ctx->info;
+	if (ctx->info == info)
+	{
+		ctx->info = ctx->info->next;
+	}
+	else
+	{
+		while (it != NULL && it->next != NULL && it->next != info)
 		{
-			it = ctx->info;
-			ctx->info = ctx->info->next;
-		}
-		else
-		{
-			while (it != NULL && it->next != NULL && it->next != info)
-			{
-				it = it->next;
-			}
+			it = it->next;
 		}
 		if (it != NULL)
-			unixserver_remove(it);
+			it->next = info->next;
+	}
+
+	unixserver_remove(info);
 }
 /**
  * this is the main loop for the sending
@@ -1360,7 +1364,11 @@ static void *_cmds_json_pthreadsend(void *arg)
 
 				/** free the client **/
 				if (request->info != NULL)
+				{
+					pthread_mutex_lock(&ctx->mutex);
 					_cmds_json_removeinfo(ctx, request->info);
+					pthread_mutex_unlock(&ctx->mutex);
+				}
 				/** free the request **/
 				json_decref(request->request);
 				free(request);
@@ -1381,8 +1389,10 @@ static void *_cmds_json_pthreadsend(void *arg)
 					int ret = jsonrpc_sendevent(ctx, info, "onchange");
 					if (ret < 0)
 					{
+						pthread_mutex_lock(&ctx->mutex);
 						err("cmds: sendevent error %d", ret);
 						_cmds_json_removeinfo(ctx, info);
+						pthread_mutex_unlock(&ctx->mutex);
 					}
 					info = next;
 				}
@@ -1471,13 +1481,13 @@ static int jsonrpc_command(thread_info_t *info)
 		}
 		else
 		{
-			dbg("recv nothing");
+			cmds_dbg("cmds: recv nothing");
 			if (info->sock == -1)
 				run = 0;
 		}
 	}
-	warn("cmds: json socket %d leave", sock);
 	pthread_mutex_lock(&ctx->mutex);
+	warn("cmds: json socket %d leave", info->sock);
 	_cmds_json_removeinfo(ctx, info);
 	pthread_mutex_unlock(&ctx->mutex);
 	return ret;

@@ -205,7 +205,8 @@ static int method_list(json_t *json_params, json_t **result, void *userdata)
 
 	entry.count = 0;
 	media->ops->list(media->ctx, _append_entry, (void *)&entry);
-	*result = json_pack("{s:i,s:i,s:o}", "count", count, "nbitems", entry.count, "playlist", entry.list);
+	*result = json_pack("{s:i,s:i,s:o}",
+		"count", count, "nbitems", entry.count, "playlist", entry.list);
 
 	return 0;
 }
@@ -229,6 +230,7 @@ static int method_info(json_t *json_params, json_t **result, void *userdata)
 		int id = json_integer_value(id_js);
 		*result = json_object();
 		media->ops->find(media->ctx, id, _print_entry, (void *)*result);
+		json_object_set(*result, "id", id_js);
 	}
 	else
 	{
@@ -514,11 +516,11 @@ static int method_next(json_t *json_params, json_t **result, void *userdata)
 	break;
 	case STATE_PLAY:
 	case STATE_CHANGE:
-		*result = json_pack("{ss}", "state", str_play);
+		*result = json_pack("{ss,s:i}", "state", str_play, "id", id);
 		ret = 0;
 	break;
 	case STATE_PAUSE:
-		*result = json_pack("{ss}", "state", str_pause);
+		*result = json_pack("{ss,s:i}", "state", str_pause, "id", id);
 		ret = 0;
 	break;
 	default:

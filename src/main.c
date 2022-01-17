@@ -122,14 +122,17 @@ void help(const char *name)
 {
 	fprintf(stderr, "%s [-R <websocketdir>][-m <media>][-o <output>][-p <pidfile>]\n", name);
 	fprintf(stderr, "\t...[-f <filtername>][-x][-D][-a][-r][-l][-L <logfile>]\n");
-	fprintf(stderr, "\t...[-d <directory>]\n");
+	fprintf(stderr, "\t...[-d <directory>][-R <directory>]\n");
 	fprintf(stderr, "\t...[-P [0-99]]\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "\t -m <media>\tSet the media supporting audio files\n");
-	fprintf(stderr, "\t -o <output>\tSet the audio sink parameter\n");
+	fprintf(stderr, "\t -o <output>\tSet the sink URL (default: alsa:default)\n");
 	fprintf(stderr, "\t -a\t\tAuto play enabled\n");
 	fprintf(stderr, "\t -r\t\tShuffle enabled\n");
 	fprintf(stderr, "\t -l\t\tLoop enabled\n");
+	fprintf(stderr, "\t -R <directory>\tSet the directory for command socket file\n");
+	fprintf(stderr, "\t -d <directory>\tSet the working directory\n");
+	fprintf(stderr, "\t -P <priority>\tSet the process priority\n");
 }
 
 #define DAEMONIZE 0x01

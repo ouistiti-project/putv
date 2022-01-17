@@ -70,8 +70,6 @@ int start(client_routine_t service, thread_info_t *info)
 void unixserver_remove(thread_info_t *info)
 {
 	thread_info_t *it = &info->server->firstinfo;
-	dbg("unix_server: remove socket %d", info->sock);
-	dbg("unix_server: first %p current %p", it, info);
 	if (it == info)
 	{
 		err("the list must be never empty when removing");
@@ -82,12 +80,15 @@ void unixserver_remove(thread_info_t *info)
 	 */
 	thread_server_t *server = info->server;
 	pthread_mutex_lock(&server->lock);
-	while (it != NULL && info != it->next) it = it->next;
+	while (it != NULL && info != it->next)
+	{
+		it = it->next;
+	}
 	if (it != NULL)
 		it->next = info->next;
-	pthread_mutex_unlock(&server->lock);
 	close(info->sock);
 	free(info);
+	pthread_mutex_unlock(&server->lock);
 }
 
 void unixserver_kill(thread_info_t *info)
@@ -156,6 +157,7 @@ int unixserver_run(client_routine_t routine, void *userctx, const char *socketpa
 			} while(newsock > 0);
 		}
 		close(sock);
+		pthread_mutex_lock(&server->lock);
 		struct thread_info_s *info = server->firstinfo.next;
 		while (info != NULL)
 		{
@@ -163,6 +165,7 @@ int unixserver_run(client_routine_t routine, void *userctx, const char *socketpa
 			free(info);
 			info = next;
 		}
+		pthread_mutex_unlock(&server->lock);
 		pthread_mutex_destroy(&server->lock);
 		free(server);
 	}

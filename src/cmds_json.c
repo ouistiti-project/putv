@@ -766,15 +766,15 @@ static int method_options(json_t *json_params, json_t **result, void *userdata)
 	int ret = -1;
 	media_t *media = player_media(ctx->player);
 
-	json_t *value = NULL;
-	json_t *loop_value = NULL;
-	json_t *random_value = NULL;
 	if (json_is_object(json_params))
 	{
+		json_t *value = NULL;
+		int state = -1;
+
 		value = json_object_get(json_params, "loop");
 		if (json_is_boolean(value))
 		{
-			int state = json_boolean_value(value);
+			state = json_boolean_value(value);
 			if (media->ops->loop)
 			{
 				media->ops->loop(media->ctx, state);
@@ -786,12 +786,11 @@ static int method_options(json_t *json_params, json_t **result, void *userdata)
 				return -1;
 			}
 
-			loop_value = json_boolean(state);
 		}
 		value = json_object_get(json_params, "random");
 		if (json_is_boolean(value))
 		{
-			int state = json_boolean_value(value);
+			state = json_boolean_value(value);
 			if (media->ops->random)
 			{
 				state = media->ops->random(media->ctx, state);
@@ -809,14 +808,14 @@ static int method_options(json_t *json_params, json_t **result, void *userdata)
 				*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
 				return -1;
 			}
-
-			random_value = json_boolean(state);
 		}
 		*result = json_object();
-		if (loop_value != NULL)
-			json_object_set(*result, "loop", loop_value);
-		if (random_value != NULL)
-			json_object_set(*result, "random", random_value);
+		state = media->ops->loop(media->ctx, OPTION_REQUEST);
+		value = json_boolean(state);
+		json_object_set(*result, "loop", value);
+		state = media->ops->random(media->ctx, OPTION_REQUEST);
+		value = json_boolean(state);
+		json_object_set(*result, "random", value);
 	}
 	return 0;
 }

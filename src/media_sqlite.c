@@ -1608,43 +1608,9 @@ static int _media_opendb(media_ctx_t *ctx, const char *url)
 	return ret;
 }
 
-static int _media_initdb(sqlite3 *db, const char *query[])
-{
-	char *error = NULL;
-	int i = 0;
-	int ret = SQLITE_OK;
-
-	while (query[i] != NULL)
-	{
-		if (ret != SQLITE_OK)
-		{
-			err("media prepare error %d query[%d]", ret, i);
-			break;
-		}
-		media_dbg("query %d",i);
-		media_dbg("query %s", query[i]);
-		ret = sqlite3_exec(db, query[i], NULL, NULL, &error);
-		i++;
-	}
-	return ret;
-}
-
-static media_ctx_t *media_init(player_ctx_t *player, const char *url, ...)
-{
-	media_ctx_t *ctx = NULL;
-	int ret = SQLITE_ERROR;
-
-	ctx = calloc(1, sizeof(*ctx));
-	ret = _media_opendb(ctx, url);
-	if (ret != -1 && ctx->db)
-	{
-		char *error = NULL;
-		if (sqlite3_exec(ctx->db, "PRAGMA encoding=\"UTF-8\";", NULL, NULL, &error))
-			warn("sqlite pragma error: %s", error);
-		if (ret == SQLITE_CORRUPT)
-		{
+#ifdef MEDIA_SQLITE_INITDB
 #ifndef MEDIA_SQLITE_EXT
-			const char *query[] = {
+static const char *query[] = {
 "create table mimes (\"id\" INTEGER PRIMARY KEY, \"name\" TEXT UNIQUE NOT NULL);",
 "insert into mimes (id, name) values (1, \"audio/mp3\");",
 "insert into mimes (id, name) values (2, \"audio/flac\");",
@@ -1700,24 +1666,27 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url, ...)
  * |           |           | (ref word)              |
  * |           |  coverid  | url to the cover image  |
  * |           |           | for the album(ref cover)|
+ * |           |   speed   | speed of the music      |
+ * |           |           | (ref speed)             |
  * |           |  comment  | text about the album    |
  * ---------------------------------------------------
  */
-			const char *query[] = {
+static const char *query[] = {
 "create table mimes (\"id\" INTEGER PRIMARY KEY, \"name\" TEXT UNIQUE NOT NULL);",
 "insert into mimes (id, name) values (0, \"octet/stream\");",
 "insert into mimes (id, name) values (1, \"audio/mp3\");",
 "insert into mimes (id, name) values (2, \"audio/flac\");",
 "insert into mimes (id, name) values (3, \"audio/alac\");",
 "insert into mimes (id, name) values (4, \"audio/pcm\");",
-"create table media (id INTEGER PRIMARY KEY, url TEXT UNIQUE NOT NULL, mimeid INTEGER, info BLOB, " \
-	"opusid INTEGER, albumid INTEGER, info BLOB" \
+"create table media (id INTEGER PRIMARY KEY, url TEXT UNIQUE NOT NULL, "\
+	"mimeid INTEGER, info BLOB, opusid INTEGER, albumid INTEGER, " \
 	"FOREIGN KEY (mimeid) REFERENCES mimes(id) ON UPDATE SET NULL," \
 	"FOREIGN KEY (opusid) REFERENCES opus(id) ON UPDATE SET NULL," \
 	"FOREIGN KEY (albumid) REFERENCES album(id) ON UPDATE SET NULL);",
 "create table opus (id INTEGER PRIMARY KEY,  titleid INTEGER UNIQUE NOT NULL, " \
 	"artistid INTEGER, otherid INTEGER, albumid INTEGER, " \
-	"genreid INTEGER, coverid INTEGER, like INTEGER, speedid INTEGER DEFAULT(2), introid INTEGER, comment BLOB, " \
+	"genreid INTEGER DEFAULT(0), coverid INTEGER, like INTEGER, " \
+	"speedid INTEGER DEFAULT(0), introid INTEGER, comment BLOB, " \
 	"FOREIGN KEY (titleid) REFERENCES word(id), " \
 	"FOREIGN KEY (introid) REFERENCES opus(id), " \
 	"FOREIGN KEY (artistid) REFERENCES artist(id) ON UPDATE SET NULL," \
@@ -1725,21 +1694,31 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url, ...)
 	"FOREIGN KEY (genreid) REFERENCES word(id) ON UPDATE SET NULL," \
 	"FOREIGN KEY (speedid) REFERENCES speed(id) ON UPDATE SET NULL," \
 	"FOREIGN KEY (coverid) REFERENCES cover(id) ON UPDATE SET NULL);",
-"create table album (id INTEGER PRIMARY KEY, wordid INTEGER UNIQUE NOT NULL, artistid INTEGER, " \
-	"genreid INTEGER, coverid INTEGER, comment BLOB, " \
+"create table album (id INTEGER PRIMARY KEY, wordid INTEGER UNIQUE NOT NULL, " \
+	"artistid INTEGER, genreid INTEGER DEFAULT(0), " \
+	"speedid INTEGER DEFAULT(0), coverid INTEGER, comment BLOB, " \
 	"FOREIGN KEY (wordid) REFERENCES word(id), " \
 	"FOREIGN KEY (artistid) REFERENCES artist(id) ON UPDATE SET NULL, " \
 	"FOREIGN KEY (genreid) REFERENCES word(id) ON UPDATE SET NULL, " \
 	"FOREIGN KEY (coverid) REFERENCES cover(id) ON UPDATE SET NULL);",
-"create table artist (id INTEGER PRIMARY KEY, wordid INTEGER UNIQUE NOT NULL, comment BLOB, " \
+"create table artist (id INTEGER PRIMARY KEY, " \
+	"wordid INTEGER UNIQUE NOT NULL, comment BLOB, " \
 	"FOREIGN KEY (wordid) REFERENCES word(id));",
 "create table genre (id INTEGER PRIMARY KEY, wordid INTEGER, " \
 	"FOREIGN KEY (wordid) REFERENCES word(id));",
+"insert into genre (id, wordid) values (0, 2);",
+"insert into genre (id, wordid) values (1, 7);",
+"insert into genre (id, wordid) values (2, 8);",
+"insert into genre (id, wordid) values (3, 9);",
+"insert into genre (id, wordid) values (4, 10);",
+"insert into genre (id, wordid) values (5, 5);",
 "create table speed (id INTEGER PRIMARY KEY, wordid INTEGER, " \
 	"FOREIGN KEY (wordid) REFERENCES word(id));",
+"insert into speed (id, wordid) values (0, 2);",
 "insert into speed (id, wordid) values (1, 3);",
 "insert into speed (id, wordid) values (2, 4);",
 "insert into speed (id, wordid) values (3, 5);",
+"insert into speed (id, wordid) values (4, 6);",
 "create table cover (id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL);",
 "create table playlist (id INTEGER, listid INTEGER, " \
 	"FOREIGN KEY (id) REFERENCES media(id) ON UPDATE SET NULL, " \
@@ -1750,14 +1729,57 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url, ...)
 "insert into word (id, name) values (3, \"cool\");",
 "insert into word (id, name) values (4, \"ambiant\");",
 "insert into word (id, name) values (5, \"dance\");",
+"insert into word (id, name) values (6, \"live\");",
+"insert into word (id, name) values (7, \"pop\");",
+"insert into word (id, name) values (8, \"rock\");",
+"insert into word (id, name) values (9, \"jazz\");",
+"insert into word (id, name) values (10, \"classic\");",
 "create table listname (id INTEGER PRIMARY KEY, wordid INTEGER, " \
 	"FOREIGN KEY (wordid) REFERENCES word(id));",
 "insert into listname (id, wordid) values (1, 1);",
 				NULL,
 			};
 #endif
+static int _media_initdb(sqlite3 *db, const char *query[])
+{
+	char *error = NULL;
+	int i = 0;
+	int ret = SQLITE_OK;
+
+	while (query[i] != NULL)
+	{
+		if (ret != SQLITE_OK)
+		{
+			err("media prepare error %d query[%d]", ret, i);
+			break;
+		}
+		media_dbg("query %d",i);
+		media_dbg("query %s", query[i]);
+		ret = sqlite3_exec(db, query[i], NULL, NULL, &error);
+		i++;
+	}
+	return ret;
+}
+#endif
+
+static media_ctx_t *media_init(player_ctx_t *player, const char *url, ...)
+{
+	media_ctx_t *ctx = NULL;
+	int ret = SQLITE_ERROR;
+
+	ctx = calloc(1, sizeof(*ctx));
+	ret = _media_opendb(ctx, url);
+	if (ret != -1 && ctx->db)
+	{
+		char *error = NULL;
+		if (sqlite3_exec(ctx->db, "PRAGMA encoding=\"UTF-8\";", NULL, NULL, &error))
+			warn("sqlite pragma error: %s", error);
+#ifdef MEDIA_SQLITE_INITDB
+		if (ret == SQLITE_CORRUPT)
+		{
 			ret = _media_initdb(ctx->db, query);
 		}
+#endif
 		if (ret == SQLITE_OK)
 		{
 			dbg("open db %s", url);
@@ -1803,3 +1825,20 @@ const media_ops_t *media_sqlite = &(const media_ops_t)
 	.random = media_random,
 	.loop = media_loop,
 };
+
+#ifdef GENERATEDBSCRIPT
+#include "decoder.h"
+const decoder_ops_t *decoder_check(const char *path)
+{
+	return NULL;
+}
+
+int main()
+{
+	for (int i = 0; query[i] != NULL; i++)
+	{
+		printf("%s\n", query[i]);
+	}
+	return 0;
+}
+#endif

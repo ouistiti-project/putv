@@ -1728,12 +1728,12 @@ static const char *query[] = {
 "insert into mimes (id, name) values (3, \"audio/alac\");",
 "insert into mimes (id, name) values (4, \"audio/pcm\");",
 "create table media (id INTEGER PRIMARY KEY, url TEXT UNIQUE NOT NULL, "\
-	"mimeid INTEGER, info BLOB, opusid INTEGER, albumid INTEGER, " \
+	"mimeid INTEGER, info BLOB, opusid INTEGER, albumid INTEGER DEFAULT(1), " \
 	"FOREIGN KEY (mimeid) REFERENCES mimes(id) ON UPDATE SET NULL," \
 	"FOREIGN KEY (opusid) REFERENCES opus(id) ON UPDATE SET NULL," \
 	"FOREIGN KEY (albumid) REFERENCES album(id) ON UPDATE SET NULL);",
 "create table opus (id INTEGER PRIMARY KEY,  titleid INTEGER UNIQUE NOT NULL, " \
-	"artistid INTEGER, otherid INTEGER, albumid INTEGER, " \
+	"artistid INTEGER, otherid INTEGER, albumid INTEGER DEFAULT(1), " \
 	"genreid INTEGER DEFAULT(0), coverid INTEGER, like INTEGER, " \
 	"speedid INTEGER DEFAULT(0), introid INTEGER, comment BLOB, " \
 	"FOREIGN KEY (titleid) REFERENCES word(id), " \
@@ -1750,18 +1750,19 @@ static const char *query[] = {
 	"FOREIGN KEY (artistid) REFERENCES artist(id) ON UPDATE SET NULL, " \
 	"FOREIGN KEY (genreid) REFERENCES word(id) ON UPDATE SET NULL, " \
 	"FOREIGN KEY (coverid) REFERENCES cover(id) ON UPDATE SET NULL);",
+"insert into album (id, wordid) values (1, 2);",
 "create table artist (id INTEGER PRIMARY KEY, " \
 	"wordid INTEGER UNIQUE NOT NULL, comment BLOB, " \
 	"FOREIGN KEY (wordid) REFERENCES word(id));",
-"create table genre (id INTEGER PRIMARY KEY, wordid INTEGER, " \
+"create table genre (id INTEGER PRIMARY KEY, wordid INTEGER NOT NULL, " \
 	"FOREIGN KEY (wordid) REFERENCES word(id));",
 "insert into genre (id, wordid) values (0, 2);",
-"insert into genre (id, wordid) values (1, 7);",
-"insert into genre (id, wordid) values (2, 8);",
-"insert into genre (id, wordid) values (3, 9);",
-"insert into genre (id, wordid) values (4, 10);",
+"insert into genre (id, wordid) values (1, 8);",
+"insert into genre (id, wordid) values (2, 9);",
+"insert into genre (id, wordid) values (3, 10);",
+"insert into genre (id, wordid) values (4, 11);",
 "insert into genre (id, wordid) values (5, 5);",
-"create table speed (id INTEGER PRIMARY KEY, wordid INTEGER, " \
+"create table speed (id INTEGER PRIMARY KEY, wordid INTEGER NOT NULL, " \
 	"FOREIGN KEY (wordid) REFERENCES word(id));",
 "insert into speed (id, wordid) values (0, 2);",
 "insert into speed (id, wordid) values (1, 3);",
@@ -1769,7 +1770,7 @@ static const char *query[] = {
 "insert into speed (id, wordid) values (3, 5);",
 "insert into speed (id, wordid) values (4, 6);",
 "create table cover (id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL);",
-"create table playlist (id INTEGER, listid INTEGER, " \
+"create table playlist (id INTEGER, listid INTEGER DEFAULT(1), " \
 	"FOREIGN KEY (id) REFERENCES media(id) ON UPDATE SET NULL, " \
 	"FOREIGN KEY (listid) REFERENCES listname(id) ON UPDATE SET NULL);",
 "create table word (id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL);",
@@ -1779,10 +1780,11 @@ static const char *query[] = {
 "insert into word (id, name) values (4, \"ambiant\");",
 "insert into word (id, name) values (5, \"dance\");",
 "insert into word (id, name) values (6, \"live\");",
-"insert into word (id, name) values (7, \"pop\");",
-"insert into word (id, name) values (8, \"rock\");",
-"insert into word (id, name) values (9, \"jazz\");",
-"insert into word (id, name) values (10, \"classic\");",
+"insert into word (id, name) values (7, \"radio\");",
+"insert into word (id, name) values (8, \"pop\");",
+"insert into word (id, name) values (9, \"rock\");",
+"insert into word (id, name) values (10, \"jazz\");",
+"insert into word (id, name) values (11, \"classic\");",
 "create table listname (id INTEGER PRIMARY KEY, wordid INTEGER, " \
 	"FOREIGN KEY (wordid) REFERENCES word(id));",
 "insert into listname (id, wordid) values (1, 1);",
@@ -1797,14 +1799,14 @@ static int _media_initdb(sqlite3 *db, const char *query[])
 
 	while (query[i] != NULL)
 	{
+		media_dbg("query %d",i);
+		media_dbg("query %s", query[i]);
+		ret = sqlite3_exec(db, query[i], NULL, NULL, &error);
 		if (ret != SQLITE_OK)
 		{
 			err("media prepare error %d query[%d]", ret, i);
 			break;
 		}
-		media_dbg("query %d",i);
-		media_dbg("query %s", query[i]);
-		ret = sqlite3_exec(db, query[i], NULL, NULL, &error);
 		i++;
 	}
 	return ret;

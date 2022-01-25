@@ -36,16 +36,18 @@
 #include <pthread.h>
 #include <sched.h>
 #include <limits.h>
+#include <stdint.h>
 
 #ifdef USE_ID3TAG
 #include <id3tag.h>
-#include <jansson.h>
 #define N_(string) string
 #endif
 
 #ifdef USE_OGGMETADDATA
 #include <FLAC/metadata.h>
 #endif
+
+#include <jansson.h>
 
 #include "media.h"
 #include "decoder.h"

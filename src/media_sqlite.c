@@ -679,7 +679,7 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int *palbumid, const 
 	json_t *jinfo = json_loads(info, 0, &error);
 	opus_parse_info(jinfo, &title, &artist, &album, &genre, &cover, &comment);
 
-	warn("%s , %s , %s", title, album, artist);
+	warn("%s , %s , %s", title?title:"", album?album:"", artist?artist:"");
 	if (title != NULL)
 	{
 		titleid = table_insert_word(ctx, "word", title, &exist);

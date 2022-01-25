@@ -96,7 +96,8 @@ static src_t *_src_build(const src_ops_t *const src_list[],
 	src->ops = src_ops;
 	src->ctx = src_ctx;
 	src->mediaid = -1;
-	src->info = strdup(info);
+	if (info)
+		src->info = strdup(info);
 
 	return src;
 }

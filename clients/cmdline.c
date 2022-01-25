@@ -82,7 +82,83 @@ struct cmdline_ctx_s
 	} state;
 };
 
-typedef int (*method_t)(cmdline_ctx_t *ctx, char *arg);
+typedef int (*method_t)(cmdline_ctx_t *ctx, const char *arg);
+
+static int method_append(cmdline_ctx_t *ctx, const char *arg);
+static int method_remove(cmdline_ctx_t *ctx, const char *arg);
+static int method_list(cmdline_ctx_t *ctx, const char *arg);
+static int method_filter(cmdline_ctx_t *ctx, const char *arg);
+static int method_media(cmdline_ctx_t *ctx, const char *arg);
+static int method_import(cmdline_ctx_t *ctx, const char *arg);
+static int method_search(cmdline_ctx_t *ctx, const char *arg);
+static int method_info(cmdline_ctx_t *ctx, const char *arg);
+static int method_play(cmdline_ctx_t *ctx, const char *arg);
+static int method_pause(cmdline_ctx_t *ctx, const char *arg);
+static int method_stop(cmdline_ctx_t *ctx, const char *arg);
+static int method_next(cmdline_ctx_t *ctx, const char *arg);
+static int method_volume(cmdline_ctx_t *ctx, const char *arg);
+static int method_loop(cmdline_ctx_t *ctx, const char *arg);
+static int method_random(cmdline_ctx_t *ctx, const char *arg);
+static int method_quit(cmdline_ctx_t *ctx, const char *arg);
+static int method_help(cmdline_ctx_t *ctx, const char *arg);
+
+struct cmd_s {
+	const char *name;
+	method_t method;
+};
+static const struct cmd_s cmds[] = {{
+		.name = "append",
+		.method = method_append,
+	},{
+		.name = "remove",
+		.method = method_remove,
+	},{
+		.name = "list",
+		.method = method_list,
+	},{
+		.name = "filter",
+		.method = method_filter,
+	},{
+		.name = "media",
+		.method = method_media,
+	},{
+		.name = "import",
+		.method = method_import,
+	},{
+		.name = "search",
+		.method = method_search,
+	},{
+		.name = "info",
+		.method = method_info,
+	},{
+		.name = "play",
+		.method = method_play,
+	},{
+		.name = "pause",
+		.method = method_pause,
+	},{
+		.name = "stop",
+		.method = method_stop,
+	},{
+		.name = "next",
+		.method = method_next,
+	},{
+		.name = "volume",
+		.method = method_volume,
+	},{
+		.name = "loop",
+		.method = method_loop,
+	},{
+		.name = "random",
+		.method = method_random,
+	},{
+		.name = "quit",
+		.method = method_quit,
+	},{
+		.name = "help",
+		.method = method_help,
+	}
+};
 
 #ifdef USE_LIBINPUT
 static int open_restricted(const char *path, int flags, void *user_data)
@@ -116,27 +192,27 @@ int cmdline_checkstate(void *data, json_t *params)
 	return 0;
 }
 
-static int method_next(cmdline_ctx_t *ctx, char *arg)
+static int method_next(cmdline_ctx_t *ctx, const char *arg)
 {
 	return client_next(ctx->client, cmdline_checkstate, ctx);
 }
 
-static int method_play(cmdline_ctx_t *ctx, char *arg)
+static int method_play(cmdline_ctx_t *ctx, const char *arg)
 {
 	return client_play(ctx->client, cmdline_checkstate, ctx);
 }
 
-static int method_pause(cmdline_ctx_t *ctx, char *arg)
+static int method_pause(cmdline_ctx_t *ctx, const char *arg)
 {
 	return client_pause(ctx->client, cmdline_checkstate, ctx);
 }
 
-static int method_stop(cmdline_ctx_t *ctx, char *arg)
+static int method_stop(cmdline_ctx_t *ctx, const char *arg)
 {
 	return client_stop(ctx->client, cmdline_checkstate, ctx);
 }
 
-static int method_volume(cmdline_ctx_t *ctx, char *arg)
+static int method_volume(cmdline_ctx_t *ctx, const char *arg)
 {
 	int ret = -1;
 	unsigned int volume = atoi(arg);
@@ -147,7 +223,7 @@ static int method_volume(cmdline_ctx_t *ctx, char *arg)
 	return ret;
 }
 
-static int method_media(cmdline_ctx_t *ctx, char *arg)
+static int method_media(cmdline_ctx_t *ctx, const char *arg)
 {
 	int ret = -1;
 	json_error_t error;
@@ -156,26 +232,68 @@ static int method_media(cmdline_ctx_t *ctx, char *arg)
 	return ret;
 }
 
-static int method_loop(cmdline_ctx_t *ctx, char *arg)
+static int method_loop(cmdline_ctx_t *ctx, const char *arg)
 {
 	int ret = -1;
 	return ret;
 }
 
-static int method_random(cmdline_ctx_t *ctx, char *arg)
+static int method_random(cmdline_ctx_t *ctx, const char *arg)
 {
 	int ret = -1;
 	return ret;
 }
 
-static int method_quit(cmdline_ctx_t *ctx, char *arg)
+static int method_append(cmdline_ctx_t *ctx, const char *arg)
+{
+	int ret = -1;
+	return ret;
+}
+
+static int method_remove(cmdline_ctx_t *ctx, const char *arg)
+{
+	int ret = -1;
+	return ret;
+}
+
+static int method_list(cmdline_ctx_t *ctx, const char *arg)
+{
+	int ret = -1;
+	return ret;
+}
+
+static int method_filter(cmdline_ctx_t *ctx, const char *arg)
+{
+	int ret = -1;
+	return ret;
+}
+
+static int method_import(cmdline_ctx_t *ctx, const char *arg)
+{
+	int ret = -1;
+	return ret;
+}
+
+static int method_search(cmdline_ctx_t *ctx, const char *arg)
+{
+	int ret = -1;
+	return ret;
+}
+
+static int method_info(cmdline_ctx_t *ctx, const char *arg)
+{
+	int ret = -1;
+	return ret;
+}
+
+static int method_quit(cmdline_ctx_t *ctx, const char *arg)
 {
 	client_disconnect(ctx->client);
 	ctx->run = 0;
 	return 0;
 }
 
-static int method_help(cmdline_ctx_t *ctx, char *arg)
+static int method_help(cmdline_ctx_t *ctx, const char *arg)
 {
 	fprintf(stdout, "putv commands:\n");
 	fprintf(stdout, " play   : start or resume the stream on putv server\n");
@@ -224,7 +342,7 @@ int run_client(void *arg)
 	ctx->client = &data;
 
 	pthread_t thread;
-	client_eventlistener(&data, "onchange", printevent, ctx);
+	client_eventlistener(&data, "onchange", (client_event_prototype_t)printevent, ctx);
 	pthread_create(&thread, NULL, (__start_routine_t)client_loop, (void *)&data);
 
 	int fd = 0;
@@ -249,7 +367,7 @@ int run_client(void *arg)
 			ret = read(fd, buffer, length);
 			int i;
 			method_t method = NULL;
-			char *arg = NULL;
+			const char *arg = NULL;
 			for (i = 0; i < length; i++)
 			{
 				if (buffer[i] == ' ' || buffer[i] == '\t')
@@ -261,79 +379,15 @@ int run_client(void *arg)
 					arg = buffer + i;
 					break;
 				}
-				if (!strncmp(buffer + i, "play",4))
+				for (int j = 0; cmds[j].name != NULL; j++)
 				{
-					method = method_play;
-					i += 4;
-				}
-				if (!strncmp(buffer + i, "pause",5))
-				{
-					method = method_pause;
-					i += 5;
-				}
-				if (!strncmp(buffer + i, "stop",4))
-				{
-					method = method_stop;
-					i += 4;
-				}
-				if (!strncmp(buffer + i, "next",4))
-				{
-					method = method_next;
-					i += 4;
-				}
-				if (!strncmp(buffer + i, "volume",6))
-				{
-					method = method_volume;
-					i += 6;
-				}
-				if (!strncmp(buffer + i, "loop",4))
-				{
-					method = method_loop;
-					i += 4;
-				}
-				if (!strncmp(buffer + i, "random",6))
-				{
-					method = method_random;
-					i += 6;
-				}
-				if (!strncmp(buffer + i, "quit",4))
-				{
-					method = method_quit;
-					i += 4;
-				}
-				if (!strncmp(buffer + i, "help", 4))
-				{
-					method = method_help;
-					i += 4;
-				}
-				if (!strncmp(buffer + i, "append", 6))
-				{
-					i += 6;
-				}
-				if (!strncmp(buffer + i, "remove", 6))
-				{
-					i += 6;
-				}
-				if (!strncmp(buffer + i, "list",4))
-				{
-					i += 4;
-				}
-				if (!strncmp(buffer + i, "media",5))
-				{
-					method = method_media;
-					i += 5;
-				}
-				if (!strncmp(buffer + i, "import",6))
-				{
-					i += 6;
-				}
-				if (!strncmp(buffer + i, "search",6))
-				{
-					i += 6;
-				}
-				if (!strncmp(buffer + i, "info",4))
-				{
-					i += 4;
+					int length = strlen(cmds[j].name);
+					if (!strncmp(buffer + i, cmds[j].name, length))
+					{
+						method = cmds[j].method;
+						i += length;
+						break;
+					}
 				}
 			}
 			if (method)

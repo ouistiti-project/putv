@@ -130,6 +130,7 @@ static int media_count(media_ctx_t *ctx)
 		SQLITE3_CHECK(ret, -1, sql);
 	}
 
+	media_dbg("media db: sql %s (%d)", sqlite3_expanded_sql(statement), __LINE__);
 	ret = sqlite3_step(statement);
 	if (ret == SQLITE_ROW)
 	{
@@ -164,6 +165,7 @@ static int findmedia(sqlite3 *db, const char *path)
 		/** set the default value of @FIELDS **/
 		sqlite3_bind_text(statement, sqlite3_bind_parameter_index(statement, "@NAME"), path, -1, SQLITE_STATIC);
 
+		media_dbg("media db: sql %s (%d)", sqlite3_expanded_sql(statement), __LINE__);
 		int wordid = _execute(statement);
 		if (wordid != -1)
 		{
@@ -179,6 +181,7 @@ static int findmedia(sqlite3 *db, const char *path)
 				sqlite3_prepare_v2(db, queries[i], -1, &statement, NULL);
 				/** set the default value of @FIELDS **/
 				sqlite3_bind_int(statement, sqlite3_bind_parameter_index(statement, "@ID"), wordid);
+				media_dbg("media db: sql %s (%d)", sqlite3_expanded_sql(statement), __LINE__);
 				id = _execute(statement);
 				i++;
 			}
@@ -230,6 +233,7 @@ static int media_remove(media_ctx_t *ctx, int id, const char *path)
 			SQLITE3_CHECK(ret, -1, sql);
 		}
 
+		media_dbg("media db: sql %s (%d)", sqlite3_expanded_sql(statement), __LINE__);
 		ret = sqlite3_step(statement);
 		if (ret != SQLITE_DONE)
 			ret = -1;
@@ -265,6 +269,7 @@ static int table_insert_word(media_ctx_t *ctx, const char *table, const char *wo
 	ret = sqlite3_bind_text(st_select, index, word, -1, SQLITE_STATIC);
 	SQLITE3_CHECK(ret, -1, wordselect);
 
+	media_dbg("media db: sql %s (%d)", sqlite3_expanded_sql(st_select), __LINE__);
 	ret = sqlite3_step(st_select);
 	if (ret != SQLITE_ROW)
 	{
@@ -281,6 +286,7 @@ static int table_insert_word(media_ctx_t *ctx, const char *table, const char *wo
 		ret = sqlite3_bind_text(st_insert, index, word, -1, SQLITE_STATIC);
 		SQLITE3_CHECK(ret, -1, wordinsert);
 
+		media_dbg("media db: sql %s (%d)", sqlite3_expanded_sql(st_insert), __LINE__);
 		ret = sqlite3_step(st_insert);
 		id = sqlite3_last_insert_rowid(db);
 		if (exist != NULL)
@@ -319,6 +325,8 @@ static int opus_insert_info(media_ctx_t *ctx, const char *table, int wordid)
 	int id = -1;
 	ret = sqlite3_bind_int(st_select, index, wordid);
 	SQLITE3_CHECK(ret, -1, sql);
+
+	media_dbg("media db: sql %s (%d)", sqlite3_expanded_sql(st_select), __LINE__);
 	ret = sqlite3_step(st_select);
 	if (ret != SQLITE_ROW)
 	{
@@ -331,6 +339,7 @@ static int opus_insert_info(media_ctx_t *ctx, const char *table, int wordid)
 		ret = sqlite3_bind_int(st_insert, index, wordid);
 		SQLITE3_CHECK(ret, -1, sql);
 
+		media_dbg("media db: sql %s (%d)", sqlite3_expanded_sql(st_insert), __LINE__);
 		ret = sqlite3_step(st_insert);
 		sqlite3_finalize(st_insert);
 		/**
@@ -368,6 +377,8 @@ static int opus_insertalbum(media_ctx_t *ctx, int albumid, int artistid, int cov
 		index = sqlite3_bind_parameter_index(st_update, "@COVERID");
 		ret = sqlite3_bind_int(st_update, index, coverid);
 		SQLITE3_CHECK(ret, -1, sql);
+
+		media_dbg("media db: sql %s (%d)", sqlite3_expanded_sql(st_update), __LINE__);
 		ret = sqlite3_step(st_update);
 		sqlite3_finalize(st_update);
 	}
@@ -386,6 +397,8 @@ static int opus_insertalbum(media_ctx_t *ctx, int albumid, int artistid, int cov
 		index = sqlite3_bind_parameter_index(st_update, "@ARTISTID");
 		ret = sqlite3_bind_int(st_update, index, coverid);
 		SQLITE3_CHECK(ret, -1, sql);
+
+		media_dbg("media db: sql %s (%d)", sqlite3_expanded_sql(st_update), __LINE__);
 		ret = sqlite3_step(st_update);
 		sqlite3_finalize(st_update);
 	}
@@ -404,6 +417,8 @@ static int opus_insertalbum(media_ctx_t *ctx, int albumid, int artistid, int cov
 		index = sqlite3_bind_parameter_index(st_update, "@GENREID");
 		ret = sqlite3_bind_int(st_update, index, coverid);
 		SQLITE3_CHECK(ret, -1, sql);
+
+		media_dbg("media db: sql %s (%d)", sqlite3_expanded_sql(st_update), __LINE__);
 		ret = sqlite3_step(st_update);
 		sqlite3_finalize(st_update);
 	}
@@ -456,6 +471,7 @@ char *opus_getcover(media_ctx_t *ctx, int coverid)
 	ret = sqlite3_bind_int(st_select, index, coverid);
 	SQLITE3_CHECK(ret, NULL, sql);
 
+	media_dbg("media db: sql %s (%d)", sqlite3_expanded_sql(st_select), __LINE__);
 	ret = sqlite3_step(st_select);
 	if (ret == SQLITE_ROW)
 	{
@@ -489,6 +505,7 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 	ret = sqlite3_bind_int(st_select, index, opusid);
 	SQLITE3_CHECK(ret, NULL, sql);
 
+	media_dbg("media db: sql %s (%d)", sqlite3_expanded_sql(st_select), __LINE__);
 	ret = sqlite3_step(st_select);
 	if (ret == SQLITE_ROW)
 	{
@@ -509,6 +526,7 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 			ret = sqlite3_bind_int(st_select, index, wordid);
 			SQLITE3_CHECK(ret, NULL, sql);
 
+			media_dbg("media db: sql %s (%d)", sqlite3_expanded_sql(st_select), __LINE__);
 			ret = sqlite3_step(st_select);
 			if (ret == SQLITE_ROW)
 			{
@@ -539,6 +557,7 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 			ret = sqlite3_bind_int(st_select, index, wordid);
 			SQLITE3_CHECK(ret, NULL, sql);
 
+			media_dbg("media db: sql %s (%d)", sqlite3_expanded_sql(st_select), __LINE__);
 			ret = sqlite3_step(st_select);
 			if (ret == SQLITE_ROW)
 			{
@@ -570,6 +589,7 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 			ret = sqlite3_bind_int(st_select, index, wordid);
 			SQLITE3_CHECK(ret, NULL, sql);
 
+			media_dbg("media db: sql %s (%d)", sqlite3_expanded_sql(st_select), __LINE__);
 			ret = sqlite3_step(st_select);
 			if (ret == SQLITE_ROW)
 			{
@@ -605,6 +625,7 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 			ret = sqlite3_bind_int(st_select, index, wordid);
 			SQLITE3_CHECK(ret, NULL, sql);
 
+			media_dbg("media db: sql %s (%d)", sqlite3_expanded_sql(st_select), __LINE__);
 			ret = sqlite3_step(st_select);
 			if (ret == SQLITE_ROW)
 			{
@@ -747,6 +768,7 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int *palbumid, const 
 	index = sqlite3_bind_parameter_index(st_select, "@ARTISTID");
 	ret = sqlite3_bind_int(st_select, index, artistid);
 	SQLITE3_CHECK(ret, -1, select);
+	media_dbg("media db: sql %s (%d)", sqlite3_expanded_sql(st_select), __LINE__);
 	ret = sqlite3_step(st_select);
 	if (ret != SQLITE_ROW)
 	{
@@ -775,6 +797,7 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int *palbumid, const 
 		index = sqlite3_bind_parameter_index(st_insert, "@COMMENT");
 		ret = sqlite3_bind_text(st_insert, index, comment, -1, SQLITE_STATIC);
 		SQLITE3_CHECK(ret, -1, sql);
+		media_dbg("media db: sql %s (%d)", sqlite3_expanded_sql(st_insert), __LINE__);
 		ret = sqlite3_step(st_insert);
 		if (ret != SQLITE_DONE)
 		{
@@ -808,6 +831,7 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int *palbumid, const 
 			index = sqlite3_bind_parameter_index(st_update, "@GENREID");
 			ret = sqlite3_bind_int(st_update, index, genreid);
 			SQLITE3_CHECK(ret, -1, sql);
+			media_dbg("media db: sql %s (%d)", sqlite3_expanded_sql(st_update), __LINE__);
 			ret = sqlite3_step(st_update);
 			sqlite3_finalize(st_update);
 		}
@@ -836,6 +860,7 @@ static int opus_insert(media_ctx_t *ctx, const char *info, int *palbumid, const 
 				index = sqlite3_bind_parameter_index(st_update, "@COVERID");
 				ret = sqlite3_bind_int(st_update, index, coverid);
 				SQLITE3_CHECK(ret, -1, sql);
+				media_dbg("media db: sql %s (%d)", sqlite3_expanded_sql(st_update), __LINE__);
 				ret = sqlite3_step(st_update);
 				sqlite3_finalize(st_update);
 			}
@@ -867,6 +892,13 @@ static int _media_updateopusid(media_ctx_t *ctx, int id, int opusid)
 	ret = sqlite3_bind_int(statement, index, id);
 	SQLITE3_CHECK(ret, -1, sql);
 
+	media_dbg("media db: sql %s (%d)", sqlite3_expanded_sql(statement), __LINE__);
+	ret = sqlite3_step(statement);
+	if (ret != SQLITE_DONE)
+	{
+		err("media sqlite: error %d on update of %d\n\t%s", ret, id, sqlite3_errmsg(db));
+		ret = -1;
+	}
 	sqlite3_finalize(statement);
 	return ret;
 }
@@ -891,6 +923,13 @@ static int _media_updateinfo(media_ctx_t *ctx, int id, const char *info)
 	ret = sqlite3_bind_int(statement, index, id);
 	SQLITE3_CHECK(ret, -1, sql);
 
+	media_dbg("media db: sql %s (%d)", sqlite3_expanded_sql(statement), __LINE__);
+	ret = sqlite3_step(statement);
+	if (ret != SQLITE_DONE)
+	{
+		err("media sqlite: error %d on update of %d\n\t%s", ret, id, sqlite3_errmsg(db));
+		ret = -1;
+	}
 	sqlite3_finalize(statement);
 	return ret;
 }
@@ -983,6 +1022,7 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 		ret = sqlite3_bind_int(statement, index, mimeid);
 		SQLITE3_CHECK(ret, -1, sql);
 
+		media_dbg("media db: sql %s (%d)", sqlite3_expanded_sql(statement), __LINE__);
 		ret = sqlite3_step(statement);
 		if (ret != SQLITE_DONE)
 		{
@@ -1022,8 +1062,9 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 		ret = sqlite3_bind_int(statement, index, id);
 		index = sqlite3_bind_parameter_index(statement, "@LISTID");
 		ret = sqlite3_bind_int(statement, index, ctx->listid);
-
 		SQLITE3_CHECK(ret, -1, sql);
+
+		media_dbg("media db: sql %s (%d)", sqlite3_expanded_sql(statement), __LINE__);
 		ret = sqlite3_step(statement);
 		if (ret != SQLITE_DONE)
 		{
@@ -1167,6 +1208,7 @@ static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data)
 	ret = sqlite3_bind_int(statement, index, id);
 	SQLITE3_CHECK(ret, -1, sql);
 
+	media_dbg("media db: sql %s (%d)", sqlite3_expanded_sql(statement), __LINE__);
 	count = _media_execute(ctx, statement, cb, data);
 	sqlite3_finalize(statement);
 	return count;
@@ -1192,6 +1234,7 @@ static int media_list(media_ctx_t *ctx, media_parse_t cb, void *data)
 	ret = sqlite3_bind_int(statement, index, ctx->listid);
 	SQLITE3_CHECK(ret, 1, sql);
 
+	media_dbg("media db: sql %s (%d)", sqlite3_expanded_sql(statement), __LINE__);
 	count = _media_execute(ctx, statement, cb, data);
 	sqlite3_finalize(statement);
 
@@ -1237,6 +1280,7 @@ static int media_next(media_ctx_t *ctx)
 	ret = sqlite3_bind_int(statement, index, ctx->listid);
 	SQLITE3_CHECK(ret, -1, sql[0]);
 
+	media_dbg("media db: sql %s (%d)", sqlite3_expanded_sql(statement), __LINE__);
 	ret = sqlite3_step(statement);
 	if (ret == SQLITE_ROW)
 	{
@@ -1303,6 +1347,7 @@ static int _media_setlist(void *arg, int id, const char *url, const char *info, 
 	ret = sqlite3_bind_int(statement, index, ctx->listid);
 	SQLITE3_CHECK(ret, 1, sql);
 
+	media_dbg("media db: sql %s (%d)", sqlite3_expanded_sql(statement), __LINE__);
 	ret = sqlite3_step(statement);
 
 	sqlite3_finalize(statement);
@@ -1324,6 +1369,7 @@ static int _media_setlist(void *arg, int id, const char *url, const char *info, 
 	ret = sqlite3_bind_int(statement, index, id);
 	SQLITE3_CHECK(ret, 1, sql);
 
+	media_dbg("media db: sql %s (%d)", sqlite3_expanded_sql(statement), __LINE__);
 	ret = sqlite3_step(statement);
 	if (ret != SQLITE_DONE)
 	{
@@ -1356,6 +1402,7 @@ static int _media_createlist(media_ctx_t *ctx, char *playlist, int fill)
 	ret = sqlite3_bind_text(st_select, index, playlist, -1 , SQLITE_STATIC);
 	SQLITE3_CHECK(ret, 1, sql);
 
+	media_dbg("media db: sql %s (%d)", sqlite3_expanded_sql(st_select), __LINE__);
 	ret = sqlite3_step(st_select);
 	if (ret == SQLITE_ROW)
 	{
@@ -1378,6 +1425,7 @@ static int _media_createlist(media_ctx_t *ctx, char *playlist, int fill)
 		ret = sqlite3_bind_text(st_insert, index, playlist, -1 , SQLITE_STATIC);
 		SQLITE3_CHECK(ret, 1, sql);
 
+		media_dbg("media db: sql %s (%d)", sqlite3_expanded_sql(st_insert), __LINE__);
 		ret = sqlite3_step(st_insert);
 		if (ret != SQLITE_DONE)
 		{
@@ -1400,6 +1448,7 @@ static int _media_createlist(media_ctx_t *ctx, char *playlist, int fill)
 		ret = sqlite3_bind_int(st_insert, index, listid);
 		SQLITE3_CHECK(ret, 1, sql);
 
+		media_dbg("media db: sql %s (%d)", sqlite3_expanded_sql(st_insert), __LINE__);
 		ret = sqlite3_step(st_insert);
 		if (ret != SQLITE_DONE)
 		{
@@ -1782,7 +1831,7 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url, ...)
 #endif
 		if (ret == SQLITE_OK)
 		{
-			dbg("open db %s", url);
+			warn("media db: %s", url);
 		}
 		else
 		{

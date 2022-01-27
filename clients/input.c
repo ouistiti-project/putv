@@ -171,11 +171,11 @@ int input_parseevent(input_ctx_t *ctx, const struct input_event *event)
 	break;
 	case KEY_VOLUMEDOWN:
 		dbg("key KEY_VOLUMEDOWN");
-		ret = client_volume(ctx->client, NULL, ctx, json_integer(-5));
+		ret = client_volume(ctx->client, NULL, ctx, -5);
 	break;
 	case KEY_VOLUMEUP:
 		dbg("key KEY_VOLUMEUP");
-		ret = client_volume(ctx->client, NULL, ctx, json_integer(+5));
+		ret = client_volume(ctx->client, NULL, ctx, +5);
 	break;
 	case KEY_SHUFFLE:
 		dbg("key KEY_SHUFFLE");

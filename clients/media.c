@@ -76,7 +76,6 @@ struct data_s
 	client_data_t client;
 	long long nbitems;
 	media_t media;
-	list_t list;
 	method_t method;
 	int wait;
 	pthread_mutex_t mutex;
@@ -172,7 +171,7 @@ int method_list(void *arg, json_t *params)
 		printf("Display : %lld/%lld\n", data->nbitems, count);
 		if (data->nbitems < count)
 		{
-			data->list.first = id;
+			//data->list.first = id;
 			data->method = LIST;
 		}
 		else
@@ -232,7 +231,6 @@ int main(int argc, char **argv)
 			break;
 			case 'I':
 				data.media.id = atoi(optarg);
-				data.list.first = data.media.id;
 			break;
 			case 'h':
 				fprintf(stderr, "media -R <dir> -n <socketname> -D -m <jsonfile>");
@@ -300,7 +298,7 @@ int main(int argc, char **argv)
 			media_remove(&data.client, method_remove, &data, params);
 		break;
 		case LIST:
-			media_list(&data.client, method_list, &data, &data.list);
+			media_list(&data.client, method_list, &data, data.media.id, 10);
 		break;
 		}
 		pthread_mutex_lock(&data.mutex);

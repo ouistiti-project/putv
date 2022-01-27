@@ -28,13 +28,6 @@
 #ifndef __CLIENT_JSON_H__
 #define __CLIENT_JSON_H__
 
-typedef struct list_s list_t;
-struct list_s
-{
-	int count;
-	int first;
-	int last;
-};
 
 typedef int (*client_event_prototype_t)(void *data, json_t *params);
 typedef struct client_event_s client_event_t;
@@ -50,7 +43,6 @@ struct client_data_s
 	client_event_prototype_t proto;
 	void *data;
 	json_t*params;
-	list_t *list;
 	enum
 	{
 		OPTION_ASYNC = 0x01,
@@ -70,12 +62,14 @@ int client_play(client_data_t *data, client_event_prototype_t proto, void *proto
 int client_pause(client_data_t *data, client_event_prototype_t proto, void *protodata);
 int client_stop(client_data_t *data, client_event_prototype_t proto, void *protodata);
 int client_getposition(client_data_t *data, client_event_prototype_t proto, void *protodata);
-int client_volume(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *step);
+int client_volume(client_data_t *data, client_event_prototype_t proto, void *protodata, int step);
+int client_status(client_data_t *data, client_event_prototype_t proto, void *protodata);
+int client_info(client_data_t *data, client_event_prototype_t proto, void *protodata, int id);
 
 int media_change(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *media);
 int media_insert(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *media);
 int media_remove(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *media);
-int media_list(client_data_t *data, client_event_prototype_t proto, void *protodata, list_t *list);
+int media_list(client_data_t *data, client_event_prototype_t proto, void *protodata, int first, int maxitems);
 int media_options(client_data_t *data, client_event_prototype_t proto, void *protodata, int random, int loop);
 
 #endif

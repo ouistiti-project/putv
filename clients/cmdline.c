@@ -218,7 +218,7 @@ static int method_volume(cmdline_ctx_t *ctx, const char *arg)
 	unsigned int volume = atoi(arg);
 	if (volume != -1)
 	{
-		ret = client_volume(ctx->client, NULL, ctx, json_integer(volume));
+		ret = client_volume(ctx->client, NULL, ctx, volume);
 	}
 	return ret;
 }

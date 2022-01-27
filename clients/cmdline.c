@@ -82,6 +82,8 @@ struct cmdline_ctx_s
 	} state;
 };
 
+int display_info(cmdline_ctx_t *ctx, json_t *info);
+
 typedef int (*method_t)(cmdline_ctx_t *ctx, const char *arg);
 
 static int method_append(cmdline_ctx_t *ctx, const char *arg);
@@ -256,9 +258,37 @@ static int method_remove(cmdline_ctx_t *ctx, const char *arg)
 	return ret;
 }
 
+static int display_list(cmdline_ctx_t *ctx, json_t *params)
+{
+	const unsigned char *key = NULL;
+	json_t *value;
+	int count = json_integer_value(json_object_get(params, "count"));
+	int nbitems = json_integer_value(json_object_get(params, "nbitems"));
+	fprintf(stdout, "nb media: %d\n", count);
+	json_t *playlist = json_object_get(params, "playlist");
+	int i;
+	json_t *entry;
+	json_array_foreach(playlist, i, entry)
+	{
+		json_t *info = json_object_get(entry, "info");
+		int id = json_integer_value(json_object_get(entry, "id"));
+		fprintf(stdout, "media: %d\n", id);
+		display_info(ctx, info);
+	}
+	return 0;
+}
+
 static int method_list(cmdline_ctx_t *ctx, const char *arg)
 {
 	int ret = -1;
+	int first = 0;
+	int max = 5;
+	if (arg)
+		ret = sscanf(arg, "%d %d", &first, &max);
+	if (ret >= 0)
+		ret = media_list(ctx->client, display_list, ctx, first, max);
+	else
+		fprintf(stdout, "error on parameter %s\n", strerror(errno));
 	return ret;
 }
 
@@ -278,6 +308,25 @@ static int method_search(cmdline_ctx_t *ctx, const char *arg)
 {
 	int ret = -1;
 	return ret;
+}
+
+int display_info(cmdline_ctx_t *ctx, json_t *info)
+{
+	const unsigned char *key = NULL;
+	json_t *value;
+	json_object_foreach(info, key, value)
+	{
+		if (json_is_string(value))
+		{
+			const char *string = json_string_value(value);
+			if (string != NULL)
+			{
+				fprintf(stdout, "  %s: %s\n", key, string);
+			}
+		}
+	}
+
+	return 0;
 }
 
 static int method_info(cmdline_ctx_t *ctx, const char *arg)
@@ -315,19 +364,7 @@ int printevent(cmdline_ctx_t *ctx, json_t *json_params)
 
 	json_unpack(json_params, "{ss,si,so}", "state", &state,"id", &id, "info", &info);
 	fprintf(stdout, "\n%s\n", state);
-	const unsigned char *key = NULL;
-	json_t *value;
-	json_object_foreach(info, key, value)
-	{
-		if (json_is_string(value))
-		{
-			const char *string = json_string_value(value);
-			if (string != NULL)
-			{
-				fprintf(stdout, "%s : %s\n", key, string);
-			}
-		}
-	}
+	display_info(ctx, info);
 	fprintf(stdout, "> ");
 	fflush(stdout);
 }

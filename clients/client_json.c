@@ -298,6 +298,13 @@ int client_info(client_data_t *data, client_event_prototype_t proto, void *proto
 	return _client_generic(data, proto, protodata, "volume");
 }
 
+int client_setnext(client_data_t *data, client_event_prototype_t proto, void *protodata, int id)
+{
+	data->params = json_object();
+	json_object_set_new(data->params, "id", json_integer(id));
+	return _client_generic(data, proto, protodata, "setnext");
+}
+
 int client_eventlistener(client_data_t *data, const char *name, client_event_prototype_t proto, void *protodata)
 {
 	client_event_t *event = calloc(1, sizeof(*event));

@@ -201,7 +201,18 @@ static int method_next(cmdline_ctx_t *ctx, const char *arg)
 
 static int method_play(cmdline_ctx_t *ctx, const char *arg)
 {
-	return client_play(ctx->client, cmdline_checkstate, ctx);
+	int ret = 0;
+	int id = -1;
+	if (arg)
+		ret = sscanf(arg, "%d", &id);
+	if (ret == 0)
+		return client_play(ctx->client, cmdline_checkstate, ctx);
+	else {
+		ret = client_setnext(ctx->client, NULL, ctx, id);
+		if (ret == 0)
+			return client_next(ctx->client, cmdline_checkstate, ctx);
+	}
+	return -1;
 }
 
 static int method_pause(cmdline_ctx_t *ctx, const char *arg)

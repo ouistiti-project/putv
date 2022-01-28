@@ -336,6 +336,20 @@ static int method_filter(cmdline_ctx_t *ctx, const char *arg)
 static int method_import(cmdline_ctx_t *ctx, const char *arg)
 {
 	int ret = -1;
+	json_error_t error;
+	json_t *media = json_load_file(arg, 0, &error);
+	if (media != NULL)
+	{
+		json_t *params;
+		if (json_is_array(media))
+			params = media;
+		else
+		{
+			params = json_array();
+			json_array_append(params, media);
+		}
+		ret = media_insert(ctx->client, NULL, ctx, params);
+	}
 	return ret;
 }
 

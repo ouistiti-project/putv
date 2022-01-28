@@ -394,14 +394,30 @@ static int method_quit(cmdline_ctx_t *ctx, const char *arg)
 static int method_help(cmdline_ctx_t *ctx, const char *arg)
 {
 	fprintf(stdout, "putv commands:\n");
-	fprintf(stdout, " play   : start or resume the stream on putv server\n");
-	fprintf(stdout, " stop   : stop the stream on putv server\n");
-	fprintf(stdout, " pause  : suspend the stream on putv server\n");
-	fprintf(stdout, " next   : request the next source on putv server\n");
+	fprintf(stdout, " play   : start the stream\n");
+	fprintf(stdout, "        [media id]\n");
+	fprintf(stdout, " stop   : stop the stream\n");
+	fprintf(stdout, " pause  : suspend the stream\n");
+	fprintf(stdout, " next   : request the next opus\n");
+	fprintf(stdout, " repeat : change the repeat mode\n");
+	fprintf(stdout, "        <on|off>\n");
+	fprintf(stdout, " shuffle: change the shuffle mode\n");
+	fprintf(stdout, "        <on|off>\n");
 	fprintf(stdout, " volume : request to change the level of volume on putv server\n");
 	fprintf(stdout, "        <0..100>\n");
 	fprintf(stdout, " media  : request to change the media\n");
 	fprintf(stdout, "        <media url>\n");
+	fprintf(stdout, " list   : display the opus from the media\n");
+	fprintf(stdout, "        <first opus id> <max number of opus>\n");
+	fprintf(stdout, " info   : display an opus from the media\n");
+	fprintf(stdout, "        <opus id>\n");
+	fprintf(stdout, " append : add an opus into the media\n");
+	fprintf(stdout, "        <json media> {\"url\":\"https://example.com/stream.mp3\",\"info\":{\"title\": \"test\",\"artist\":\"John Doe\",\"album\":\"white\"}}\n");
+	fprintf(stdout, " import : import opus from a file into the media\n");
+	fprintf(stdout, "        <file path>\n");
+	fprintf(stdout, " export : export the opus from the media into a file\n");
+	fprintf(stdout, "        <file path>\n");
+	fprintf(stdout, " quit   : quit the command line application\n");
 	return 0;
 }
 

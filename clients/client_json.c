@@ -338,8 +338,14 @@ int media_list(client_data_t *data, client_event_prototype_t proto, void *protod
 int media_options(client_data_t *data, client_event_prototype_t proto, void *protodata, int random, int loop)
 {
 	data->params = json_object();
-	json_object_set_new(data->params, "random", json_boolean(random));
-	json_object_set_new(data->params, "loop", json_boolean(loop));
+	if (random == 1)
+		json_object_set_new(data->params, "random", json_true());
+	else if (random == 0)
+		json_object_set_new(data->params, "random", json_false());
+	if (loop == 1)
+		json_object_set_new(data->params, "loop", json_true());
+	else if (loop == 0)
+		json_object_set_new(data->params, "loop", json_false());
 	return _client_generic(data, proto, protodata, "options");
 }
 

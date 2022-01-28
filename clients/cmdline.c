@@ -99,8 +99,8 @@ static int method_pause(cmdline_ctx_t *ctx, const char *arg);
 static int method_stop(cmdline_ctx_t *ctx, const char *arg);
 static int method_next(cmdline_ctx_t *ctx, const char *arg);
 static int method_volume(cmdline_ctx_t *ctx, const char *arg);
-static int method_loop(cmdline_ctx_t *ctx, const char *arg);
-static int method_random(cmdline_ctx_t *ctx, const char *arg);
+static int method_repeat(cmdline_ctx_t *ctx, const char *arg);
+static int method_shuffle(cmdline_ctx_t *ctx, const char *arg);
 static int method_quit(cmdline_ctx_t *ctx, const char *arg);
 static int method_help(cmdline_ctx_t *ctx, const char *arg);
 
@@ -148,11 +148,11 @@ static const struct cmd_s cmds[] = {{
 		.name = "volume",
 		.method = method_volume,
 	},{
-		.name = "loop",
-		.method = method_loop,
+		.name = "repeat",
+		.method = method_repeat,
 	},{
-		.name = "random",
-		.method = method_random,
+		.name = "shuffle",
+		.method = method_shuffle,
 	},{
 		.name = "quit",
 		.method = method_quit,
@@ -234,15 +234,23 @@ static int method_media(cmdline_ctx_t *ctx, const char *arg)
 	return ret;
 }
 
-static int method_loop(cmdline_ctx_t *ctx, const char *arg)
+static int method_repeat(cmdline_ctx_t *ctx, const char *arg)
 {
 	int ret = -1;
+	if (! strcmp(arg, "on"))
+		ret = media_options(ctx->client, NULL, ctx, -1, 1);
+	else
+		ret = media_options(ctx->client, NULL, ctx, -1, 0);
 	return ret;
 }
 
-static int method_random(cmdline_ctx_t *ctx, const char *arg)
+static int method_shuffle(cmdline_ctx_t *ctx, const char *arg)
 {
 	int ret = -1;
+	if (! strcmp(arg, "on"))
+		ret = media_options(ctx->client, NULL, ctx, 1, -1);
+	else
+		ret = media_options(ctx->client, NULL, ctx, 0, -1);
 	return ret;
 }
 
@@ -286,7 +294,7 @@ static int method_list(cmdline_ctx_t *ctx, const char *arg)
 	if (arg)
 		ret = sscanf(arg, "%d %d", &first, &max);
 	if (ret >= 0)
-		ret = media_list(ctx->client, display_list, ctx, first, max);
+		ret = media_list(ctx->client, (client_event_prototype_t)display_list, ctx, first, max);
 	else
 		fprintf(stdout, "error on parameter %s\n", strerror(errno));
 	return ret;

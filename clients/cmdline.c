@@ -268,12 +268,28 @@ static int method_shuffle(cmdline_ctx_t *ctx, const char *arg)
 static int method_append(cmdline_ctx_t *ctx, const char *arg)
 {
 	int ret = -1;
+	json_error_t error;
+	json_t *media = json_loads(arg, 0, &error);
+	if (media != NULL)
+	{
+		json_t *params;
+		params = json_array();
+		json_array_append(params, media);
+		ret = media_insert(ctx->client, NULL, ctx, params);
+	}
 	return ret;
 }
 
 static int method_remove(cmdline_ctx_t *ctx, const char *arg)
 {
 	int ret = -1;
+	int id;
+	json_t *params = json_object();
+	if (arg)
+		ret = sscanf(arg, "%d", &id);
+	if (ret == 1)
+		json_object_set(params, "id", json_integer(id));
+	ret = media_remove(ctx->client, NULL, ctx, params);
 	return ret;
 }
 

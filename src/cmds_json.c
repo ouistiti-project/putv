@@ -255,9 +255,6 @@ static int method_filter(json_t *json_params, json_t **result, void *userdata)
 		return -1;
 	}
 
-	entry_t entry;
-	entry.list = json_array();
-
 	json_t *value;
 	value = json_object_get(json_params, "keyword");
 	if (json_is_string(value) && json_string_length(value) > 0)
@@ -1258,6 +1255,7 @@ static int jsonrpc_sendevent(cmds_ctx_t *ctx, thread_info_t *info, const char *e
 		ret = send(sock, message, length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
 		dbg("cmds: send notification %d", ret);
 		fsync(sock);
+		free(message);
 		json_decref(notification);
 	}
 	else
@@ -1285,7 +1283,7 @@ static int _jsonrpc_sendresponse(thread_info_t *info, json_t *request)
 		ret = send(sock, buff, length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
 		dbg("cmds: send response %d", ret);
 		fsync(sock);
-		json_decref(response);
+		free(buff);
 	}
 	else
 	{

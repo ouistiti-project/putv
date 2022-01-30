@@ -1633,9 +1633,16 @@ static int _media_opendb(media_ctx_t *ctx, const char *url)
 	ret = stat(ctx->path, &dbstat);
 	if ((ret == 0) && S_ISREG(dbstat.st_mode))
 	{
-		ret = sqlite3_open_v2(ctx->path, &ctx->db, SQLITE_OPEN_READWRITE, NULL);
+		char *readwrite = NULL;
+		if (ctx->query != NULL)
+			readwrite = strstr(ctx->query, "readwrite");
+		if (readwrite != NULL)
+			ret = sqlite3_open_v2(ctx->path, &ctx->db, SQLITE_OPEN_READWRITE, NULL);
+		else
+			ret = SQLITE_ERROR;
 		if (ret == SQLITE_ERROR)
 		{
+			err("Open database in read only");
 			ret = sqlite3_open_v2(ctx->path, &ctx->db, SQLITE_OPEN_READONLY, NULL);
 		}
 	}

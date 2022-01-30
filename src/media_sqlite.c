@@ -958,7 +958,10 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 
 	opusid = opus_insert(ctx, info, &albumid, filename);
 	if (opusid == -1)
+	{
 		err("opusid error");
+		return -1;
+	}
 	if (path == NULL)
 		return opusid;
 #else
@@ -1201,6 +1204,8 @@ static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data)
 	int count;
 	int ret;
 	sqlite3_stmt *statement;
+	if (id == -1)
+		return 0;
 #ifndef MEDIA_SQLITE_EXT
 	char *sql = "select \"url\", \"mimeid\", \"id\", \"info\" from \"media\"  where id = @ID";
 #else

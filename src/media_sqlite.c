@@ -678,8 +678,8 @@ static char *opus_get(media_ctx_t *ctx, int opusid, int coverid, const char *inf
 	json_t *jnewinfo = opus_getjson(ctx, opusid, coverid);
 	json_error_t error;
 	json_t *jinfo = json_loads(info, 0, &error);
-	json_object_update_missing(jinfo, jnewinfo);
-	newinfo = json_dumps(jinfo, JSON_INDENT(2));
+	json_object_update_missing(jnewinfo, jinfo);
+	newinfo = json_dumps(jnewinfo, JSON_INDENT(2));
 	json_decref(jinfo);
 	json_decref(jnewinfo);
 	return newinfo;

@@ -205,10 +205,9 @@ static int method_play(cmdline_ctx_t *ctx, const char *arg)
 		ret = sscanf(arg, "%d", &id);
 	if (ret == 0)
 		return client_play(ctx->client, cmdline_checkstate, ctx);
-	else {
-		ret = client_setnext(ctx->client, NULL, ctx, id);
-		if (ret == 0)
-			return client_next(ctx->client, cmdline_checkstate, ctx);
+	else
+	{
+		return client_setnext(ctx->client, (client_event_prototype_t)method_next, ctx, id);
 	}
 	return -1;
 }

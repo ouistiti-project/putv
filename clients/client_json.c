@@ -156,6 +156,8 @@ struct jsonrpc_method_entry_t table[] =
 	{'a',"stop", answer_stdparams, "o", 0, NULL},
 	{'r',"status", method_nullparam, "", 0, NULL},
 	{'a',"status", answer_stdparams, "o", 0, NULL},
+	{'r',"setnext", method_stdparams, "o", 0, NULL},
+	{'a',"setnext", answer_stdparams, "o", 0, NULL},
 	{'r',"volume", method_stdparams, "o", 0, NULL},
 	{'a',"volume", answer_stdparams, "o", 0, NULL},
 	{'r',"change", method_stdparams, "o", 0, NULL},

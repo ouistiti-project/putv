@@ -64,13 +64,13 @@ int client_stop(client_data_t *data, client_event_prototype_t proto, void *proto
 int client_getposition(client_data_t *data, client_event_prototype_t proto, void *protodata);
 int client_volume(client_data_t *data, client_event_prototype_t proto, void *protodata, int step);
 int client_status(client_data_t *data, client_event_prototype_t proto, void *protodata);
-int client_info(client_data_t *data, client_event_prototype_t proto, void *protodata, int id);
 int client_setnext(client_data_t *data, client_event_prototype_t proto, void *protodata, int id);
 
 int media_change(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *media);
 int media_insert(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *media);
 int media_remove(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *media);
 int media_list(client_data_t *data, client_event_prototype_t proto, void *protodata, int first, int maxitems);
+int media_info(client_data_t *data, client_event_prototype_t proto, void *protodata, int id);
 int media_options(client_data_t *data, client_event_prototype_t proto, void *protodata, int random, int loop);
 
 #endif

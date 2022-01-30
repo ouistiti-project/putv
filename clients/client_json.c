@@ -162,6 +162,8 @@ struct jsonrpc_method_entry_t table[] =
 	{'a',"remove", answer_stdparams, "o", 0, NULL},
 	{'r',"list", method_stdparams, "o", 0, NULL},
 	{'a',"list", answer_stdparams, "o", 0, NULL},
+	{'r',"info", method_stdparams, "o", 0, NULL},
+	{'a',"info", answer_stdparams, "o", 0, NULL},
 	{'r',"getposition", method_nullparam, "", 0, NULL},
 	{'a',"getposition", answer_stdparams, "o", 0, NULL},
 	{'r',"options", method_stdparams, "", 0, NULL},
@@ -291,13 +293,6 @@ int client_volume(client_data_t *data, client_event_prototype_t proto, void *pro
 	return _client_generic(data, proto, protodata, "volume");
 }
 
-int client_info(client_data_t *data, client_event_prototype_t proto, void *protodata, int id)
-{
-	data->params = json_object();
-	json_object_set_new(data->params, "id", json_integer(id));
-	return _client_generic(data, proto, protodata, "volume");
-}
-
 int client_setnext(client_data_t *data, client_event_prototype_t proto, void *protodata, int id)
 {
 	data->params = json_object();
@@ -340,6 +335,13 @@ int media_list(client_data_t *data, client_event_prototype_t proto, void *protod
 	json_object_set_new(data->params, "first", json_integer(first));
 	json_object_set_new(data->params, "maxitems", json_integer(maxitems));
 	return _client_generic(data, proto, protodata, "list");
+}
+
+int media_info(client_data_t *data, client_event_prototype_t proto, void *protodata, int id)
+{
+	data->params = json_object();
+	json_object_set_new(data->params, "id", json_integer(id));
+	return _client_generic(data, proto, protodata, "info");
 }
 
 int media_options(client_data_t *data, client_event_prototype_t proto, void *protodata, int random, int loop)

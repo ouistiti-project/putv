@@ -82,8 +82,6 @@ struct cmdline_ctx_s
 	} state;
 };
 
-int display_info(cmdline_ctx_t *ctx, json_t *info);
-
 typedef int (*method_t)(cmdline_ctx_t *ctx, const char *arg);
 
 static int method_append(cmdline_ctx_t *ctx, const char *arg);
@@ -293,6 +291,41 @@ static int method_remove(cmdline_ctx_t *ctx, const char *arg)
 	return ret;
 }
 
+static int display_info(cmdline_ctx_t *ctx, json_t *info)
+{
+	const unsigned char *key = NULL;
+	json_t *value;
+	json_object_foreach(info, key, value)
+	{
+		if (json_is_string(value))
+		{
+			const char *string = json_string_value(value);
+			if (string != NULL)
+			{
+				fprintf(stdout, "  %s: %s\n", key, string);
+			}
+		}
+		if (json_is_integer(value))
+		{
+			fprintf(stdout, "  %s: %lld\n", key, json_integer_value(value));
+		}
+		if (json_is_null(value))
+		{
+			fprintf(stdout, "  %s: empty\n", key);
+		}
+	}
+
+	return 0;
+}
+
+static int display_media(cmdline_ctx_t *ctx, json_t *media)
+{
+	json_t *info = json_object_get(media, "info");
+	int id = json_integer_value(json_object_get(media, "id"));
+	fprintf(stdout, "media: %d\n", id);
+	display_info(ctx, info);
+}
+
 static int display_list(cmdline_ctx_t *ctx, json_t *params)
 {
 	const unsigned char *key = NULL;
@@ -302,13 +335,10 @@ static int display_list(cmdline_ctx_t *ctx, json_t *params)
 	fprintf(stdout, "nb media: %d\n", count);
 	json_t *playlist = json_object_get(params, "playlist");
 	int i;
-	json_t *entry;
-	json_array_foreach(playlist, i, entry)
+	json_t *media;
+	json_array_foreach(playlist, i, media)
 	{
-		json_t *info = json_object_get(entry, "info");
-		int id = json_integer_value(json_object_get(entry, "id"));
-		fprintf(stdout, "media: %d\n", id);
-		display_info(ctx, info);
+		return display_media(ctx, media);
 	}
 	return 0;
 }
@@ -359,28 +389,14 @@ static int method_search(cmdline_ctx_t *ctx, const char *arg)
 	return ret;
 }
 
-int display_info(cmdline_ctx_t *ctx, json_t *info)
-{
-	const unsigned char *key = NULL;
-	json_t *value;
-	json_object_foreach(info, key, value)
-	{
-		if (json_is_string(value))
-		{
-			const char *string = json_string_value(value);
-			if (string != NULL)
-			{
-				fprintf(stdout, "  %s: %s\n", key, string);
-			}
-		}
-	}
-
-	return 0;
-}
-
 static int method_info(cmdline_ctx_t *ctx, const char *arg)
 {
 	int ret = -1;
+	int id;
+	if (arg)
+		ret = sscanf(arg, "%d", &id);
+	if (ret == 1)
+		ret = media_info(ctx->client, (client_event_prototype_t)display_media, ctx, id);
 	return ret;
 }
 

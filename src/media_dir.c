@@ -25,6 +25,7 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *****************************************************************************/
+#define _GNU_SOURCE
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -35,7 +36,6 @@
 #include <errno.h>
 #include <sys/stat.h>
 
-#define __USE_GNU
 #include <pthread.h>
 
 #ifdef USE_INOTIFY
@@ -217,6 +217,20 @@ static int _find(media_ctx_t *ctx, int level, media_dirlist_t **pit, int *pmedia
 		}
 		switch (it->items[it->index]->d_type)
 		{
+			case DT_LNK:
+			{
+				int fddir = open(it->path, O_PATH);
+				struct stat filestat;
+				if (fstatat(fddir, it->items[it->index]->d_name, &filestat, 0) != 0)
+				{
+					dbg("media link error");
+					break;
+				}
+				if (!S_ISDIR(filestat.st_mode))
+					break;
+				close(fddir);
+			}
+			// continue as directory
 			case DT_DIR:
 			{
 				media_dirlist_t *new = calloc(1, sizeof(*new));

@@ -68,14 +68,18 @@ static int method_subscribe(json_t *json_params, json_t **result, void *userdata
 
 static int answer_proto(client_data_t * data, json_t *json_params)
 {
+	client_event_prototype_t func;
+	void *funcdata;
 	pthread_mutex_lock(&data->mutex);
 	data->pid = 0;
-	if (data->proto)
-		data->proto(data->data, json_params);
+	func = data->proto;
+	funcdata = data->data;
 	data->proto = NULL;
 	data->data = NULL;
 	pthread_mutex_unlock(&data->mutex);
 	pthread_cond_broadcast(&data->cond);
+	if (func)
+		func(funcdata, json_params);
 	return 0;
 }
 

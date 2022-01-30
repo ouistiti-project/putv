@@ -263,7 +263,7 @@ static int table_insert_word(media_ctx_t *ctx, const char *table, const char *wo
 {
 	sqlite3 *db = ctx->db;
 	int ret;
-	char *wordselect = "select id from %s where \"name\" = @WORD";
+	char *wordselect = "select id from %s where \"name\" = @WORD collate nocase";
 
 	char sql[256];
 	snprintf(sql, 256, wordselect, table);

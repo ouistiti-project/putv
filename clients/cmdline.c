@@ -85,6 +85,7 @@ struct cmdline_ctx_s
 typedef int (*method_t)(cmdline_ctx_t *ctx, const char *arg);
 
 static int method_append(cmdline_ctx_t *ctx, const char *arg);
+static int method_update(cmdline_ctx_t *ctx, const char *arg);
 static int method_remove(cmdline_ctx_t *ctx, const char *arg);
 static int method_list(cmdline_ctx_t *ctx, const char *arg);
 static int method_filter(cmdline_ctx_t *ctx, const char *arg);
@@ -109,6 +110,9 @@ struct cmd_s {
 static const struct cmd_s cmds[] = {{
 		.name = "append",
 		.method = method_append,
+	},{
+		.name = "update",
+		.method = method_update,
 	},{
 		.name = "remove",
 		.method = method_remove,
@@ -273,6 +277,22 @@ static int method_append(cmdline_ctx_t *ctx, const char *arg)
 		params = json_array();
 		json_array_append(params, media);
 		ret = media_insert(ctx->client, NULL, ctx, params);
+	}
+	return ret;
+}
+
+static int method_update(cmdline_ctx_t *ctx, const char *arg)
+{
+	int ret = -1;
+	int id;
+	char *info = NULL;
+	if (arg)
+		ret = sscanf(arg, "%d %1024mc", &id, &info);
+	if (ret == 2 && info)
+	{
+		json_error_t error;
+		json_t *jinfo = json_loads(info, 0, &error);
+		ret = media_setinfo(ctx->client, NULL, ctx, id, jinfo);
 	}
 	return ret;
 }

@@ -164,6 +164,8 @@ struct jsonrpc_method_entry_t table[] =
 	{'a',"change", answer_stdparams, "o", 0, NULL},
 	{'r',"append", method_stdparams, "o", 0, NULL},
 	{'a',"append", answer_stdparams, "o", 0, NULL},
+	{'r',"setinfo", method_stdparams, "o", 0, NULL},
+	{'a',"setinfo", answer_stdparams, "o", 0, NULL},
 	{'r',"remove", method_stdparams, "o", 0, NULL},
 	{'a',"remove", answer_stdparams, "o", 0, NULL},
 	{'r',"list", method_stdparams, "o", 0, NULL},
@@ -327,6 +329,14 @@ int media_insert(client_data_t *data, client_event_prototype_t proto, void *prot
 {
 	data->params = media;
 	return _client_generic(data, proto, protodata, "append");
+}
+
+int media_setinfo(client_data_t *data, client_event_prototype_t proto, void *protodata, int id, json_t *info)
+{
+	data->params = json_object();
+	json_object_set_new(data->params, "id", json_integer(id));
+	json_object_set_new(data->params, "info", info);
+	return _client_generic(data, proto, protodata, "setinfo");
 }
 
 int media_remove(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *media)

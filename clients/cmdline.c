@@ -402,6 +402,7 @@ static int method_import(cmdline_ctx_t *ctx, const char *arg)
 		}
 		ret = media_insert(ctx->client, NULL, ctx, params);
 	}
+	json_decref(media);
 	return ret;
 }
 

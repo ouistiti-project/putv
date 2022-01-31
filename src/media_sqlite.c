@@ -101,28 +101,6 @@ static void media_destroy(media_ctx_t *ctx);
 
 static const char str_mediasqlite[] = "sqlite DB";
 
-static int _execute(sqlite3_stmt *statement)
-{
-	int id = -1;
-	int ret;
-
-	ret = sqlite3_step(statement);
-	while (ret == SQLITE_ROW)
-	{
-		int i = 0, nbColumns = sqlite3_column_count(statement);
-		if (i < nbColumns)
-		{
-			//const char *key = sqlite3_column_name(statement, i);
-			if (sqlite3_column_type(statement, i) == SQLITE_INTEGER)
-			{
-				id = sqlite3_column_int(statement, i);
-			}
-		}
-		ret = sqlite3_step(statement);
-	}
-	return id;
-}
-
 static int media_count(media_ctx_t *ctx)
 {
 	sqlite3 *db = ctx->db;
@@ -151,14 +129,36 @@ static int media_count(media_ctx_t *ctx)
 	return count;
 }
 
-static int findmedia(sqlite3 *db, const char *path)
+static int _execute(sqlite3_stmt *statement)
 {
+	int id = -1;
+	int ret;
+
+	ret = sqlite3_step(statement);
+	while (ret == SQLITE_ROW)
+	{
+		int i = 0, nbColumns = sqlite3_column_count(statement);
+		if (i < nbColumns)
+		{
+			//const char *key = sqlite3_column_name(statement, i);
+			if (sqlite3_column_type(statement, i) == SQLITE_INTEGER)
+			{
+				id = sqlite3_column_int(statement, i);
+			}
+		}
+		ret = sqlite3_step(statement);
+	}
+	return id;
+}
+
+/**
+ * returns media id from a path or a title or artist or album
+ */
+static int _media_find(media_ctx_t *ctx, const char *path)
+{
+	sqlite3 *db = ctx->db;
 	sqlite3_stmt *statement;
-#ifndef MEDIA_SQLITE_EXT
 	const char *sql = "select \"id\" from \"media\" where \"url\"=@PATH";
-#else
-	const char *sql = "select \"opusid\" from \"media\" where \"url\"=@PATH";
-#endif
 	int ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
 	SQLITE3_CHECK(ret, -1, sql);
 
@@ -209,7 +209,7 @@ static int media_remove(media_ctx_t *ctx, int id, const char *path)
 	sqlite3 *db = ctx->db;
 	if (path != NULL)
 	{
-		id = findmedia(db, path);
+		id = _media_find(ctx, path);
 		force = 1;
 	}
 
@@ -985,7 +985,7 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 		snprintf(tpath, len, PROTOCOLNAME"%s", path);
 	}
 
-	id = findmedia(db, tpath);
+	id = _media_find(ctx, tpath);
 	if (id == -1)
 	{
 		sqlite3_stmt *statement;
@@ -1269,6 +1269,7 @@ static int _media_execute(media_ctx_t *ctx, sqlite3_stmt *statement, media_parse
 		type = sqlite3_column_type(statement, index);
 		if (type == SQLITE_INTEGER)
 			coverid = sqlite3_column_int(statement, index);
+
 		index++;
 		type = sqlite3_column_type(statement, index);
 		if (type == SQLITE_TEXT)

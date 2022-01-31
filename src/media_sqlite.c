@@ -1362,33 +1362,32 @@ static int media_next(media_ctx_t *ctx)
 	int ret;
 	sqlite3_stmt *statement;
 
-	const char *sql[] = {
-		"select \"id\" from \"playlist\" where listid == @LISTID and id > @ID limit 1",
-		"select \"id\" from \"playlist\" where listid == @LISTID limit 1",
-		"select \"id\" from \"playlist\" where listid == @LISTID order by random() limit 1",
-		};
+	const char *sql = NULL;
 	if (ctx->options & OPTION_RANDOM)
 	{
-		ret = sqlite3_prepare_v2(ctx->db, sql[2], -1, &statement, NULL);
-		SQLITE3_CHECK(ret, -1, sql[2]);
+		const char *sql = "select \"id\" from \"playlist\" where listid == @LISTID order by random() limit 1";
+		ret = sqlite3_prepare_v2(ctx->db, sql, -1, &statement, NULL);
+		SQLITE3_CHECK(ret, -1, sql);
 	}
 	else if (ctx->mediaid != 0)
 	{
-		ret = sqlite3_prepare_v2(ctx->db, sql[0], -1, &statement, NULL);
-		SQLITE3_CHECK(ret, -1, sql[0]);
+		sql = "select \"id\" from \"playlist\" where listid == @LISTID and id > @ID limit 1";
+		ret = sqlite3_prepare_v2(ctx->db, sql, -1, &statement, NULL);
+		SQLITE3_CHECK(ret, -1, sql);
 
 		int index = sqlite3_bind_parameter_index(statement, "@ID");
 		ret = sqlite3_bind_int(statement, index, ctx->mediaid);
-		SQLITE3_CHECK(ret, -1, sql[0]);
+		SQLITE3_CHECK(ret, -1, sql);
 	}
 	else
 	{
-		ret = sqlite3_prepare_v2(ctx->db, sql[1], -1, &statement, NULL);
-		SQLITE3_CHECK(ret, -1, sql[1]);
+		sql = "select \"id\" from \"playlist\" where listid == @LISTID limit 1";
+		ret = sqlite3_prepare_v2(ctx->db, sql, -1, &statement, NULL);
+		SQLITE3_CHECK(ret, -1, sql);
 	}
 	int index = sqlite3_bind_parameter_index(statement, "@LISTID");
 	ret = sqlite3_bind_int(statement, index, ctx->listid);
-	SQLITE3_CHECK(ret, -1, sql[0]);
+	SQLITE3_CHECK(ret, -1, sql);
 
 	media_dbgsql(statement, __LINE__);
 	ret = sqlite3_step(statement);

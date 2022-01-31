@@ -1491,7 +1491,7 @@ static int _media_setlist(void *arg, int id, const char *url, const char *info, 
 	return ret;
 }
 
-static int _media_createlist(media_ctx_t *ctx, char *playlist, int fill)
+static int playlist_create(media_ctx_t *ctx, char *playlist, int fill)
 {
 	int ret;
 	int listid = 1;
@@ -1647,7 +1647,7 @@ static int _media_filter(media_ctx_t *ctx, int table, const char *word)
 
 static int media_filter(media_ctx_t *ctx, media_filter_t *filter)
 {
-	int listid = _media_createlist(ctx, "filter", 0);
+	int listid = playlist_create(ctx, "filter", 0);
 	if (ctx->listid != listid)
 		ctx->oldlistid = ctx->listid;
 	ctx->listid = listid;
@@ -1715,7 +1715,7 @@ static int media_filter(media_ctx_t *ctx, media_filter_t *filter)
 
 static int _media_changelist(media_ctx_t *ctx, char *playlist)
 {
-	int listid = _media_createlist(ctx, playlist, ctx->fill);
+	int listid = playlist_create(ctx, playlist, ctx->fill);
 	return listid;
 }
 

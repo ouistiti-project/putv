@@ -161,6 +161,9 @@ static const struct cmd_s cmds[] = {{
 	},{
 		.name = "help",
 		.method = method_help,
+	}, {
+		.name = NULL,
+		.method = NULL,
 	}
 };
 
@@ -536,6 +539,8 @@ int run_client(void *arg)
 					*end = '\0';
 				method(ctx, arg);
 			}
+			else
+				fprintf(stdout, " command not found\n");
 		}
 	}
 

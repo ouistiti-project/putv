@@ -166,6 +166,7 @@ static int _media_find(media_ctx_t *ctx, const char *path)
 	SQLITE3_CHECK(ret, -1, sql);
 
 	int id = _execute(statement);
+	sqlite3_finalize(statement);
 
 #ifdef MEDIA_SQLITE_EXT
 	if (id == -1)
@@ -177,6 +178,7 @@ static int _media_find(media_ctx_t *ctx, const char *path)
 
 		media_dbgsql(statement, __LINE__);
 		int wordid = _execute(statement);
+		sqlite3_finalize(statement);
 		if (wordid != -1)
 		{
 			const char *queries[] = {
@@ -193,12 +195,22 @@ static int _media_find(media_ctx_t *ctx, const char *path)
 				sqlite3_bind_int(statement, sqlite3_bind_parameter_index(statement, "@ID"), wordid);
 				media_dbgsql(statement, __LINE__);
 				id = _execute(statement);
+				sqlite3_finalize(statement);
 				i++;
+			}
+			if (id != -1)
+			{
+				const char *sql = "select \"id\" from \"media\" where \"opusid\"=@ID";
+				sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
+				/** set the default value of @FIELDS **/
+				sqlite3_bind_int(statement, sqlite3_bind_parameter_index(statement, "@ID"), id);
+				media_dbgsql(statement, __LINE__);
+				id = _execute(statement);
+				sqlite3_finalize(statement);
 			}
 		}
 	}
 #endif
-	sqlite3_finalize(statement);
 	return id;
 }
 

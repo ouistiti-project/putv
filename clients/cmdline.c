@@ -127,6 +127,9 @@ static const struct cmd_s cmds[] = {{
 		.name = "media",
 		.method = method_media,
 	},{
+		.name = "export",
+		.method = method_export,
+	},{
 		.name = "import",
 		.method = method_import,
 	},{
@@ -387,6 +390,33 @@ static int method_filter(ctx_t *ctx, const char *arg)
 	return ret;
 }
 
+struct export_list_s
+{
+	ctx_t *ctx;
+	char *filepath;
+};
+
+static int export_file(void *arg, json_t *list)
+{
+	int ret = -1;
+	struct export_list_s *data = (struct export_list_s *) arg;
+	ctx_t *ctx = data->ctx;
+
+	ret = json_dump_file(json_object_get(list, "playlist"), data->filepath, JSON_INDENT(2));
+	free(data->filepath);
+	return ret;
+}
+
+static int method_export(ctx_t *ctx, const char *arg)
+{
+	int ret = -1;
+	static struct export_list_s data;
+	data.ctx = ctx;
+	data.filepath = strdup(arg);
+	ret = media_list(ctx->client, export_file, &data, 0, -1);
+	return ret;
+}
+
 static int method_import(ctx_t *ctx, const char *arg)
 {
 	int ret = -1;
@@ -454,9 +484,9 @@ static int method_help(ctx_t *ctx, const char *arg)
 	fprintf(stdout, "        <opus id>\n");
 	fprintf(stdout, " append : add an opus into the media\n");
 	fprintf(stdout, "        <json media> {\"url\":\"https://example.com/stream.mp3\",\"info\":{\"title\": \"test\",\"artist\":\"John Doe\",\"album\":\"white\"}}\n");
-	fprintf(stdout, " import : import opus from a file into the media\n");
+	fprintf(stdout, " import : import opus from a json file into the media\n");
 	fprintf(stdout, "        <file path>\n");
-	fprintf(stdout, " export : export the opus from the media into a file\n");
+	fprintf(stdout, " export : export the opus from the media into a json file\n");
 	fprintf(stdout, "        <file path>\n");
 	fprintf(stdout, " quit   : quit the command line application\n");
 	return 0;

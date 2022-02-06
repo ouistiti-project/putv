@@ -301,58 +301,62 @@ static int playlist_insert(media_ctx_t *ctx, int mediaid)
 	return ret;
 }
 
-static int table_insert_word(media_ctx_t *ctx, const char *table, const char *word, int *exist)
+static int wordtable_insert(media_ctx_t *ctx, const char *table, const char *word)
 {
 	sqlite3 *db = ctx->db;
 	int ret;
-	char *wordselect = "select id from %s where \"name\" = @WORD collate nocase";
+	const char *query = "INSERT INTO %s (\"name\") VALUES (@WORD)";
 
-	char sql[256];
-	snprintf(sql, 256, wordselect, table);
+	char sql[sizeof(query) + 20];
+	snprintf(sql, sizeof(query) + 20, query, table);
 
-	sqlite3_stmt *st_select;
-	ret = sqlite3_prepare_v2(db, sql, -1, &st_select, NULL);
-	SQLITE3_CHECK(ret, -1, wordselect);
+	sqlite3_stmt *statement;
+	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
+	SQLITE3_CHECK(ret, -1, query);
 
 	int index;
-	index = sqlite3_bind_parameter_index(st_select, "@WORD");
+	index = sqlite3_bind_parameter_index(statement, "@WORD");
+	ret = sqlite3_bind_text(statement, index, word, -1, SQLITE_STATIC);
+	SQLITE3_CHECK(ret, -1, query);
 
+	media_dbgsql(statement, __LINE__);
+	ret = sqlite3_step(statement);
 	int id = -1;
-	ret = sqlite3_bind_text(st_select, index, word, -1, SQLITE_STATIC);
-	SQLITE3_CHECK(ret, -1, wordselect);
-
-	media_dbgsql(st_select, __LINE__);
-	ret = sqlite3_step(st_select);
-	if (ret != SQLITE_ROW)
-	{
-		char *wordinsert = "insert into %s (\"name\") values (@WORD)";
-
-		char sql[256];
-		snprintf(sql, 256, wordinsert, table);
-
-		sqlite3_stmt *st_insert;
-		ret = sqlite3_prepare_v2(db, sql, -1, &st_insert, NULL);
-		SQLITE3_CHECK(ret, -1, wordinsert);
-
-		index = sqlite3_bind_parameter_index(st_insert, "@WORD");
-		ret = sqlite3_bind_text(st_insert, index, word, -1, SQLITE_STATIC);
-		SQLITE3_CHECK(ret, -1, wordinsert);
-
-		media_dbgsql(st_insert, __LINE__);
-		ret = sqlite3_step(st_insert);
+	if (ret == SQLITE_DONE)
 		id = sqlite3_last_insert_rowid(db);
-		if (exist != NULL)
-			*exist = 0;
-		sqlite3_finalize(st_insert);
-	}
-	else
+	sqlite3_finalize(statement);
+	return id;
+}
+
+static int wordtable_find(media_ctx_t *ctx, const char *table, const char *word)
+{
+	sqlite3 *db = ctx->db;
+	int ret;
+	const char *query = "SELECT id FROM %s WHERE name=@WORD COLLATE NOCASE";
+
+	char sql[sizeof(query) + 20];
+	snprintf(sql, sizeof(query) + 20, query, table);
+
+	sqlite3_stmt *statement;
+	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
+	SQLITE3_CHECK(ret, -1, query);
+
+	int index;
+	index = sqlite3_bind_parameter_index(statement, "@WORD");
+	ret = sqlite3_bind_text(statement, index, word, -1, SQLITE_STATIC);
+	SQLITE3_CHECK(ret, -1, query);
+
+	media_dbgsql(statement, __LINE__);
+	ret = sqlite3_step(statement);
+	int id = -1;
+	if (ret == SQLITE_ROW)
 	{
 		int type;
-		type = sqlite3_column_type(st_select, 0);
+		type = sqlite3_column_type(statement, 0);
 		if (type == SQLITE_INTEGER)
-			id = sqlite3_column_int(st_select, 0);
+			id = sqlite3_column_int(statement, 0);
 	}
-	sqlite3_finalize(st_select);
+	sqlite3_finalize(statement);
 	return id;
 }
 
@@ -446,7 +450,9 @@ static int album_insert(media_ctx_t *ctx, char *album, int artistid, int coverid
 	if (album != NULL)
 	{
 		int exist;
-		albumid = table_insert_word(ctx, "word", album, &exist);
+		albumid = wordtable_find(ctx, "word", album);
+		if (albumid == -1)
+			albumid = wordtable_insert(ctx, "word", album);
 		free(album);
 	}
 
@@ -528,7 +534,9 @@ static int opus_populateinfo(media_ctx_t *ctx, json_t *jinfo, int *ptitleid, int
 	media_dbg("%s , %s , %s", title?title:"", album?album:"", artist?artist:"");
 	if (title != NULL)
 	{
-		*ptitleid = table_insert_word(ctx, "word", title, &exist);
+		*ptitleid = wordtable_find(ctx, "word", title);
+		if (*ptitleid == -1)
+			*ptitleid = wordtable_insert(ctx, "word", title);
 		free(title);
 	}
 	else
@@ -537,18 +545,24 @@ static int opus_populateinfo(media_ctx_t *ctx, json_t *jinfo, int *ptitleid, int
 	}
 	if (artist != NULL)
 	{
-		*partistid = table_insert_word(ctx, "word", artist, &exist);
+		*partistid = wordtable_find(ctx, "word", artist);
+		if (*partistid == -1)
+			*partistid = wordtable_insert(ctx, "word", artist);
 		free(artist);
 	}
 	if (cover != NULL)
 	{
-		*pcoverid = table_insert_word(ctx, "cover", cover, &exist);
+		*pcoverid = wordtable_find(ctx, "cover", cover);
+		if (*pcoverid == -1)
+			*pcoverid = wordtable_find(ctx, "cover", cover);
 		free(cover);
 	}
 
 	if (genre != NULL)
 	{
-		*pgenreid = table_insert_word(ctx, "word", genre, NULL);
+		*pgenreid = wordtable_find(ctx, "word", genre);
+		if (*pgenreid == -1)
+			*pgenreid = wordtable_insert(ctx, "word", genre);
 		free(genre);
 	}
 
@@ -1049,7 +1063,9 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 		int exist;
 		if (mime == NULL)
 			mime = utils_getmime(path);
-		mimeid = table_insert_word(ctx, "mimes", mime, &exist);
+		mimeid = wordtable_find(ctx, "mimes", mime);
+		if (mimeid == -1)
+			mimeid = wordtable_insert(ctx, "mimes", mime);
 		ret = sqlite3_bind_int(statement, index, mimeid);
 		SQLITE3_CHECK(ret, -1, sql);
 

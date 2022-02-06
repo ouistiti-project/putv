@@ -271,6 +271,36 @@ static int media_remove(media_ctx_t *ctx, int id, const char *path)
 	return ret;
 }
 
+static int playlist_insert(media_ctx_t *ctx, int mediaid)
+{
+	sqlite3 *db = ctx->db;
+	int ret = -1;
+	int index;
+	sqlite3_stmt *statement;
+	const char *sql = "insert into \"playlist\" (\"id\", \"listid\") values(@ID,@LISTID);";
+
+	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
+	SQLITE3_CHECK(ret, -1, sql);
+
+	index = sqlite3_bind_parameter_index(statement, "@ID");
+	ret = sqlite3_bind_int(statement, index, mediaid);
+
+	index = sqlite3_bind_parameter_index(statement, "@LISTID");
+	ret = sqlite3_bind_int(statement, index, ctx->listid);
+	SQLITE3_CHECK(ret, -1, sql);
+
+	media_dbgsql(statement, __LINE__);
+	ret = sqlite3_step(statement);
+	if (ret != SQLITE_DONE)
+	{
+		err("media sqlite: error on insert %d", ret);
+		ret = -1;
+	}
+	sqlite3_finalize(statement);
+
+	return ret;
+}
+
 static int table_insert_word(media_ctx_t *ctx, const char *table, const char *word, int *exist)
 {
 	sqlite3 *db = ctx->db;
@@ -1059,9 +1089,7 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 			media_dbg("putv: new media[%d] %s", id, path);
 		}
 		sqlite3_finalize(statement);
-#ifdef MEDIA_SQLITE_EXT
-		id = opusid;
-#endif
+		playlist_insert(ctx, id);
 	}
 	else
 	{
@@ -1069,36 +1097,17 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 			_media_updateinfo(ctx, id, info);
 #ifdef MEDIA_SQLITE_EXT
 		_media_updateopusid(ctx, id, opusid);
-		id = opusid;
 #endif
 	}
 	free(tpath);
-	if (id != -1)
-	{
-		int index;
-		sqlite3_stmt *statement;
-		const char *sql = "insert into \"playlist\" (\"id\", \"listid\") values(@ID,@LISTID);";
 
-		ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
-		SQLITE3_CHECK(ret, -1, sql);
+#ifdef MEDIA_SQLITE_EXT
+	free((char *)info);
 
-		index = sqlite3_bind_parameter_index(statement, "@ID");
-		ret = sqlite3_bind_int(statement, index, id);
-		index = sqlite3_bind_parameter_index(statement, "@LISTID");
-		ret = sqlite3_bind_int(statement, index, ctx->listid);
-		SQLITE3_CHECK(ret, -1, sql);
-
-		media_dbgsql(statement, __LINE__);
-		ret = sqlite3_step(statement);
-		if (ret != SQLITE_DONE)
-		{
-			err("media sqlite: error on insert %d", ret);
-			ret = -1;
-		}
-		sqlite3_finalize(statement);
-	}
-
+	return opusid;
+#else
 	return id;
+#endif
 }
 
 

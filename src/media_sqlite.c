@@ -984,6 +984,13 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 	int ret = 0;
 	sqlite3 *db = ctx->db;
 
+	int mimeid = 0;
+	if (mime == NULL)
+		mime = utils_getmime(path);
+	mimeid = wordtable_find(ctx, "mimes", mime);
+	if (mimeid == -1)
+		mimeid = wordtable_insert(ctx, "mimes", mime);
+
 #ifdef MEDIA_SQLITE_EXT
 	int opusid = -1;
 	int albumid = -1;
@@ -1030,9 +1037,9 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 	{
 		sqlite3_stmt *statement;
 #ifndef MEDIA_SQLITE_EXT
-		const char *sql = "insert into \"media\" (\"url\", \"mimeid\", \"info\") values(@PATH , @MIMEID , @INFO);";
+		const char *sql = "INSERT INTO media (url, mimeid, \"info\") VALUES(@PATH , @MIMEID , @INFO);";
 #else
-		const char *sql = "insert into \"media\" (\"url\", \"mimeid\", \"opusid\", \"albumid\", \"info\") values(@PATH , @MIMEID, @OPUSID, @ALBUMID, @INFO );";
+		const char *sql = "INSERT INTO media (url, mimeid, opusid, albumid, \"info\") VALUES(@PATH , @MIMEID, @OPUSID, @ALBUMID, @INFO );";
 #endif
 
 		ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
@@ -1059,13 +1066,6 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 		SQLITE3_CHECK(ret, -1, sql);
 #endif
 		index = sqlite3_bind_parameter_index(statement, "@MIMEID");
-		int mimeid = 0;
-		int exist;
-		if (mime == NULL)
-			mime = utils_getmime(path);
-		mimeid = wordtable_find(ctx, "mimes", mime);
-		if (mimeid == -1)
-			mimeid = wordtable_insert(ctx, "mimes", mime);
 		ret = sqlite3_bind_int(statement, index, mimeid);
 		SQLITE3_CHECK(ret, -1, sql);
 
@@ -1221,6 +1221,7 @@ static int _media_execute(media_ctx_t *ctx, sqlite3_stmt *statement, media_parse
 {
 	int count = 0;
 	int ret = sqlite3_step(statement);
+
 	while (ret == SQLITE_ROW)
 	{
 		count ++;
@@ -1245,10 +1246,8 @@ static int _media_execute(media_ctx_t *ctx, sqlite3_stmt *statement, media_parse
 		 */
 		index++;
 		type = sqlite3_column_type(statement, index);
-		int mimeid = 0;
-		if (type == SQLITE_INTEGER)
-			mimeid = sqlite3_column_int(statement, index);
-		mime = _media_getmime(ctx, mimeid);
+		if (type == SQLITE_TEXT)
+			mime = sqlite3_column_text(statement, index);
 
 #ifndef MEDIA_SQLITE_EXT
 		/**
@@ -1321,9 +1320,13 @@ static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data)
 	if (id == -1)
 		return 0;
 #ifndef MEDIA_SQLITE_EXT
-	const char *sql = "select \"url\", \"mimeid\", \"id\", \"info\" from \"media\"  where id = @ID";
+	const char *sql = "SELECT url, mimes.name, id, \"info\" FROM media " \
+			"INNER JOIN mimes ON media.mimeid=mimes.id " \
+			"WHERE id = @ID";
 #else
-	const char *sql = "select \"url\", \"mimeid\", \"opusid\", \"coverid\", \"info\" from \"media\" inner join \"album\" on album.id=media.albumid where opusid = @ID";
+	const char *sql = "SELECT url, mimes.name, opusid, album.coverid, \"info\" FROM media " \
+			"INNER JOIN album ON album.id=media.albumid, mimes ON media.mimeid=mimes.id " \
+			"WHERE opusid=@ID";
 #endif
 	ret = sqlite3_prepare_v2(ctx->db, sql, -1, &statement, NULL);
 	SQLITE3_CHECK(ret, -1, sql);
@@ -1347,9 +1350,14 @@ static int media_list(media_ctx_t *ctx, media_parse_t cb, void *data)
 	int index;
 
 #ifndef MEDIA_SQLITE_EXT
-	const char *sql = "select \"url\", \"mimeid\", \"id\", \"info\" from \"media\" inner join playlist on media.id=playlist.id where playlist.listid=@LISTID;";
+	const char *sql = "SELECT url, mimes.name, id, \"info\" FROM \"media\" " \
+			"INNER JOIN playlist on media.id=playlist.id, mimes ON media.mimeid=mimes.id " \
+			"WHERE playlist.listid=@LISTID;";
 #else
-	const char *sql = "select \"url\", \"mimeid\", \"opusid\", \"coverid\", \"info\" from \"media\" inner join playlist on media.id=playlist.id, \"album\" on album.id=media.albumid where playlist.listid=@LISTID;";
+	const char *sql = "SELECT url, mimes.name, opusid, album.coverid, info FROM media " \
+			"INNER JOIN playlist ON media.id=playlist.id, album ON album.id=media.albumid, " \
+			"mimes ON media.mimeid=mimes.id " \
+			"WHERE playlist.listid=@LISTID;";
 #endif
 	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
 	SQLITE3_CHECK(ret, -1, sql);
@@ -1610,40 +1618,43 @@ static int _media_filter(media_ctx_t *ctx, int table, const char *word)
 	int count = 0;
 	int index;
 	const char *sql[] = {
-		"select \"url\", \"mimeid\", \"opusid\", \"coverid\" from \"media\" "
-		"inner join opus on opus.id = media.opusid "
-		"where opus.albumid in ("
-			"select album.id from album "
-				"inner join "
-					"word on word.id=album.wordid "
-				"where LOWER(word.name) like LOWER(@NAME)"
+		"SELECT url, mimes.name, \"opusid\", album.coverid, \"info\" FROM media "
+		"INNER JOIN opus ON opus.id = media.opusid, mimes ON media.mimeid=mimes.id "
+		"album ON media.albumid = album.id "
+		"WHERE opus.albumid IN ("
+			"SELECT album.id FROM album "
+				"INNER JOIN word ON word.id=album.wordid "
+				"WHERE LOWER(word.name) LIKE LOWER(@NAME)"
 			");",
-		"select \"url\", \"mimeid\", \"opusid\", \"coverid\" from \"media\" "
-		"inner join opus on opus.id = media.opusid "
-		"where opus.artistid in ("
-			"select artist.id from artist "
-				"inner join "
-					"word on word.id=artist.wordid "
-				"where LOWER(word.name) like LOWER(@NAME)"
+		"SELECT url, mimes.name, opusid, album.coverid, \"info\" FROM media "
+		"INNER JOIN opus ON opus.id = media.opusid, mimes ON media.mimeid=mimes.id "
+		"album ON media.albumid = album.id "
+		"WHERE opus.artistid IN ("
+			"SELECT artist.id FROM artist "
+				"INNER JOIN word ON word.id=artist.wordid "
+				"WHERE LOWER(word.name) LIKE LOWER(@NAME)"
 			");",
-		"select \"url\", \"mimeid\", \"opusid\", \"coverid\" from \"media\" "
-		"inner join opus on opus.id = media.opusid "
-		"where opus.speedid in ("
-			"select speed.id from speed "
-				"inner join "
-					"word on word.id=speed.wordid "
-				"where LOWER(word.name) like LOWER(@NAME)"
+		"SELECT url, mimes.name, opusid, album.coverid, \"info\" from \"media\" "
+		"INNER JOIN opus ON opus.id = media.opusid, mimes ON media.mimeid=mimes.id "
+		"album ON media.albumid = album.id "
+		"WHERE opus.speedid in ("
+			"SELECT speed.id FROM speed "
+				"INNER JOIN word ON word.id=speed.wordid "
+				"WHERE LOWER(word.name) LIKE LOWER(@NAME)"
 			");",
-		"select \"url\", \"mimeid\", \"opusid\", \"coverid\" from \"media\" "
-		"inner join opus on opus.id = media.opusid "
-		"where titleid in ("
-			"select word.id from word "
-				"where LOWER(word.name) like LOWER(@NAME)"
+		"SELECT url, mimes.name, opusid, album.coverid, \"info\" from \"media\" "
+		"INNER JOIN opus ON opus.id = media.opusid, mimes ON media.mimeid=mimes.id "
+		"album ON media.albumid = album.id "
+		"WHERE titleid IN ("
+			"SELECT word.id FROM word "
+				"WHERE LOWER(word.name) LIKE LOWER(@NAME)"
 			");",
-		"select \"url\", \"mimeid\", \"opusid\", \"coverid\" from \"media\" "
-		"where genreid in ("
-			"select word.id from word "
-				"where LOWER(word.name) like LOWER(@NAME)"
+		"SELECT url, mimes.name, opusid, album.coverid, \"info\" from \"media\" "
+		"INNER JOIN opus ON opus.id = media.opusid, mimes ON media.mimeid=mimes.id "
+		"album ON media.albumid = album.id "
+		"WHERE genreid IN ("
+			"SELECT word.id FROM word "
+				"WHERE LOWER(word.name) LIKE LOWER(@NAME)"
 			");",
 	};
 	ret = sqlite3_prepare_v2(db, sql[table], -1, &statement, NULL);

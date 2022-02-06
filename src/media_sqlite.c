@@ -214,60 +214,29 @@ static int _media_find(media_ctx_t *ctx, const char *path)
 	return id;
 }
 
-static int media_remove(media_ctx_t *ctx, int id, const char *path)
+static int playlist_remove(media_ctx_t *ctx, int id)
 {
-	int ret;
-	int force = 0;
 	sqlite3 *db = ctx->db;
-	if (path != NULL)
+	int ret = -1;
+	sqlite3_stmt *statement;
+	const char sql[] = "DELETE FROM playlist WHERE id=@ID and listid=@LISTID";
+	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
+	SQLITE3_CHECK(ret, -1, sql);
+
+	int index;
+	index = sqlite3_bind_parameter_index(statement, "@ID");
+	ret = sqlite3_bind_int(statement, index, id);
+	SQLITE3_CHECK(ret, -1, sql);
+
+	index = sqlite3_bind_parameter_index(statement, "@LISTID");
+	if (index > 0)
 	{
-		id = _media_find(ctx, path);
-		force = 1;
+		ret = sqlite3_bind_int(statement, index, ctx->listid);
+		SQLITE3_CHECK(ret, -1, sql);
 	}
 
-	if (id > 0)
-	{
-		sqlite3_stmt *statement;
-		const char *sql = NULL;
-		if (force)
-		{
-#ifndef MEDIA_SQLITE_EXT
-			sql = "DELETE FROM media WHERE id=@ID";
-#else
-			sql = "DELETE FROM media WHERE opusid=@ID";
-#endif
-		}
-		else
-		{
-			sql = "DELETE FROM playlist WHERE id=@ID and listid=@LISTID";
-		}
-		ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
-		SQLITE3_CHECK(ret, -1, sql);
-
-		int index = sqlite3_bind_parameter_index(statement, "@ID");
-		ret = sqlite3_bind_int(statement, index, id);
-		SQLITE3_CHECK(ret, -1, sql);
-
-		index = sqlite3_bind_parameter_index(statement, "@LISTID");
-		if (index > 0)
-		{
-			ret = sqlite3_bind_int(statement, index, ctx->listid);
-			SQLITE3_CHECK(ret, -1, sql);
-		}
-
-		media_dbgsql(statement, __LINE__);
-		ret = sqlite3_step(statement);
-		if (ret != SQLITE_DONE)
-			ret = -1;
-		else if (force)
-			media_remove(ctx, id, NULL);
-		else
-		{
-			ret = 0;
-			media_dbg("putv: remove media %s", path);
-		}
-		sqlite3_finalize(statement);
-	}
+	media_dbgsql(statement, __LINE__);
+	ret = sqlite3_step(statement);
 	return ret;
 }
 
@@ -1433,6 +1402,60 @@ static int media_end(media_ctx_t *ctx)
 {
 	ctx->mediaid = -1;
 	return 0;
+}
+
+static int _media_remove(media_ctx_t *ctx, int id)
+{
+	int ret;
+	sqlite3 *db = ctx->db;
+	sqlite3_stmt *statement;
+#ifndef MEDIA_SQLITE_EXT
+	const char sql[] = "DELETE FROM media WHERE id=@ID";
+#else
+	const char sql[] = "DELETE FROM media WHERE opusid=@ID";
+#endif
+	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
+	SQLITE3_CHECK(ret, -1, sql);
+
+	int index = sqlite3_bind_parameter_index(statement, "@ID");
+	ret = sqlite3_bind_int(statement, index, id);
+	SQLITE3_CHECK(ret, -1, sql);
+
+	index = sqlite3_bind_parameter_index(statement, "@LISTID");
+	if (index > 0)
+	{
+		ret = sqlite3_bind_int(statement, index, ctx->listid);
+		SQLITE3_CHECK(ret, -1, sql);
+	}
+
+	media_dbgsql(statement, __LINE__);
+	ret = sqlite3_step(statement);
+	if (ret != SQLITE_DONE)
+		ret = -1;
+	else
+		playlist_remove(ctx, id);
+	sqlite3_finalize(statement);
+
+	return ret;
+}
+
+static int media_remove(media_ctx_t *ctx, int id, const char *path)
+{
+	int ret = -1;
+	sqlite3 *db = ctx->db;
+	if (id > 0)
+		return playlist_remove(ctx, id);
+
+	if (path != NULL)
+	{
+		id = _media_find(ctx, path);
+	}
+
+	if (id > 0)
+	{
+		ret =_media_remove(ctx, id);
+	}
+	return ret;
 }
 
 /**

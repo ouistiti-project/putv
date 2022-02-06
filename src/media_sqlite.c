@@ -794,25 +794,20 @@ static int opus_updatefield(media_ctx_t *ctx, int opusid, const char *field, int
 	return ret;
 }
 
-static int opus_insert(media_ctx_t *ctx, const char *info, int *palbumid, const char *filename)
+static int opus_insert(media_ctx_t *ctx, json_t *jinfo, int *palbumid, const char *filename)
 {
 	int titleid = -1;
 	int artistid = -1;
 	int genreid = -1;
-	int albumid = -1;
 	int coverid = -1;
 	char *comment = NULL;
-	json_error_t error;
 
-	json_t *jinfo = json_loads(info, 0, &error);
-	opus_populateinfo(ctx, jinfo, &titleid, &artistid, &albumid, &genreid, &coverid, &comment);
-	json_decref(jinfo);
+	opus_populateinfo(ctx, jinfo, &titleid, &artistid, *palbumid, &genreid, &coverid, &comment);
 
 	if (titleid == -1)
 		return -1;
-
-	if (albumid > -1)
-		albumid = opus_insertalbum(ctx, albumid, artistid, coverid, genreid);
+	if (*palbumid > -1)
+		*palbumid = opus_insertalbum(ctx, *palbumid, artistid, coverid, genreid);
 
 	int opusid = -1;
 
@@ -972,7 +967,12 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 	if (info == NULL)
 		info = 	media_fillinfo(path, mime);
 
-	opusid = opus_insert(ctx, info, &albumid, filename);
+	json_error_t error;
+
+	json_t *jinfo = json_loads(info, 0, &error);
+	opusid = opus_insert(ctx, jinfo, &albumid, filename);
+	info = json_dumps(jinfo, 0);
+	json_decref(jinfo);
 	if (opusid == -1)
 	{
 		err("opusid error");

@@ -410,9 +410,17 @@ static int opus_insert_info(media_ctx_t *ctx, const char *table, int wordid)
 	return id;
 }
 
-static int opus_insertalbum(media_ctx_t *ctx, int albumid, int artistid, int coverid, int genreid)
+static int album_insert(media_ctx_t *ctx, char *album, int artistid, int coverid, int genreid)
 {
 	sqlite3 *db = ctx->db;
+	int albumid;
+	if (album != NULL)
+	{
+		int exist;
+		albumid = table_insert_word(ctx, "word", album, &exist);
+		free(album);
+	}
+
 	albumid = opus_insert_info(ctx, "album", albumid);
 	if (coverid != -1)
 	{
@@ -526,18 +534,17 @@ static int opus_parse_info(json_t *jinfo, char **ptitle, char **partist,
 }
 
 static int opus_populateinfo(media_ctx_t *ctx, json_t *jinfo, int *ptitleid, int *partistid,
-		int *palbumid, int *pgenreid, int *pcoverid, char **pcomment)
+		char **album, int *pgenreid, int *pcoverid, char **pcomment)
 {
 	char *title = NULL;
 	char *artist = NULL;
 	char *genre = NULL;
-	char *album = NULL;
 	char *cover = NULL;
 	int exist = 1;
 
-	opus_parse_info(jinfo, &title, &artist, &album, &genre, &cover, pcomment);
+	opus_parse_info(jinfo, &title, &artist, album, &genre, &cover, pcomment);
 
-	warn("%s , %s , %s", title?title:"", album?album:"", artist?artist:"");
+	media_dbg("%s , %s , %s", title?title:"", album?album:"", artist?artist:"");
 	if (title != NULL)
 	{
 		*ptitleid = table_insert_word(ctx, "word", title, &exist);
@@ -556,11 +563,6 @@ static int opus_populateinfo(media_ctx_t *ctx, json_t *jinfo, int *ptitleid, int
 	{
 		*pcoverid = table_insert_word(ctx, "cover", cover, &exist);
 		free(cover);
-	}
-	if (album != NULL)
-	{
-		*palbumid = table_insert_word(ctx, "word", album, &exist);
-		free(album);
 	}
 
 	if (genre != NULL)
@@ -831,13 +833,14 @@ static int opus_insert(media_ctx_t *ctx, json_t *jinfo, int *palbumid, const cha
 	int genreid = -1;
 	int coverid = -1;
 	char *comment = NULL;
+	char *album = NULL;
 
-	opus_populateinfo(ctx, jinfo, &titleid, &artistid, *palbumid, &genreid, &coverid, &comment);
+	opus_populateinfo(ctx, jinfo, &titleid, &artistid, &album, &genreid, &coverid, &comment);
 
 	if (titleid == -1)
 		return -1;
-	if (*palbumid > -1)
-		*palbumid = opus_insertalbum(ctx, *palbumid, artistid, coverid, genreid);
+	if (album != NULL)
+		*palbumid = album_insert(ctx, album, artistid, coverid, genreid);
 
 	int opusid = -1;
 
@@ -1057,14 +1060,7 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 		SQLITE3_CHECK(ret, -1, sql);
 
 		index = sqlite3_bind_parameter_index(statement, "@ALBUMID");
-		if (albumid != -1)
-		{
-			ret = sqlite3_bind_int(statement, index, albumid);
-		}
-		else
-		{
-			ret = sqlite3_bind_null(statement, index);
-		}
+		ret = sqlite3_bind_int(statement, index, albumid);
 		SQLITE3_CHECK(ret, -1, sql);
 #endif
 		index = sqlite3_bind_parameter_index(statement, "@MIMEID");
@@ -1136,13 +1132,13 @@ static int media_modify(media_ctx_t *ctx, int opusid, const char *info)
 			int titleid = -1;
 			int artistid = -1;
 			int genreid = -1;
-			int albumid = -1;
+			char *album = NULL;
 			int coverid = -1;
 			char *comment = NULL;
 			json_error_t error;
 
 			jinfo = json_loads(info, 0, &error);
-			opus_populateinfo(ctx, jinfo, &titleid, &artistid, &albumid, &genreid, &coverid, &comment);
+			opus_populateinfo(ctx, jinfo, &titleid, &artistid, &album, &genreid, &coverid, &comment);
 
 			opusid = sqlite3_column_int(statememt, 0);
 			if (titleid != -1)
@@ -1161,9 +1157,9 @@ static int media_modify(media_ctx_t *ctx, int opusid, const char *info)
 				opus_updatefield(ctx, opusid, "coverid", coverid);
 			else
 				coverid = sqlite3_column_int(statememt, 4);
-			if (albumid != -1)
+			if (album != NULL)
 			{
-				albumid = opus_insertalbum(ctx, albumid, artistid, coverid, genreid);
+				int albumid = album_insert(ctx, album, artistid, coverid, genreid);
 				opus_updatefield(ctx, opusid, "albumid", albumid);
 			}
 			if (comment != NULL)

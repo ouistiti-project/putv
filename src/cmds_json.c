@@ -240,6 +240,69 @@ static int method_info(json_t *json_params, json_t **result, void *userdata)
 	return 0;
 }
 
+typedef struct
+{
+	media_t *media;
+	const char *info;
+	json_t *result;
+} _setinfo_t;
+static int _setinfo(void *arg, int id, const char *url,
+		const char *info, const char *mime)
+{
+	if (url == NULL)
+		return -1;
+	_setinfo_t *data = (_setinfo_t *)arg;
+	media_t *media = data->media;
+	const char *newinfo = data->info;
+	if (newinfo && info && strcmp(newinfo, info))
+	{
+		if (media->ops->modify(media->ctx, id, newinfo) != 0)
+		{
+			json_object_set(data->result, "status", json_string("KO"));
+			json_object_set(data->result, "message", json_string("storage error"));
+			return -2;
+		}
+	}
+	json_object_set(data->result, "status", json_string("OK"));
+	return 0;
+}
+
+static int method_setinfo(json_t *json_params, json_t **result, void *userdata)
+{
+	int ret;
+	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
+	media_t *media = player_media(ctx->player);
+	cmds_dbg("cmds: setinfo");
+
+	if (media->ops->modify == NULL)
+	{
+		*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
+		return -1;
+	}
+
+	json_t *id_js = json_object_get(json_params, "id");
+	if (id_js && json_is_integer(id_js))
+	{
+		int id = json_integer_value(id_js);
+		char * info = json_dumps(json_object_get(json_params, "info"), 0);
+		*result = json_object();
+		_setinfo_t data = {
+			.media = media,
+			.info = info,
+			.result = *result,
+		};
+		media->ops->find(media->ctx, id, _setinfo, &data);
+		free(info);
+		json_object_set(*result, "id", id_js);
+	}
+	else
+	{
+		*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "id not found", json_null());
+	}
+
+	return 0;
+}
+
 static int method_filter(json_t *json_params, json_t **result, void *userdata)
 {
 	int ret;
@@ -1168,6 +1231,7 @@ static struct jsonrpc_method_entry_t method_table[] = {
 	{ 'r', "setnext", method_setnext, "o" },
 	{ 'r', "list", method_list, "o" },
 	{ 'r', "info", method_info, "o" },
+	{ 'r', "setinfo", method_setinfo, "o" },
 	{ 'r', "filter", method_filter, "o" },
 	{ 'r', "append", method_append, "[]" },
 	{ 'r', "remove", method_remove, "o" },

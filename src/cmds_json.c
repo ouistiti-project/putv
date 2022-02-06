@@ -377,9 +377,9 @@ static int method_append(json_t *json_params, json_t **result, void *userdata)
 
 	int ret = -1;
 	if (json_is_array(json_params)) {
-		size_t index;
+		size_t i;
 		json_t *value;
-		json_array_foreach(json_params, index, value)
+		json_array_foreach(json_params, i, value)
 		{
 			if (json_is_string(value))
 			{
@@ -389,22 +389,28 @@ static int method_append(json_t *json_params, json_t **result, void *userdata)
 			}
 			else if (json_is_object(value))
 			{
-				json_t * path = json_object_get(value, "url");
 				json_t * info = json_object_get(value, "info");
-				json_t * mime = json_object_get(value, "mime");
-				if (json_is_string(info))
+				json_t * sources = json_object_get(value, "sources");
+				json_t * source = NULL;
+				size_t j;
+				json_array_foreach(sources, j, source)
 				{
-					ret = append_cb(media->ctx,
-							json_string_value(path),
-							json_string_value(info),
-							json_string_value(mime));
-				}
-				else if (json_is_object(info))
-				{
-					ret = append_cb(media->ctx,
-							json_string_value(path),
-							json_dumps(info, 0),
-							json_string_value(mime));
+					json_t * path = json_object_get(source, "url");
+					json_t * mime = json_object_get(value, "mime");\
+					if (json_is_string(info))
+					{
+						ret = append_cb(media->ctx,
+								json_string_value(path),
+								json_string_value(info),
+								json_string_value(mime));
+					}
+					else if (json_is_object(info))
+					{
+						ret = append_cb(media->ctx,
+								json_string_value(path),
+								json_dumps(info, 0),
+								json_string_value(mime));
+					}
 				}
 			}
 			if (ret == -1)

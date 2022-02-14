@@ -56,8 +56,7 @@ static void _player_autonext(void *arg, event_t event, void *eventarg);
 
 struct player_ctx_s
 {
-	const char *filtername;
-	filter_t *filter;
+	const filter_ops_t *filterops;
 
 	media_t *media;
 	media_t *nextmedia;
@@ -77,12 +76,18 @@ struct player_ctx_s
 
 player_ctx_t *player_init(const char *filtername)
 {
+	const filter_ops_t *filterops = filter_build(filtername);
+	if (filterops == NULL)
+	{
+		err("filter %s not found", filtername);
+		return NULL;
+	}
 	player_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	pthread_mutex_init(&ctx->mutex, NULL);
 	pthread_cond_init(&ctx->cond, NULL);
 	pthread_cond_init(&ctx->cond_int, NULL);
 	ctx->state = STATE_STOP;
-	ctx->filtername = filtername;
+	ctx->filterops = filterops;
 	player_eventlistener(ctx, _player_autonext, ctx, "player");
 	return ctx;
 }
@@ -488,9 +493,12 @@ void player_sendevent(player_ctx_t *ctx, event_t event, void *data)
 	}
 }
 
-const char *player_filtername(player_ctx_t *ctx)
+filter_t *player_filter(player_ctx_t *ctx, jitter_format_t format, sampled_t sampled)
 {
-	return ctx->filtername;
+	filter_t *filter = calloc(1, sizeof (*filter));
+	filter->ops = ctx->filterops;
+	filter->ctx = filter->ops->init(sampled, format);
+	return filter;
 }
 
 src_t *player_source(player_ctx_t *ctx)

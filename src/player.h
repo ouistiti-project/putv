@@ -4,6 +4,7 @@
 #define STATE_PAUSE_MASK 0x8000
 
 #include "event.h"
+#include "filter.h"
 
 typedef enum
 {
@@ -49,7 +50,7 @@ int player_next(player_ctx_t *ctx, int change);
 void player_removeevent(player_ctx_t *ctx, int id);
 int player_eventlistener(player_ctx_t *ctx, event_listener_cb_t callback, void *cbctx, char *name);
 int player_mediaid(player_ctx_t *ctx);
-const char *player_filtername(player_ctx_t *ctx);
+filter_t *player_filter(player_ctx_t *ctx, jitter_format_t format, sampled_t sampled);
 src_t *player_source(player_ctx_t *ctx);
 void player_sendevent(player_ctx_t *ctx, event_t event, void *data);
 

@@ -338,27 +338,20 @@ const filter_ops_t *filter_pcm_right = &(filter_ops_t)
 };
 #endif
 
-filter_t *filter_build(const char *name, jitter_format_t format, sampled_t sampled)
+const filter_ops_t *filter_build(const char *name)
 {
-	filter_t *filter = calloc(1, sizeof (*filter));
+	const filter_ops_t *filterops = NULL;
 	if (!strcmp(name, filter_pcm_interleave->name))
-		filter->ops = filter_pcm_interleave;
+		filterops = filter_pcm_interleave;
 #ifdef FILTER_MIXED
 	if (!strcmp(name, filter_pcm_mixed->name))
-		filter->ops = filter_pcm_mixed;
+		filterops = filter_pcm_mixed;
 #endif
 #ifdef FILTER_ONECHANNEL
 	if (!strcmp(name, filter_pcm_left->name))
-		filter->ops = filter_pcm_left;
+		filterops = filter_pcm_left;
 	if (!strcmp(name, filter_pcm_right->name))
-		filter->ops = filter_pcm_right;
+		filterops = filter_pcm_right;
 #endif
-	if (filter->ops != NULL)
-		filter->ctx = filter->ops->init(sampled, format);
-	else
-	{
-		free(filter);
-		filter = NULL;
-	}
-	return filter;
+	return filterops;
 }

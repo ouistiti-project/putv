@@ -266,6 +266,8 @@ int main(int argc, char **argv)
 	}
 
 	player_ctx_t *player = player_init(filtername);
+	if (player == NULL)
+		return -1;
 	player_change(player, mediapath, ((mode & RANDOM) == RANDOM), ((mode & LOOP) == LOOP), 1);
 
 	uid_t pw_uid = getuid();

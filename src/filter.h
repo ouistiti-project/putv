@@ -48,6 +48,6 @@ struct filter_s
 	filter_ctx_t *ctx;
 };
 
-filter_t *filter_build(const char *name, jitter_format_t format, sampled_t sampled);
+const filter_ops_t *filter_build(const char *name);
 
 #endif

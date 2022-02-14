@@ -317,7 +317,7 @@ static decoder_ctx_t *_decoder_init(player_ctx_t *player)
 	ctx->ops = decoder_mad;
 	ctx->player = player;
 
-	ctx->filter = filter_build(player_filtername(player), PCM_24bits4_LE_stereo, sampled_scaling);
+	ctx->filter = player_filter(player, PCM_24bits4_LE_stereo, sampled_scaling);
 	mad_decoder_init(&ctx->decoder, ctx,
 			input, header /* header */, 0 /* filter */, output,
 			error, 0 /* message */);

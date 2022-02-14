@@ -41,12 +41,20 @@ typedef   signed long sample_t;
 typedef struct filter_ctx_s filter_ctx_t;
 typedef struct filter_audio_s filter_audio_t;
 typedef sample_t (*sample_get_t)(filter_ctx_t *ctx, filter_audio_t *audio, int channel, unsigned int index);
-typedef sample_t (*sampled_t)(sample_t sample, int bitlength);
+typedef sample_t (*sampled_t)(void * ctx, sample_t sample, int bitlength);
+
+typedef struct sampled_ctx_s sampled_ctx_t;
+struct sampled_ctx_s
+{
+	sampled_t cb;
+	void *arg;
+	sampled_ctx_t *next;
+};
 
 struct filter_ctx_s
 {
 	sample_get_t get;
-	sampled_t sampled;
+	sampled_ctx_t *sampled;
 	unsigned int samplerate;
 	unsigned char samplesize;
 	unsigned char shift;
@@ -80,6 +88,7 @@ static filter_ctx_t *filter_init(jitter_format_t format,...)
 {
 	filter_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->get = filter_get;
+	sampled_ctx_t *sampleditem = NULL;
 
 	va_list params;
 	va_start(params, format);
@@ -89,7 +98,11 @@ static filter_ctx_t *filter_init(jitter_format_t format,...)
 		switch(code)
 		{
 		case FILTER_SAMPLED:
-			ctx->sampled = (sampled_t) va_arg(params, sampled_t);
+			sampleditem = calloc(1, sizeof(*ctx->sampled));
+			sampleditem->next = ctx->sampled;
+			ctx->sampled = sampleditem;
+			ctx->sampled->cb = (sampled_t) va_arg(params, sampled_t);
+			ctx->sampled->arg = (void *) va_arg(params, void *);
 		break;
 #ifdef FILTER_ONECHANNEL
 		case FILTER_MONOLEFT:
@@ -165,15 +178,24 @@ static int filter_set(filter_ctx_t *ctx, jitter_format_t format, unsigned int sa
 
 static void filter_destroy(filter_ctx_t *ctx)
 {
+	sampled_ctx_t *sampleditem = ctx->sampled;
+	while (sampleditem != NULL)
+	{
+		ctx->sampled = sampleditem->next;
+		free(sampleditem);
+		sampleditem = ctx->sampled;
+	}
 	free(ctx);
 }
 
 int sampled_change(filter_ctx_t *ctx, sample_t sample, int bitspersample, unsigned char *out)
 {
-	if (ctx->sampled)
+	sampled_ctx_t *sampleditem = ctx->sampled;
+	while (sampleditem != NULL)
 	{
 		int length = ((ctx->shift) > bitspersample)?bitspersample:ctx->shift;
-		sample = ctx->sampled(sample, length);
+		sample = sampleditem->cb(sampleditem->arg, sample, length);
+		sampleditem = sampleditem->next;
 	}
 
 	int i = 0, j = 0;

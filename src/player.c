@@ -493,12 +493,12 @@ void player_sendevent(player_ctx_t *ctx, event_t event, void *data)
 	}
 }
 
-filter_t *player_filter(player_ctx_t *ctx, jitter_format_t format, sampled_t sampled)
+filter_t *player_filter(player_ctx_t *ctx, jitter_format_t format, sampled_t sampled, void *arg)
 {
 	filter_t *filter = calloc(1, sizeof (*filter));
 	filter->ops = ctx->filterops;
 	if (sampled != NULL)
-		filter->ctx = filter->ops->init(format, FILTER_SAMPLED, sampled, 0);
+		filter->ctx = filter->ops->init(format, FILTER_SAMPLED, sampled, arg, 0);
 	else
 		filter->ctx = filter->ops->init(format, 0);
 	return filter;

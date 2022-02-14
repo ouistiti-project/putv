@@ -32,7 +32,7 @@ struct filter_audio_s
 #ifndef FILTER_CTX
 typedef void filter_ctx_t;
 #endif
-typedef sample_t (*sampled_t)(sample_t sample, int bitlength);
+typedef sample_t (*sampled_t)(void * ctx, sample_t sample, int bitlength);
 
 typedef struct filter_ops_s filter_ops_t;
 struct filter_ops_s

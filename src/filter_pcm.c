@@ -28,6 +28,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
 
 # define SIZEOF_INT 4
 
@@ -62,46 +63,59 @@ struct filter_ctx_s
 #define dbg(...)
 #endif
 
-static filter_ctx_t *filter_init(sampled_t sampled, jitter_format_t format,...);
+static sample_t filter_get(filter_ctx_t *ctx, filter_audio_t *audio, int channel, unsigned int index);
+#ifdef FILTER_ONECHANNEL
+static sample_t filter_mono(filter_ctx_t *ctx, filter_audio_t *audio, int channel, unsigned int index);
+#endif
+#ifdef FILTER_MIXED
+static sample_t filter_mix(filter_ctx_t *ctx, filter_audio_t *audio, int channel, unsigned int index);
+#endif
+
+static filter_ctx_t *filter_init(jitter_format_t format,...);
 static int filter_set(filter_ctx_t *ctx, jitter_format_t format, unsigned int samplerate);
 static void filter_destroy(filter_ctx_t *ctx);
 
 # define FRACBITS		28
 # define ONE		((sample_t)(0x10000000L))
 
-static filter_ctx_t *filter_init(sampled_t sampled, jitter_format_t format,...)
+static filter_ctx_t *filter_init(jitter_format_t format,...)
 {
 	filter_ctx_t *ctx = calloc(1, sizeof(*ctx));
-	ctx->sampled = sampled;
+	ctx->sampled = sampled_change;
+	ctx->get = filter_get;
 
-	if (sampled != NULL)
-		ctx->sampled = sampled;
+	va_list params;
+	va_start(params, format);
+	int code = (int) va_arg(params, int);
+	while (code != 0)
+	{
+		switch(code)
+		{
+		case FILTER_SAMPLED:
+			ctx->sampled = (sampled_t) va_arg(params, sampled_t);
+		break;
+#ifdef FILTER_ONECHANNEL
+		case FILTER_MONOLEFT:
+			ctx->channel = 0;
+			ctx->get = filter_mono;
+		break;
+		case FILTER_MONORIGHT:
+			ctx->channel = 1;
+			ctx->get = filter_mono;
+		break;
+#endif
+#ifdef FILTER_MIXED
+		case FILTER_MONOMIXED:
+			ctx->get = filter_mix;
+		break;
+#endif
+		}
+		code = (int) va_arg(params, int);
+	}
+	va_end(params);
 	filter_set(ctx, format, 44100);
 	return ctx;
 }
-
-#ifdef FILTER_ONECHANNEL
-static filter_ctx_t *filter_init_onechannel(sampled_t sampled, jitter_format_t format, int channel)
-{
-	filter_ctx_t *ctx = filter_init(sampled, format);
-	if (ctx != NULL)
-	{
-		ctx->channel = channel;
-	}
-	return ctx;
-}
-
-static filter_ctx_t *filter_init_left(sampled_t sampled, jitter_format_t format, ...)
-{
-	filter_ctx_t *ctx = filter_init_onechannel(sampled, format, 0);
-	return ctx;
-}
-static filter_ctx_t *filter_init_right(sampled_t sampled, jitter_format_t format, ...)
-{
-	filter_ctx_t *ctx = filter_init_onechannel(sampled, format, 1);
-	return ctx;
-}
-#endif
 
 static int filter_set(filter_ctx_t *ctx, jitter_format_t format, unsigned int samplerate)
 {
@@ -278,7 +292,7 @@ filter_exit:
 
 static int filter_interleave(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *buffer, size_t size)
 {
-	return filter_run(ctx, audio, buffer, size, filter_get);
+	return filter_run(ctx, audio, buffer, size, ctx->get);
 }
 
 #ifdef FILTER_MIXED
@@ -321,7 +335,7 @@ const filter_ops_t *filter_pcm_mixed = &(filter_ops_t)
 const filter_ops_t *filter_pcm_left = &(filter_ops_t)
 {
 	.name = "pcm_left",
-	.init = filter_init_left,
+	.init = filter_init,
 	.set = filter_set,
 	.run = filter_channelmono,
 	.destroy = filter_destroy,
@@ -330,7 +344,7 @@ const filter_ops_t *filter_pcm_left = &(filter_ops_t)
 const filter_ops_t *filter_pcm_right = &(filter_ops_t)
 {
 	.name = "pcm_right",
-	.init = filter_init_right,
+	.init = filter_init,
 	.set = filter_set,
 	.run = filter_channelmono,
 	.destroy = filter_destroy,

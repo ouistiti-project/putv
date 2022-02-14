@@ -41,7 +41,8 @@ typedef   signed long sample_t;
 typedef struct filter_ctx_s filter_ctx_t;
 typedef struct filter_audio_s filter_audio_t;
 typedef sample_t (*sample_get_t)(filter_ctx_t *ctx, filter_audio_t *audio, int channel, unsigned int index);
-typedef int (*sampled_t)(filter_ctx_t *ctx, sample_t sample, int bitspersample, unsigned char *out);
+typedef sample_t (*sampled_t)(sample_t sample, int bitlength);
+
 struct filter_ctx_s
 {
 	sample_get_t get;
@@ -75,13 +76,9 @@ static filter_ctx_t *filter_init(jitter_format_t format,...);
 static int filter_set(filter_ctx_t *ctx, jitter_format_t format, unsigned int samplerate);
 static void filter_destroy(filter_ctx_t *ctx);
 
-# define FRACBITS		28
-# define ONE		((sample_t)(0x10000000L))
-
 static filter_ctx_t *filter_init(jitter_format_t format,...)
 {
 	filter_ctx_t *ctx = calloc(1, sizeof(*ctx));
-	ctx->sampled = sampled_change;
 	ctx->get = filter_get;
 
 	va_list params;
@@ -171,40 +168,14 @@ static void filter_destroy(filter_ctx_t *ctx)
 	free(ctx);
 }
 
-/**
- * @brief this function comes from mad decoder
- *
- * @arg sample the 32bits sample
- * @arg length the length of scaling (16 or 24)
- *
- * @return sample
- */
-static
-signed int scale_sample(sample_t sample, int length)
-{
-	/* round */
-	sample += (1L << (FRACBITS - length));
-	/* clip */
-	if (sample >= ONE)
-		sample = ONE - 1;
-	else if (sample < -ONE)
-		sample = -ONE;
-	/* quantize */
-	sample = sample >> (FRACBITS + 1 - length);
-	return sample;
-}
-
-int sampled_scaling(filter_ctx_t *ctx, sample_t sample, int bitspersample, unsigned char *out)
-{
-	int length = ((ctx->shift) > bitspersample)?bitspersample:ctx->shift;
-	sample = scale_sample(sample, length);
-
-	return sampled_change(ctx, sample, bitspersample, out);
-}
-
-
 int sampled_change(filter_ctx_t *ctx, sample_t sample, int bitspersample, unsigned char *out)
 {
+	if (ctx->sampled)
+	{
+		int length = ((ctx->shift) > bitspersample)?bitspersample:ctx->shift;
+		sample = ctx->sampled(sample, length);
+	}
+
 	int i = 0, j = 0;
 	for (i = 0; i < ctx->samplesize; i++)
 	{
@@ -278,7 +249,7 @@ static int filter_run(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *b
 			sample = get(ctx, audio, j, i);
 			if (audio->regain != 0)
 				sample = filter_boost(audio->regain, sample, audio->bitspersample);
-			int len = ctx->sampled(ctx, sample, audio->bitspersample,
+			int len = sampled_change(ctx, sample, audio->bitspersample,
 						buffer + bufferlen);
 			bufferlen += len;
 		}

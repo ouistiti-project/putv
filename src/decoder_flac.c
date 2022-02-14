@@ -86,7 +86,7 @@ static decoder_ctx_t *_decoder_init(player_ctx_t *player)
 	ctx->samplerate = DEFAULT_SAMPLERATE;
 	ctx->player = player;
 
-	ctx->filter = player_filter(player, PCM_24bits4_LE_stereo, sampled_change);
+	ctx->filter = player_filter(player, PCM_24bits4_LE_stereo, NULL);
 
 	ctx->decoder = FLAC__stream_decoder_new();
 	if (ctx->decoder == NULL)

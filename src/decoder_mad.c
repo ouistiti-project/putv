@@ -86,6 +86,32 @@ struct decoder_ctx_s
 #define DECODER_HEARTBEAT
 #endif
 
+/**
+ * @brief this function comes from mad decoder
+ *
+ * @arg sample the 32bits sample
+ * @arg length the length of scaling (16 or 24)
+ *
+ * @return sample
+ */
+# define FRACBITS		28
+# define ONE		((sample_t)(0x10000000L))
+
+static
+sample_t scale_sample(sample_t sample, int bitlength)
+{
+	/* round */
+	sample += (1L << (FRACBITS - bitlength));
+	/* clip */
+	if (sample >= ONE)
+		sample = ONE - 1;
+	else if (sample < -ONE)
+		sample = -ONE;
+	/* quantize */
+	sample = sample >> (FRACBITS + 1 - bitlength);
+	return sample;
+}
+
 #define JITTER_TYPE JITTER_TYPE_RING
 
 static jitter_t *_decoder_jitter(decoder_ctx_t *ctx, jitte_t jitte);
@@ -317,7 +343,7 @@ static decoder_ctx_t *_decoder_init(player_ctx_t *player)
 	ctx->ops = decoder_mad;
 	ctx->player = player;
 
-	ctx->filter = player_filter(player, PCM_24bits4_LE_stereo, sampled_scaling);
+	ctx->filter = player_filter(player, PCM_24bits4_LE_stereo, scale_sample);
 	mad_decoder_init(&ctx->decoder, ctx,
 			input, header /* header */, 0 /* filter */, output,
 			error, 0 /* message */);

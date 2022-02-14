@@ -390,7 +390,7 @@ static int _decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 	int ret = 0;
 	ctx->out = jitter;
 	if (ctx->filter)
-		ret = ctx->filter->ops->set(ctx->filter->ctx, NULL, jitter->format, jitter->ctx->frequence);
+		ret = ctx->filter->ops->set(ctx->filter->ctx, jitter->format, jitter->ctx->frequence);
 #ifdef DECODER_HEARTBEAT
 	if (heartbeat_samples)
 	{

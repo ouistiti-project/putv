@@ -296,7 +296,7 @@ static int _decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 	 * Because we need the jitter out.
 	 */
 	if (ctx->filter)
-		ret = ctx->filter->ops->set(ctx->filter->ctx, NULL, jitter->format, jitter->ctx->frequence);
+		ret = ctx->filter->ops->set(ctx->filter->ctx, jitter->format, jitter->ctx->frequence);
 	if (ret == 0)
 		pthread_create(&ctx->thread, NULL, _decoder_thread, ctx);
 	return ret;

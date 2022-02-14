@@ -63,7 +63,7 @@ struct filter_ctx_s
 #endif
 
 static filter_ctx_t *filter_init(sampled_t sampled, jitter_format_t format,...);
-static int filter_set(filter_ctx_t *ctx, sampled_t sampled, jitter_format_t format, unsigned int samplerate);
+static int filter_set(filter_ctx_t *ctx, jitter_format_t format, unsigned int samplerate);
 static void filter_destroy(filter_ctx_t *ctx);
 
 # define FRACBITS		28
@@ -74,7 +74,9 @@ static filter_ctx_t *filter_init(sampled_t sampled, jitter_format_t format,...)
 	filter_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->sampled = sampled;
 
-	filter_set(ctx, sampled, format, 44100);
+	if (sampled != NULL)
+		ctx->sampled = sampled;
+	filter_set(ctx, format, 44100);
 	return ctx;
 }
 
@@ -101,11 +103,8 @@ static filter_ctx_t *filter_init_right(sampled_t sampled, jitter_format_t format
 }
 #endif
 
-static int filter_set(filter_ctx_t *ctx, sampled_t sampled, jitter_format_t format, unsigned int samplerate)
+static int filter_set(filter_ctx_t *ctx, jitter_format_t format, unsigned int samplerate)
 {
-	if (sampled != NULL)
-		ctx->sampled = sampled;
-
 	unsigned char samplesize = 4;
 	unsigned char shift = 24;
 	unsigned char nchannels = 2;

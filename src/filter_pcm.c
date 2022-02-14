@@ -38,9 +38,12 @@ typedef   signed long sample_t;
 #endif
 
 typedef struct filter_ctx_s filter_ctx_t;
+typedef struct filter_audio_s filter_audio_t;
+typedef sample_t (*sample_get_t)(filter_ctx_t *ctx, filter_audio_t *audio, int channel, unsigned int index);
 typedef int (*sampled_t)(filter_ctx_t *ctx, sample_t sample, int bitspersample, unsigned char *out);
 struct filter_ctx_s
 {
+	sample_get_t get;
 	sampled_t sampled;
 	unsigned int samplerate;
 	unsigned char samplesize;
@@ -214,7 +217,39 @@ static sample_t filter_boost(int regain, sample_t sample, int bitspersample)
 	return sample;
 }
 
-static int filter_interleave(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *buffer, size_t size)
+static sample_t filter_get(filter_ctx_t *ctx, filter_audio_t *audio, int channel, unsigned int index)
+{
+	return audio->samples[(channel % audio->nchannels)][index];
+}
+
+#ifdef FILTER_ONECHANNEL
+static sample_t filter_mono(filter_ctx_t *ctx, filter_audio_t *audio, int channel, unsigned int index)
+{
+	return audio->samples[ctx->channel][index];
+}
+#endif
+
+#ifdef FILTER_MIXED
+static sample_t filter_mix(filter_ctx_t *ctx, filter_audio_t *audio, int channel, unsigned int index)
+{
+	static sample_t sample = 0;
+	if (channel == 0)
+		sample = 0;
+	else
+		return sample;
+	/**
+	 * this is not the good algo to mixe the channels
+	 */
+	int j;
+	for (j = 0; j < audio->nchannels; j++)
+	{
+		sample += (audio->samples[j][index] / audio->nchannels);
+	}
+	return sample;
+}
+#endif
+
+static int filter_run(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *buffer, size_t size, sample_get_t get)
 {
 	int j;
 	int i;
@@ -227,10 +262,7 @@ static int filter_interleave(filter_ctx_t *ctx, filter_audio_t *audio, unsigned 
 			if (bufferlen >= size)
 				goto filter_exit;
 
-			if (j < audio->nchannels)
-				sample = audio->samples[(j % audio->nchannels)][i];
-			else
-				sample = audio->samples[0][i];
+			sample = get(ctx, audio, j, i);
 			if (audio->regain != 0)
 				sample = filter_boost(audio->regain, sample, audio->bitspersample);
 			int len = ctx->sampled(ctx, sample, audio->bitspersample,
@@ -245,73 +277,22 @@ filter_exit:
 	return bufferlen;
 }
 
-#ifdef FILTER_MIXED
-static int filter_mixemono(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *buffer, size_t size)
+static int filter_interleave(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *buffer, size_t size)
 {
-	int j;
-	int i;
-	int bufferlen = 0;
+	return filter_run(ctx, audio, buffer, size, filter_get);
+}
 
-	for (i = 0; i < audio->nsamples; i++)
-	{
-		/**
-		 * this is not the good algo to mixe the channels
-		 */
-		long long sample = 0;
-		for (j = 0; j < audio->nchannels; j++)
-		{
-			sample += (audio->samples[j][i] / audio->nchannels);
-		}
-		for (j = 0; j < ctx->nchannels; j++)
-		{
-			if (audio->regain != 0)
-				sample = filter_boost(audio->regain, sample, audio->bitspersample);
-			int len = ctx->sampled(ctx, sample, audio->bitspersample,
-						buffer + bufferlen);
-			bufferlen += len;
-			if (bufferlen >= size)
-				goto filter_exit;
-		}
-		if (bufferlen >= size)
-			goto filter_exit;
-	}
-filter_exit:
-	audio->nsamples -= i;
-	for (j = 0; j < audio->nchannels; j++)
-		audio->samples[j] += i;
-	return bufferlen;
+#ifdef FILTER_MIXED
+static int filter_mixedmono(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *buffer, size_t size)
+{
+	return filter_run(ctx, audio, buffer, size, filter_mix);
 }
 #endif
 
 #ifdef FILTER_ONECHANNEL
-static int filter_mono(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *buffer, size_t size)
+static int filter_channelmono(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *buffer, size_t size)
 {
-	int j;
-	int i;
-	int bufferlen = 0;
-
-	for (i = 0; i < audio->nsamples; i++)
-	{
-		sample_t sample;
-		for (j = 0; j < ctx->nchannels; j++)
-		{
-			sample = audio->samples[ctx->channel][i];
-			if (audio->regain != 0)
-				sample = filter_boost(audio->regain, sample, audio->bitspersample);
-			int len = ctx->sampled(ctx, sample, audio->bitspersample,
-						buffer + bufferlen);
-			bufferlen += len;
-			if (bufferlen >= size)
-				goto filter_exit;
-		}
-		if (bufferlen >= size)
-			goto filter_exit;
-	}
-filter_exit:
-	audio->nsamples -= i;
-	for (j = 0; j < audio->nchannels; j++)
-		audio->samples[j] += i;
-	return bufferlen;
+	return filter_run(ctx, audio, buffer, size, filter_mono);
 }
 
 #endif
@@ -332,7 +313,7 @@ const filter_ops_t *filter_pcm_mixed = &(filter_ops_t)
 	.name = "pcm_mixed",
 	.init = filter_init,
 	.set = filter_set,
-	.run = filter_mixemono,
+	.run = filter_mixedmono,
 	.destroy = filter_destroy,
 };
 #endif
@@ -343,7 +324,7 @@ const filter_ops_t *filter_pcm_left = &(filter_ops_t)
 	.name = "pcm_left",
 	.init = filter_init_left,
 	.set = filter_set,
-	.run = filter_mono,
+	.run = filter_channelmono,
 	.destroy = filter_destroy,
 };
 
@@ -352,7 +333,7 @@ const filter_ops_t *filter_pcm_right = &(filter_ops_t)
 	.name = "pcm_right",
 	.init = filter_init_right,
 	.set = filter_set,
-	.run = filter_mono,
+	.run = filter_channelmono,
 	.destroy = filter_destroy,
 };
 #endif

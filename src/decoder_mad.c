@@ -353,7 +353,8 @@ static decoder_ctx_t *_decoder_init(player_ctx_t *player)
 static int _decoder_prepare(decoder_ctx_t *ctx, const char *info)
 {
 	decoder_dbg("decoder: prepare");
-	ctx->boost = media_boost(info);
+	if (info != NULL)
+		ctx->boost = media_boost(info);
 	return 0;
 }
 
@@ -487,6 +488,7 @@ const decoder_ops_t _decoder_mad =
 	.name = "mad",
 	.check = _decoder_check,
 	.init = _decoder_init,
+	.prepare = _decoder_prepare,
 	.jitter = _decoder_jitter,
 	.run = _decoder_run,
 	.position = _decoder_position,

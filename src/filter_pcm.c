@@ -80,54 +80,29 @@ static sample_t filter_mono(filter_ctx_t *ctx, filter_audio_t *audio, int channe
 static sample_t filter_mix(filter_ctx_t *ctx, filter_audio_t *audio, int channel, unsigned int index);
 #endif
 
-static filter_ctx_t *filter_init(jitter_format_t format,...);
-static int filter_set(filter_ctx_t *ctx, jitter_format_t format, unsigned int samplerate);
+static filter_ctx_t *filter_init(jitter_format_t format);
+static int filter_set(filter_ctx_t *ctx,...);
+static int filter_setoptions(filter_ctx_t *ctx, va_list params);
 static void filter_destroy(filter_ctx_t *ctx);
 
-static filter_ctx_t *filter_init(jitter_format_t format,...)
+static filter_ctx_t *filter_init(jitter_format_t format)
 {
 	filter_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->get = filter_get;
-	sampled_ctx_t *sampleditem = NULL;
 
-	va_list params;
-	va_start(params, format);
-	int code = (int) va_arg(params, int);
-	while (code != 0)
-	{
-		switch(code)
-		{
-		case FILTER_SAMPLED:
-			sampleditem = calloc(1, sizeof(*ctx->sampled));
-			sampleditem->next = ctx->sampled;
-			ctx->sampled = sampleditem;
-			ctx->sampled->cb = (sampled_t) va_arg(params, sampled_t);
-			ctx->sampled->arg = (void *) va_arg(params, void *);
-		break;
-#ifdef FILTER_ONECHANNEL
-		case FILTER_MONOLEFT:
-			ctx->channel = 0;
-			ctx->get = filter_mono;
-		break;
-		case FILTER_MONORIGHT:
-			ctx->channel = 1;
-			ctx->get = filter_mono;
-		break;
-#endif
-#ifdef FILTER_MIXED
-		case FILTER_MONOMIXED:
-			ctx->get = filter_mix;
-		break;
-#endif
-		}
-		code = (int) va_arg(params, int);
-	}
-	va_end(params);
-	filter_set(ctx, format, 44100);
+	filter_set(ctx, FILTER_FORMAT, format, FILTER_SAMPLERATE, 44100, 0);
 	return ctx;
 }
 
-static int filter_set(filter_ctx_t *ctx, jitter_format_t format, unsigned int samplerate)
+static int filter_set(filter_ctx_t *ctx, ...)
+{
+	va_list params;
+	va_start(params, ctx);
+	filter_setoptions(ctx, params);
+	va_end(params);
+}
+
+static int filter_setformat(filter_ctx_t *ctx, jitter_format_t format)
 {
 	unsigned char samplesize = 4;
 	unsigned char shift = 24;
@@ -172,8 +147,49 @@ static int filter_set(filter_ctx_t *ctx, jitter_format_t format, unsigned int sa
 	ctx->samplesize = samplesize;
 	ctx->shift = shift;
 	ctx->nchannels = nchannels;
-	ctx->samplerate = samplerate;
 	return 0;
+}
+
+static int filter_setoptions(filter_ctx_t *ctx, va_list params)
+{
+	sampled_ctx_t *sampleditem = NULL;
+	int code = (int) va_arg(params, int);
+	while (code != 0)
+	{
+		switch(code)
+		{
+		case FILTER_SAMPLED:
+			sampleditem = calloc(1, sizeof(*ctx->sampled));
+			sampleditem->next = ctx->sampled;
+			ctx->sampled = sampleditem;
+			ctx->sampled->cb = (sampled_t) va_arg(params, sampled_t);
+			ctx->sampled->arg = (void *) va_arg(params, void *);
+		break;
+#ifdef FILTER_ONECHANNEL
+		case FILTER_MONOLEFT:
+			ctx->channel = 0;
+			ctx->get = filter_mono;
+		break;
+		case FILTER_MONORIGHT:
+			ctx->channel = 1;
+			ctx->get = filter_mono;
+		break;
+#endif
+#ifdef FILTER_MIXED
+		case FILTER_MONOMIXED:
+			ctx->get = filter_mix;
+		break;
+#endif
+		case FILTER_FORMAT:
+			filter_setformat(ctx, (jitter_format_t) va_arg(params, jitter_format_t));
+		break;
+		case FILTER_SAMPLERATE:
+			ctx->samplerate = (unsigned int) va_arg(params, unsigned int);
+		break;
+		}
+		code = (int) va_arg(params, int);
+	}
+	va_end(params);
 }
 
 static void filter_destroy(filter_ctx_t *ctx)

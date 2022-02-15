@@ -497,10 +497,9 @@ filter_t *player_filter(player_ctx_t *ctx, jitter_format_t format, sampled_t sam
 {
 	filter_t *filter = calloc(1, sizeof (*filter));
 	filter->ops = ctx->filterops;
+	filter->ctx = filter->ops->init(format);
 	if (sampled != NULL)
-		filter->ctx = filter->ops->init(format, FILTER_SAMPLED, sampled, arg, 0);
-	else
-		filter->ctx = filter->ops->init(format, 0);
+		filter->ops->set(filter->ctx, FILTER_SAMPLED, sampled, arg, 0);
 	return filter;
 }
 

@@ -356,6 +356,7 @@ static int _decoder_prepare(decoder_ctx_t *ctx, const char *info)
 	ctx->boost = media_boost(info);
 	return 0;
 }
+
 static jitter_t *_decoder_jitter(decoder_ctx_t *ctx, jitte_t jitte)
 {
 	if (ctx->in == NULL)
@@ -416,7 +417,7 @@ static int _decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 	int ret = 0;
 	ctx->out = jitter;
 	if (ctx->filter)
-		ret = ctx->filter->ops->set(ctx->filter->ctx, jitter->format, jitter->ctx->frequence);
+		ret = ctx->filter->ops->set(ctx->filter->ctx, FILTER_FORMAT, jitter->format, FILTER_SAMPLERATE, jitter->ctx->frequence, 0);
 #ifdef DECODER_HEARTBEAT
 	if (heartbeat_samples)
 	{

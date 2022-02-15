@@ -86,7 +86,7 @@ static decoder_ctx_t *_decoder_init(player_ctx_t *player)
 	ctx->samplerate = DEFAULT_SAMPLERATE;
 	ctx->player = player;
 
-	ctx->filter = player_filter(player, PCM_24bits4_LE_stereo, NULL, NULL);
+	ctx->filter = player_filter(player, PCM_24bits4_LE_stereo);
 
 	ctx->decoder = FLAC__stream_decoder_new();
 	if (ctx->decoder == NULL)
@@ -296,7 +296,7 @@ static int _decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 	 * Because we need the jitter out.
 	 */
 	if (ctx->filter)
-		ret = ctx->filter->ops->set(ctx->filter->ctx, jitter->format, jitter->ctx->frequence);
+		ret = ctx->filter->ops->set(ctx->filter->ctx, FILTER_FORMAT, jitter->format, FILTER_SAMPLERATE, jitter->ctx->frequence, 0);
 	if (ret == 0)
 		pthread_create(&ctx->thread, NULL, _decoder_thread, ctx);
 	return ret;

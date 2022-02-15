@@ -242,10 +242,13 @@ static void _player_new_es(player_ctx_t *ctx, void *eventarg)
 	event_data->decoder = decoder_build(ctx, event_data->mime);
 	if (event_data->decoder == NULL)
 		err("player: decoder not found for %s", event_data->mime);
-	else {
+	else
+	{
 		src->ops->attach(src->ctx, event_data->pid, event_data->decoder);
 		if (event_data->decoder->ops->prepare)
+		{
 			event_data->decoder->ops->prepare(event_data->decoder->ctx, src->info);
+		}
 	}
 }
 
@@ -493,13 +496,11 @@ void player_sendevent(player_ctx_t *ctx, event_t event, void *data)
 	}
 }
 
-filter_t *player_filter(player_ctx_t *ctx, jitter_format_t format, sampled_t sampled, void *arg)
+filter_t *player_filter(player_ctx_t *ctx, jitter_format_t format)
 {
 	filter_t *filter = calloc(1, sizeof (*filter));
 	filter->ops = ctx->filterops;
 	filter->ctx = filter->ops->init(format);
-	if (sampled != NULL)
-		filter->ops->set(filter->ctx, FILTER_SAMPLED, sampled, arg, 0);
 	return filter;
 }
 

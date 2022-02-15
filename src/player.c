@@ -73,8 +73,6 @@ struct player_ctx_s
 	jitter_t *outstream[MAX_ESTREAM];
 	int noutstreams;
 
-	// filters
-	boost_t boost;
 };
 
 player_ctx_t *player_init(const char *filtername)
@@ -242,11 +240,13 @@ static void _player_new_es(player_ctx_t *ctx, void *eventarg)
 	event_new_es_t *event_data = (event_new_es_t *)eventarg;
 	const src_t *src = event_data->src;
 	warn("player: decoder build");
-	event_data->decoder = decoder_build(ctx, event_data->mime);
-	if (event_data->decoder == NULL)
+	decoder_t *decoder;
+	decoder = decoder_build(ctx, event_data->mime);
+	if (decoder == NULL)
 		err("player: decoder not found for %s", event_data->mime);
 	else
 	{
+		event_data->decoder = decoder;
 		src->ops->attach(src->ctx, event_data->pid, event_data->decoder);
 		jitter_t *outstream = NULL;
 		int i;
@@ -259,10 +259,10 @@ static void _player_new_es(player_ctx_t *ctx, void *eventarg)
 		filter_t *filter = NULL;
 		if (i < ctx->noutstreams)
 			filter = player_filter(ctx, outstream->format);
-		event_data->decoder->filter = filter;
-		if (event_data->decoder->ops->prepare)
+		decoder->filter = filter;
+		if (decoder->ops->prepare)
 		{
-			event_data->decoder->ops->prepare(event_data->decoder->ctx, event_data->decoder->filter, src->info);
+			decoder->ops->prepare(decoder->ctx, filter, src->info);
 		}
 		if (filter)
 		{
@@ -271,7 +271,7 @@ static void _player_new_es(player_ctx_t *ctx, void *eventarg)
 				replaygain = media_boost(src->info);
 			if (replaygain > 0)
 			{
-				boost_t *boost = boost_init(&ctx->boost, replaygain);
+				boost_t *boost = boost_init(&decoder->boost, replaygain);
 				filter->ops->set(filter->ctx, FILTER_SAMPLED, boost_cb, boost);
 			}
 		}

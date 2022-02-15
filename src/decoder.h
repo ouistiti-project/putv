@@ -32,6 +32,7 @@ struct decoder_s
 	const decoder_ops_t *ops;
 	decoder_ctx_t *ctx;
 	filter_t *filter;
+	boost_t boost;
 };
 
 decoder_t *decoder_build(player_ctx_t *player, const char *mime);

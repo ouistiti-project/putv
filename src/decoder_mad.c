@@ -342,25 +342,27 @@ static decoder_ctx_t *_decoder_init(player_ctx_t *player)
 	ctx->ops = decoder_mad;
 	ctx->player = player;
 
-	ctx->filter = player_filter(player, PCM_24bits4_LE_stereo);
-	if (ctx->filter != NULL)
-		ctx->filter->ops->set(ctx->filter->ctx, FILTER_SAMPLED, scale_sample, NULL);
 	mad_decoder_init(&ctx->decoder, ctx,
 			input, header /* header */, 0 /* filter */, output,
 			error, 0 /* message */);
 	return ctx;
 }
 
-static int _decoder_prepare(decoder_ctx_t *ctx, const char *info)
+static int _decoder_prepare(decoder_ctx_t *ctx, filter_t *filter, const char *info)
 {
 	decoder_dbg("decoder: prepare");
-	int replaygain = 0;
-	if (info != NULL)
-		replaygain = media_boost(info);
-	if (replaygain > 0)
+	ctx->filter = filter;
+	if (ctx->filter != NULL)
 	{
-		boost_t *boost = boost_init(&ctx->boost, replaygain);
-		ctx->filter->ops->set(ctx->filter->ctx, FILTER_SAMPLED, boost_cb, boost);
+		ctx->filter->ops->set(ctx->filter->ctx, FILTER_SAMPLED, scale_sample, NULL);
+		int replaygain = 0;
+		if (info != NULL)
+			replaygain = media_boost(info);
+		if (replaygain > 0)
+		{
+			boost_t *boost = boost_init(&ctx->boost, replaygain);
+			ctx->filter->ops->set(ctx->filter->ctx, FILTER_SAMPLED, boost_cb, boost);
+		}
 	}
 	return 0;
 }

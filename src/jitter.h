@@ -62,9 +62,12 @@ struct jitter_ops_s
 	void (*pause)(jitter_ctx_t *jitter, int enable);
 };
 
+#define JITTER_AUDIO 0x80000000
+#define JITTER_VIDEO 0xC0000000
+#define JITTER_OTHER 0xE0000000
 typedef enum jitter_format_e
 {
-	PCM_8bits_mono,
+	PCM_8bits_mono = JITTER_AUDIO,
 	PCM_16bits_LE_mono,
 	PCM_16bits_LE_stereo,
 	PCM_24bits3_LE_stereo,
@@ -73,10 +76,10 @@ typedef enum jitter_format_e
 	PCM_32bits_BE_stereo,
 	MPEG2_3_MP3,
 	FLAC,
-	MPEG2_1,
+	MPEG2_1 = 0xC0000000,
 	MPEG2_2,
 	DVB_frame,
-	SINK_BITSSTREAM,
+	SINK_BITSSTREAM = 0xE0000000,
 } jitter_format_t;
 
 typedef struct jitter_s jitter_t;

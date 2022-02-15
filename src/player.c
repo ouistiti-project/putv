@@ -245,9 +245,19 @@ static void _player_new_es(player_ctx_t *ctx, void *eventarg)
 	else
 	{
 		src->ops->attach(src->ctx, event_data->pid, event_data->decoder);
+		jitter_t *outstream = NULL;
+		int i;
+		for ( i = 0; i < ctx->noutstreams; i++)
+		{
+			outstream = ctx->outstream[i];
+			if (outstream->format & JITTER_AUDIO)
+				break;
+		}
+		if (i < ctx->noutstreams)
+			event_data->decoder->filter = player_filter(ctx, outstream->format);
 		if (event_data->decoder->ops->prepare)
 		{
-			event_data->decoder->ops->prepare(event_data->decoder->ctx, src->info);
+			event_data->decoder->ops->prepare(event_data->decoder->ctx, event_data->decoder->filter, src->info);
 		}
 	}
 }

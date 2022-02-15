@@ -86,8 +86,6 @@ static decoder_ctx_t *_decoder_init(player_ctx_t *player)
 	ctx->samplerate = DEFAULT_SAMPLERATE;
 	ctx->player = player;
 
-	ctx->filter = player_filter(player, PCM_24bits4_LE_stereo);
-
 	ctx->decoder = FLAC__stream_decoder_new();
 	if (ctx->decoder == NULL)
 	{
@@ -262,9 +260,11 @@ static int _decoder_check(const char *path)
 	return 0;
 }
 
-static int _decoder_prepare(decoder_ctx_t *ctx, const char *info)
+static int _decoder_prepare(decoder_ctx_t *ctx, filter_t *filter, const char *info)
 {
 	decoder_dbg("decoder: prepare");
+	ctx->filter = filter;
+
 	int ret;
 	FLAC__stream_decoder_set_metadata_ignore(ctx->decoder, FLAC__METADATA_TYPE_PADDING);
 	FLAC__stream_decoder_set_metadata_ignore(ctx->decoder, FLAC__METADATA_TYPE_VORBIS_COMMENT);

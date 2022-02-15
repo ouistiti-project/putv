@@ -72,6 +72,9 @@ struct player_ctx_s
 
 	jitter_t *outstream[MAX_ESTREAM];
 	int noutstreams;
+
+	// filters
+	boost_t boost;
 };
 
 player_ctx_t *player_init(const char *filtername)
@@ -253,11 +256,24 @@ static void _player_new_es(player_ctx_t *ctx, void *eventarg)
 			if (outstream->format & JITTER_AUDIO)
 				break;
 		}
+		filter_t *filter = NULL;
 		if (i < ctx->noutstreams)
-			event_data->decoder->filter = player_filter(ctx, outstream->format);
+			filter = player_filter(ctx, outstream->format);
+		event_data->decoder->filter = filter;
 		if (event_data->decoder->ops->prepare)
 		{
 			event_data->decoder->ops->prepare(event_data->decoder->ctx, event_data->decoder->filter, src->info);
+		}
+		if (filter)
+		{
+			int replaygain = 0;
+			if (src->info != NULL)
+				replaygain = media_boost(src->info);
+			if (replaygain > 0)
+			{
+				boost_t *boost = boost_init(&ctx->boost, replaygain);
+				filter->ops->set(filter->ctx, FILTER_SAMPLED, boost_cb, boost);
+			}
 		}
 	}
 }

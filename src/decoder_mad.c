@@ -64,7 +64,6 @@ struct decoder_ctx_s
 	beat_samples_t beat;
 	mad_timer_t position;
 	unsigned int nloops;
-	boost_t boost;
 };
 #define DECODER_CTX
 #include "decoder.h"
@@ -355,14 +354,6 @@ static int _decoder_prepare(decoder_ctx_t *ctx, filter_t *filter, const char *in
 	if (ctx->filter != NULL)
 	{
 		ctx->filter->ops->set(ctx->filter->ctx, FILTER_SAMPLED, scale_sample, NULL);
-		int replaygain = 0;
-		if (info != NULL)
-			replaygain = media_boost(info);
-		if (replaygain > 0)
-		{
-			boost_t *boost = boost_init(&ctx->boost, replaygain);
-			ctx->filter->ops->set(ctx->filter->ctx, FILTER_SAMPLED, boost_cb, boost);
-		}
 	}
 	return 0;
 }

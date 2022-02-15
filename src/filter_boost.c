@@ -54,7 +54,7 @@ sample_t boost_cb(void *arg, sample_t sample, int bitspersample)
 
 static sample_t boost_increase(boost_t *ctx, sample_t sample, int bitspersample)
 {
-	sample_t mask = 1 << (bitspersample - 2);
+	sample_t mask = (((sample_t)1) << (bitspersample - 2));
 	sample_t lead = sample & mask;
 	sample = (sample << ctx->rgshift) & ~mask;
 	sample |= lead;

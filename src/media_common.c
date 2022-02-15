@@ -599,9 +599,9 @@ const char *media_parseinfo(const char *info, const char *key)
 unsigned int media_boost(const char *info)
 {
 	const char *sboost = media_parseinfo(info, str_regain);
-	unsigned int boost = strtol(sboost, NULL, 10);
-	if (boost > 2)
-		boost = 2;
+	unsigned int boost = 0;
+	if (sboost != NULL)
+		boost = strtol(sboost, NULL, 10);
 	return boost;
 }
 

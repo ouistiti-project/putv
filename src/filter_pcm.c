@@ -1,5 +1,5 @@
 /*****************************************************************************
- * jitter_ring.c
+ * filter_pcm.c
  * this file is part of https://github.com/ouistiti-project/putv
  *****************************************************************************
  * Copyright (C) 2016-2017
@@ -230,15 +230,6 @@ int sampled_change(filter_ctx_t *ctx, sample_t sample, int bitspersample, unsign
 	return ctx->samplesize;
 }
 
-static sample_t filter_boost(int regain, sample_t sample, int bitspersample)
-{
-	long mask = 1 << (bitspersample - 2);
-
-	sample = (sample << regain) & ~mask;
-	sample |= mask;
-	return sample;
-}
-
 static sample_t filter_get(filter_ctx_t *ctx, filter_audio_t *audio, int channel, unsigned int index)
 {
 	return audio->samples[(channel % audio->nchannels)][index];
@@ -285,8 +276,6 @@ static int filter_run(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *b
 				goto filter_exit;
 
 			sample = get(ctx, audio, j, i);
-			if (audio->regain != 0)
-				sample = filter_boost(audio->regain, sample, audio->bitspersample);
 			int len = sampled_change(ctx, sample, audio->bitspersample,
 						buffer + bufferlen);
 			bufferlen += len;

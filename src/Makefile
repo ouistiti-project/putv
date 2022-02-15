@@ -24,6 +24,7 @@ putv_SOURCES+=decoder_common.c
 putv_SOURCES+=sink_common.c
 
 putv_SOURCES+=filter_pcm.c
+putv_SOURCES+=filter_boost.c
 
 putv_SOURCES-$(MEDIA_SQLITE)+=media_sqlite.c
 putv_LIBRARY-$(MEDIA_SQLITE)+=sqlite3

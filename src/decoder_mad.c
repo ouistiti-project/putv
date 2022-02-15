@@ -64,7 +64,7 @@ struct decoder_ctx_s
 	beat_samples_t beat;
 	mad_timer_t position;
 	unsigned int nloops;
-	int boost;
+	boost_t boost;
 };
 #define DECODER_CTX
 #include "decoder.h"
@@ -194,7 +194,6 @@ enum mad_flow output(void *data,
 	audio.nchannels = pcm->channels;
 	audio.nsamples = pcm->length;
 	audio.bitspersample = 24;
-	audio.regain = ctx->boost / 3;
 	int i;
 	for (i = 0; i < audio.nchannels && i < MAXCHANNELS; i++)
 	{
@@ -355,8 +354,14 @@ static decoder_ctx_t *_decoder_init(player_ctx_t *player)
 static int _decoder_prepare(decoder_ctx_t *ctx, const char *info)
 {
 	decoder_dbg("decoder: prepare");
+	int replaygain = 0;
 	if (info != NULL)
-		ctx->boost = media_boost(info);
+		replaygain = media_boost(info);
+	if (replaygain > 0)
+	{
+		boost_t *boost = boost_init(&ctx->boost, replaygain);
+		ctx->filter->ops->set(ctx->filter->ctx, FILTER_SAMPLED, boost_cb, boost);
+	}
 	return 0;
 }
 

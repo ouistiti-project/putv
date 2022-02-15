@@ -55,4 +55,15 @@ struct filter_s
 
 const filter_ops_t *filter_build(const char *name);
 
+typedef struct boost_s boost_t;
+struct boost_s
+{
+	int replaygain;
+	int rgshift;
+	float coef;
+	sample_t (*cb)(boost_t *ctx, sample_t sample, int bitspersample);
+};
+boost_t *boost_init(boost_t *input, int db);
+sample_t boost_cb(void *arg, sample_t sample, int bitspersample);
+
 #endif

@@ -69,7 +69,7 @@ struct boost_s
 	sample_t (*cb)(boost_t *ctx, sample_t sample, int bitspersample, int channel);
 };
 boost_t *boost_init(boost_t *input, int db);
-sample_t boost_cb(void *arg, sample_t sample, int bitspersample);
+sample_t boost_cb(void *arg, sample_t sample, int bitspersample, int channel);
 
 /**
  * statistics filter sampled

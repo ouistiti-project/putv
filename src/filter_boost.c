@@ -41,9 +41,9 @@
 
 #define filter_dbg(...)
 
-static sample_t boost_increase(boost_t *ctx, sample_t sample, int bitspersample);
-static sample_t boost_decrease(boost_t *ctx, sample_t sample, int bitspersample);
-static sample_t boost_multi(boost_t *ctx, sample_t sample, int bitspersample);
+static sample_t boost_increase(boost_t *ctx, sample_t sample, int bitspersample, int channel);
+static sample_t boost_decrease(boost_t *ctx, sample_t sample, int bitspersample, int channel);
+static sample_t boost_multi(boost_t *ctx, sample_t sample, int bitspersample, int channel);
 
 boost_t *boost_init(boost_t *input, int db)
 {
@@ -56,13 +56,13 @@ boost_t *boost_init(boost_t *input, int db)
 	return input;
 }
 
-sample_t boost_cb(void *arg, sample_t sample, int bitspersample)
+sample_t boost_cb(void *arg, sample_t sample, int bitspersample, int channel)
 {
 	boost_t *ctx = (boost_t *)arg;
-	return ctx->cb(ctx, sample, bitspersample);
+	return ctx->cb(ctx, sample, bitspersample, channel);
 }
 
-static sample_t boost_increase(boost_t *ctx, sample_t sample, int bitspersample)
+static sample_t boost_increase(boost_t *ctx, sample_t sample, int bitspersample, int channel)
 {
 	sample_t mask = (((sample_t)0xFFFF) << (bitspersample - 1));
 	sample_t lead = sample & mask;
@@ -71,7 +71,7 @@ static sample_t boost_increase(boost_t *ctx, sample_t sample, int bitspersample)
 	return sample;
 }
 
-static sample_t boost_decrease(boost_t *ctx, sample_t sample, int bitspersample)
+static sample_t boost_decrease(boost_t *ctx, sample_t sample, int bitspersample, int channel)
 {
 	sample_t mask = (((sample_t)0xFFFF) << (bitspersample - 1));
 	sample_t lead = sample & mask;
@@ -80,7 +80,7 @@ static sample_t boost_decrease(boost_t *ctx, sample_t sample, int bitspersample)
 	return sample;
 }
 
-static sample_t boost_multi(boost_t *ctx, sample_t sample, int bitspersample)
+static sample_t boost_multi(boost_t *ctx, sample_t sample, int bitspersample, int channel)
 {
 	sample += (sample * ctx->coef);
 	return sample;

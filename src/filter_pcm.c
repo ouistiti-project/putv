@@ -30,6 +30,8 @@
 #include <string.h>
 #include <stdarg.h>
 
+#include "media.h"
+
 # define SIZEOF_INT 4
 
 #if SIZEOF_INT >= 4
@@ -166,16 +168,6 @@ static int filter_setoptions(filter_ctx_t *ctx, va_list params)
 			ctx->sampled->cb = (sampled_t) va_arg(params, sampled_t);
 			ctx->sampled->arg = (void *) va_arg(params, void *);
 		break;
-#ifdef FILTER_ONECHANNEL
-		case FILTER_MONOLEFT:
-			ctx->channel = 0;
-			ctx->get = filter_mono;
-		break;
-		case FILTER_MONORIGHT:
-			ctx->channel = 1;
-			ctx->get = filter_mono;
-		break;
-#endif
 #ifdef FILTER_MIXED
 		case FILTER_MONOMIXED:
 			ctx->get = filter_mix;
@@ -237,13 +229,6 @@ static sample_t filter_get(filter_ctx_t *ctx, filter_audio_t *audio, int channel
 	return audio->samples[(channel % audio->nchannels)][index];
 }
 
-#ifdef FILTER_ONECHANNEL
-static sample_t filter_mono(filter_ctx_t *ctx, filter_audio_t *audio, int channel, unsigned int index)
-{
-	return audio->samples[ctx->channel][index];
-}
-#endif
-
 #ifdef FILTER_MIXED
 static sample_t filter_mix(filter_ctx_t *ctx, filter_audio_t *audio, int channel, unsigned int index)
 {
@@ -302,17 +287,9 @@ static int filter_mixedmono(filter_ctx_t *ctx, filter_audio_t *audio, unsigned c
 }
 #endif
 
-#ifdef FILTER_ONECHANNEL
-static int filter_channelmono(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *buffer, size_t size)
+const filter_ops_t *filter_pcm = &(filter_ops_t)
 {
-	return filter_run(ctx, audio, buffer, size, filter_mono);
-}
-
-#endif
-
-const filter_ops_t *filter_pcm_interleave = &(filter_ops_t)
-{
-	.name = "pcm_stereo",
+	.name = "pcm",
 	.init = filter_init,
 	.set = filter_set,
 	.run = filter_interleave,
@@ -323,7 +300,7 @@ const filter_ops_t *filter_pcm_interleave = &(filter_ops_t)
 #ifdef FILTER_MIXED
 const filter_ops_t *filter_pcm_mixed = &(filter_ops_t)
 {
-	.name = "pcm_mixed",
+	.name = "mixed",
 	.init = filter_init,
 	.set = filter_set,
 	.run = filter_mixedmono,
@@ -331,40 +308,64 @@ const filter_ops_t *filter_pcm_mixed = &(filter_ops_t)
 };
 #endif
 
-#ifdef FILTER_ONECHANNEL
-const filter_ops_t *filter_pcm_left = &(filter_ops_t)
+static filter_t *_filter_build_pcm(const char *query, jitter_t *jitter, const char *info, const filter_ops_t *filterops)
 {
-	.name = "pcm_left",
-	.init = filter_init,
-	.set = filter_set,
-	.run = filter_channelmono,
-	.destroy = filter_destroy,
-};
+	filter_t *filter = calloc(1, sizeof (*filter));
+	jitter_format_t format = jitter->format;
+	int samplerate = jitter_samplerate(jitter);
 
-const filter_ops_t *filter_pcm_right = &(filter_ops_t)
-{
-	.name = "pcm_right",
-	.init = filter_init,
-	.set = filter_set,
-	.run = filter_channelmono,
-	.destroy = filter_destroy,
-};
+	filter->ops = filterops;
+	filter->ctx = filter->ops->init(format, samplerate);
+
+	int replaygain = 0;
+	if (info != NULL)
+		replaygain = media_boost(info);
+	if (replaygain > 0)
+	{
+		boost_t *boost = boost_init(&filter->boost, replaygain);
+		filter->ops->set(filter->ctx, FILTER_SAMPLED, boost_cb, boost);
+	}
+
+#ifdef FILTER_STATS
+	if (query && strstr(query, "stats") != NULL)
+	{
+		stats_t *stats = stats_init(&filter->stats);
+		filter->ops->set(filter->ctx, FILTER_SAMPLED, stats_cb, stats);
+	}
 #endif
 
-const filter_ops_t *filter_build(const char *name)
+#ifdef FILTER_ONECHANNEL
+	if (query && strstr(query, "mono=left") != NULL)
+	{
+		mono_t *mono = mono_init(&filter->mono, 0);
+		filter->ops->set(filter->ctx, FILTER_SAMPLED, mono_cb, mono);
+	}
+	if (query && strstr(query, "mono=right") != NULL)
+	{
+		mono_t *mono = mono_init(&filter->mono, 1);
+		filter->ops->set(filter->ctx, FILTER_SAMPLED, mono_cb, mono);
+	}
+#endif
+
+	return filter;
+}
+
+filter_t *filter_build(const char *name, jitter_t *jitter, const char *info)
 {
-	const filter_ops_t *filterops = NULL;
-	if (!strcmp(name, filter_pcm_interleave->name))
-		filterops = filter_pcm_interleave;
+	filter_t *filter = NULL;
+	const char *query = strchr(name, '?');
+	int length = strlen(name);
+	if (query)
+	{
+		length = query - name;
+		query++;
+	}
+	if (!strncmp(name, filter_pcm->name, length))
+		filter = _filter_build_pcm(query, jitter, info, filter_pcm);
 #ifdef FILTER_MIXED
-	if (!strcmp(name, filter_pcm_mixed->name))
-		filterops = filter_pcm_mixed;
+	if (!strncmp(name, filter_pcm_mixed->name, length))
+		filter = _filter_build_pcm(query, jitter, info, filter_pcm_mixed);
 #endif
-#ifdef FILTER_ONECHANNEL
-	if (!strcmp(name, filter_pcm_left->name))
-		filterops = filter_pcm_left;
-	if (!strcmp(name, filter_pcm_right->name))
-		filterops = filter_pcm_right;
-#endif
-	return filterops;
+
+	return filter;
 }

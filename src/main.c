@@ -152,7 +152,7 @@ int main(int argc, char **argv)
 	const char *name = basename(argv[0]);
 	const char *user = NULL;
 	const char *pidfile = NULL;
-	const char *filtername = "pcm_stereo";
+	const char *filtername = "pcm";
 	const char *logfile = NULL;
 	const char *cwd = NULL;
 

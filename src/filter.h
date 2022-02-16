@@ -25,38 +25,6 @@ struct filter_audio_s
 	char regain;
 };
 
-
-#define FILTER_SAMPLED 1
-#define FILTER_MONOLEFT 2
-#define FILTER_MONORIGHT 3
-#define FILTER_MONOMIXED 4
-#define FILTER_FORMAT 5
-#define FILTER_SAMPLERATE 6
-
-#ifndef FILTER_CTX
-typedef void filter_ctx_t;
-#endif
-typedef sample_t (*sampled_t)(void * ctx, sample_t sample, int bitlength, int channel);
-
-typedef struct filter_ops_s filter_ops_t;
-struct filter_ops_s
-{
-	const char *name;
-	filter_ctx_t *(*init)(jitter_format_t format, int samplerate);
-	int (*set)(filter_ctx_t *ctx,...);
-	int (*run)(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *buffer, size_t size);
-	void (*destroy)(filter_ctx_t *);
-};
-
-typedef struct filter_s filter_t;
-struct filter_s
-{
-	const filter_ops_t *ops;
-	filter_ctx_t *ctx;
-};
-
-const filter_ops_t *filter_build(const char *name);
-
 /**
  * boost filter sampled
  */
@@ -98,4 +66,39 @@ struct stats_s
 
 stats_t *stats_init(stats_t *input);
 sample_t stats_cb(void *arg, sample_t sample, int bitspersample, int channel);
+
+#define FILTER_SAMPLED 1
+#define FILTER_FORMAT 2
+#define FILTER_SAMPLERATE 3
+#define FILTER_MONOMIXED 4
+
+#ifndef FILTER_CTX
+typedef void filter_ctx_t;
+#endif
+typedef sample_t (*sampled_t)(void * ctx, sample_t sample, int bitlength, int channel);
+
+typedef struct filter_ops_s filter_ops_t;
+struct filter_ops_s
+{
+	const char *name;
+	filter_ctx_t *(*init)(jitter_format_t format, int samplerate);
+	int (*set)(filter_ctx_t *ctx,...);
+	int (*run)(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *buffer, size_t size);
+	void (*destroy)(filter_ctx_t *);
+};
+
+typedef struct filter_s filter_t;
+struct filter_s
+{
+	const filter_ops_t *ops;
+	filter_ctx_t *ctx;
+	boost_t boost;
+#ifdef FILTER_STATS
+	stats_t stats;
+#endif
+	mono_t mono;
+};
+
+filter_t *filter_build(const char *name, jitter_t *jitter, const char *info);
+
 #endif

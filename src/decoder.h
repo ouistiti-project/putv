@@ -2,7 +2,6 @@
 #define __DECODER_H__
 
 #include "jitter.h"
-#include "filter.h"
 
 typedef struct player_ctx_s player_ctx_t;
 typedef struct jitter_s jitter_t;
@@ -32,11 +31,6 @@ struct decoder_s
 	const decoder_ops_t *ops;
 	decoder_ctx_t *ctx;
 	filter_t *filter;
-	boost_t boost;
-#ifdef FILTER_STATS
-	stats_t stats;
-#endif
-	mono_t mono;
 };
 
 decoder_t *decoder_build(player_ctx_t *player, const char *mime);

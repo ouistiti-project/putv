@@ -56,7 +56,7 @@ static void _player_autonext(void *arg, event_t event, void *eventarg);
 
 struct player_ctx_s
 {
-	const filter_ops_t *filterops;
+	const char *filtername;
 
 	media_t *media;
 	media_t *nextmedia;
@@ -77,18 +77,12 @@ struct player_ctx_s
 
 player_ctx_t *player_init(const char *filtername)
 {
-	const filter_ops_t *filterops = filter_build(filtername);
-	if (filterops == NULL)
-	{
-		err("filter %s not found", filtername);
-		return NULL;
-	}
 	player_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	pthread_mutex_init(&ctx->mutex, NULL);
 	pthread_cond_init(&ctx->cond, NULL);
 	pthread_cond_init(&ctx->cond_int, NULL);
 	ctx->state = STATE_STOP;
-	ctx->filterops = filterops;
+	ctx->filtername = filtername;
 	player_eventlistener(ctx, _player_autonext, ctx, "player");
 	return ctx;
 }
@@ -258,26 +252,8 @@ static void _player_new_es(player_ctx_t *ctx, void *eventarg)
 		}
 		filter_t *filter = NULL;
 		if (i < ctx->noutstreams)
-			filter = player_filter(ctx, outstream->format, jitter_samplerate(outstream));
+			filter = filter_build(ctx->filtername, outstream, src->info);
 		decoder->filter = filter;
-		if (filter)
-		{
-			int replaygain = 0;
-			if (src->info != NULL)
-				replaygain = media_boost(src->info);
-			if (replaygain > 0)
-			{
-				boost_t *boost = boost_init(&decoder->boost, replaygain);
-				filter->ops->set(filter->ctx, FILTER_SAMPLED, boost_cb, boost);
-			}
-
-#ifdef FILTER_STATS
-			stats_t *stats = stats_init(&decoder->stats);
-			filter->ops->set(filter->ctx, FILTER_SAMPLED, stats_cb, stats);
-#endif
-//			mono_t *mono = mono_init(&decoder->mono, 0);
-//			filter->ops->set(filter->ctx, FILTER_SAMPLED, mono_cb, mono);
-		}
 		if (decoder->ops->prepare)
 		{
 			decoder->ops->prepare(decoder->ctx, filter, src->info);
@@ -527,14 +503,6 @@ void player_sendevent(player_ctx_t *ctx, event_t event, void *data)
 		it->cb(it->arg, event, data);
 		it = it->next;
 	}
-}
-
-filter_t *player_filter(player_ctx_t *ctx, jitter_format_t format, int samplerate)
-{
-	filter_t *filter = calloc(1, sizeof (*filter));
-	filter->ops = ctx->filterops;
-	filter->ctx = filter->ops->init(format, samplerate);
-	return filter;
 }
 
 src_t *player_source(player_ctx_t *ctx)

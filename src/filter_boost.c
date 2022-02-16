@@ -31,6 +31,16 @@
 
 #include "filter.h"
 
+#define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
+#define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
+#ifdef DEBUG
+#define dbg(format, ...) fprintf(stderr, "\x1B[32m"format"\x1B[0m\n",  ##__VA_ARGS__)
+#else
+#define dbg(...)
+#endif
+
+#define filter_dbg(...)
+
 static sample_t boost_increase(boost_t *ctx, sample_t sample, int bitspersample);
 static sample_t boost_decrease(boost_t *ctx, sample_t sample, int bitspersample);
 static sample_t boost_multi(boost_t *ctx, sample_t sample, int bitspersample);
@@ -54,7 +64,7 @@ sample_t boost_cb(void *arg, sample_t sample, int bitspersample)
 
 static sample_t boost_increase(boost_t *ctx, sample_t sample, int bitspersample)
 {
-	sample_t mask = (((sample_t)1) << (bitspersample - 2));
+	sample_t mask = (((sample_t)0xFFFF) << (bitspersample - 1));
 	sample_t lead = sample & mask;
 	sample = (sample << ctx->rgshift) & ~mask;
 	sample |= lead;
@@ -63,7 +73,7 @@ static sample_t boost_increase(boost_t *ctx, sample_t sample, int bitspersample)
 
 static sample_t boost_decrease(boost_t *ctx, sample_t sample, int bitspersample)
 {
-	sample_t mask = 1 << (bitspersample - 2);
+	sample_t mask = (((sample_t)0xFFFF) << (bitspersample - 1));
 	sample_t lead = sample & mask;
 	sample = (sample >> ctx->rgshift) & ~mask;
 	sample |= lead;

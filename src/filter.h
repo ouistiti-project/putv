@@ -42,7 +42,7 @@ typedef struct filter_ops_s filter_ops_t;
 struct filter_ops_s
 {
 	const char *name;
-	filter_ctx_t *(*init)(jitter_format_t format);
+	filter_ctx_t *(*init)(jitter_format_t format, int samplerate);
 	int (*set)(filter_ctx_t *ctx,...);
 	int (*run)(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *buffer, size_t size);
 	void (*destroy)(filter_ctx_t *);

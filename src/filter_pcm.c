@@ -80,17 +80,18 @@ static sample_t filter_mono(filter_ctx_t *ctx, filter_audio_t *audio, int channe
 static sample_t filter_mix(filter_ctx_t *ctx, filter_audio_t *audio, int channel, unsigned int index);
 #endif
 
-static filter_ctx_t *filter_init(jitter_format_t format);
 static int filter_set(filter_ctx_t *ctx,...);
 static int filter_setoptions(filter_ctx_t *ctx, va_list params);
 static void filter_destroy(filter_ctx_t *ctx);
 
-static filter_ctx_t *filter_init(jitter_format_t format)
+static filter_ctx_t *filter_init(jitter_format_t format, int samplerate)
 {
 	filter_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->get = filter_get;
 
-	filter_set(ctx, FILTER_FORMAT, format, FILTER_SAMPLERATE, 44100, 0);
+	if (samplerate == 0)
+		samplerate = 44100;
+	filter_set(ctx, FILTER_FORMAT, format, FILTER_SAMPLERATE, samplerate, 0);
 	return ctx;
 }
 

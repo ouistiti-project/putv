@@ -258,7 +258,7 @@ static void _player_new_es(player_ctx_t *ctx, void *eventarg)
 		}
 		filter_t *filter = NULL;
 		if (i < ctx->noutstreams)
-			filter = player_filter(ctx, outstream->format);
+			filter = player_filter(ctx, outstream->format, jitter_samplerate(outstream));
 		decoder->filter = filter;
 		if (filter)
 		{
@@ -527,11 +527,11 @@ void player_sendevent(player_ctx_t *ctx, event_t event, void *data)
 	}
 }
 
-filter_t *player_filter(player_ctx_t *ctx, jitter_format_t format)
+filter_t *player_filter(player_ctx_t *ctx, jitter_format_t format, int samplerate)
 {
 	filter_t *filter = calloc(1, sizeof (*filter));
 	filter->ops = ctx->filterops;
-	filter->ctx = filter->ops->init(format);
+	filter->ctx = filter->ops->init(format, samplerate);
 	return filter;
 }
 

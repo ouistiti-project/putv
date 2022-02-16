@@ -1,6 +1,8 @@
 #ifndef __FILTER_H__
 #define __FILTER_H__
 
+#include <stdint.h>
+
 #include "jitter.h"
 
 # define SIZEOF_INT 4
@@ -66,4 +68,19 @@ struct boost_s
 boost_t *boost_init(boost_t *input, int db);
 sample_t boost_cb(void *arg, sample_t sample, int bitspersample);
 
+/**
+ * statistics filter sampled
+ */
+typedef struct stats_s stats_t;
+struct stats_s
+{
+	uint64_t nbs;
+	long double rms;
+	uint32_t mean;
+	uint32_t peak;
+	int bitspersample;
+};
+
+stats_t *stats_init(stats_t *input);
+sample_t stats_cb(void *arg, sample_t sample, int bitspersample);
 #endif

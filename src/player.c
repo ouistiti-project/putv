@@ -260,10 +260,6 @@ static void _player_new_es(player_ctx_t *ctx, void *eventarg)
 		if (i < ctx->noutstreams)
 			filter = player_filter(ctx, outstream->format);
 		decoder->filter = filter;
-		if (decoder->ops->prepare)
-		{
-			decoder->ops->prepare(decoder->ctx, filter, src->info);
-		}
 		if (filter)
 		{
 			int replaygain = 0;
@@ -274,6 +270,15 @@ static void _player_new_es(player_ctx_t *ctx, void *eventarg)
 				boost_t *boost = boost_init(&decoder->boost, replaygain);
 				filter->ops->set(filter->ctx, FILTER_SAMPLED, boost_cb, boost);
 			}
+
+#ifdef FILTER_STATS
+			stats_t *stats = stats_init(&decoder->stats);
+			filter->ops->set(filter->ctx, FILTER_SAMPLED, stats_cb, stats);
+#endif
+		}
+		if (decoder->ops->prepare)
+		{
+			decoder->ops->prepare(decoder->ctx, filter, src->info);
 		}
 	}
 }

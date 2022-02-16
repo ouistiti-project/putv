@@ -36,7 +36,7 @@ struct filter_audio_s
 #ifndef FILTER_CTX
 typedef void filter_ctx_t;
 #endif
-typedef sample_t (*sampled_t)(void * ctx, sample_t sample, int bitlength);
+typedef sample_t (*sampled_t)(void * ctx, sample_t sample, int bitlength, int channel);
 
 typedef struct filter_ops_s filter_ops_t;
 struct filter_ops_s
@@ -66,7 +66,7 @@ struct boost_s
 	int replaygain;
 	int rgshift;
 	float coef;
-	sample_t (*cb)(boost_t *ctx, sample_t sample, int bitspersample);
+	sample_t (*cb)(boost_t *ctx, sample_t sample, int bitspersample, int channel);
 };
 boost_t *boost_init(boost_t *input, int db);
 sample_t boost_cb(void *arg, sample_t sample, int bitspersample);
@@ -85,5 +85,5 @@ struct stats_s
 };
 
 stats_t *stats_init(stats_t *input);
-sample_t stats_cb(void *arg, sample_t sample, int bitspersample);
+sample_t stats_cb(void *arg, sample_t sample, int bitspersample, int channel);
 #endif

@@ -41,7 +41,7 @@ typedef   signed long sample_t;
 typedef struct filter_ctx_s filter_ctx_t;
 typedef struct filter_audio_s filter_audio_t;
 typedef sample_t (*sample_get_t)(filter_ctx_t *ctx, filter_audio_t *audio, int channel, unsigned int index);
-typedef sample_t (*sampled_t)(void * ctx, sample_t sample, int bitlength);
+typedef sample_t (*sampled_t)(void * ctx, sample_t sample, int bitlength, int channel);
 
 typedef struct sampled_ctx_s sampled_ctx_t;
 struct sampled_ctx_s
@@ -199,20 +199,20 @@ static void filter_destroy(filter_ctx_t *ctx)
 	while (sampleditem != NULL)
 	{
 		ctx->sampled = sampleditem->next;
-		sampleditem->cb(sampleditem->arg, INT32_MIN, 0);
+		sampleditem->cb(sampleditem->arg, INT32_MIN, 0, 0);
 		free(sampleditem);
 		sampleditem = ctx->sampled;
 	}
 	free(ctx);
 }
 
-int sampled_change(filter_ctx_t *ctx, sample_t sample, int bitspersample, unsigned char *out)
+int sampled_change(filter_ctx_t *ctx, sample_t sample, int bitspersample, int channel, unsigned char *out)
 {
 	sampled_ctx_t *sampleditem = ctx->sampled;
 	while (sampleditem != NULL)
 	{
 		int length = ((ctx->shift) > bitspersample)?bitspersample:ctx->shift;
-		sample = sampleditem->cb(sampleditem->arg, sample, length);
+		sample = sampleditem->cb(sampleditem->arg, sample, length, channel);
 		sampleditem = sampleditem->next;
 	}
 
@@ -279,7 +279,7 @@ static int filter_run(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *b
 
 			sample = get(ctx, audio, j, i);
 			int len = sampled_change(ctx, sample, audio->bitspersample,
-						buffer + bufferlen);
+						j, buffer + bufferlen);
 			bufferlen += len;
 		}
 	}

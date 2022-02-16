@@ -353,7 +353,7 @@ static int _decoder_prepare(decoder_ctx_t *ctx, filter_t *filter, const char *in
 	ctx->filter = filter;
 	if (ctx->filter != NULL)
 	{
-		ctx->filter->ops->set(ctx->filter->ctx, FILTER_SAMPLED, scale_sample, NULL);
+		ctx->filter->ops->set(ctx->filter->ctx, FILTER_SAMPLED, scale_sample, NULL, 0);
 	}
 	return 0;
 }

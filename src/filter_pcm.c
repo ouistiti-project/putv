@@ -190,7 +190,7 @@ static int filter_setoptions(filter_ctx_t *ctx, va_list params)
 		}
 		code = (int) va_arg(params, int);
 	}
-	va_end(params);
+	return 0;
 }
 
 static void filter_destroy(filter_ctx_t *ctx)

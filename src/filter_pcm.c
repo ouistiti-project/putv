@@ -198,6 +198,7 @@ static void filter_destroy(filter_ctx_t *ctx)
 	while (sampleditem != NULL)
 	{
 		ctx->sampled = sampleditem->next;
+		sampleditem->cb(sampleditem->arg, INT32_MIN, 0);
 		free(sampleditem);
 		sampleditem = ctx->sampled;
 	}

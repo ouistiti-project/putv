@@ -57,6 +57,9 @@ struct filter_s
 
 const filter_ops_t *filter_build(const char *name);
 
+/**
+ * boost filter sampled
+ */
 typedef struct boost_s boost_t;
 struct boost_s
 {

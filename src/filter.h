@@ -72,6 +72,18 @@ boost_t *boost_init(boost_t *input, int db);
 sample_t boost_cb(void *arg, sample_t sample, int bitspersample, int channel);
 
 /**
+ * mono filter sampled
+ */
+typedef struct mono_s mono_t;
+struct mono_s
+{
+	sample_t sample;
+	int channel;
+};
+mono_t *mono_init(mono_t *input, int db);
+sample_t mono_cb(void *arg, sample_t sample, int bitspersample, int channel);
+
+/**
  * statistics filter sampled
  */
 typedef struct stats_s stats_t;

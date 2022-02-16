@@ -36,6 +36,7 @@ struct decoder_s
 #ifdef FILTER_STATS
 	stats_t stats;
 #endif
+	mono_t mono;
 };
 
 decoder_t *decoder_build(player_ctx_t *player, const char *mime);

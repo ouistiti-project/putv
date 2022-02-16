@@ -275,6 +275,8 @@ static void _player_new_es(player_ctx_t *ctx, void *eventarg)
 			stats_t *stats = stats_init(&decoder->stats);
 			filter->ops->set(filter->ctx, FILTER_SAMPLED, stats_cb, stats);
 #endif
+//			mono_t *mono = mono_init(&decoder->mono, 0);
+//			filter->ops->set(filter->ctx, FILTER_SAMPLED, mono_cb, mono);
 		}
 		if (decoder->ops->prepare)
 		{

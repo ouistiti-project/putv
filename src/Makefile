@@ -25,6 +25,7 @@ putv_SOURCES+=sink_common.c
 
 putv_SOURCES+=filter_pcm.c
 putv_SOURCES+=filter_boost.c
+putv_SOURCES+=filter_mono.c
 putv_SOURCES-$(FILTER_STATS)+=filter_stats.c
 putv_LIB-$(FILTER_STATS)S+=m
 
@@ -92,7 +93,7 @@ putv_LIBRARY-$(USE_ID3TAG)+=id3tag
 putv_LIBS-$(USE_OGGMETADDATA)+=FLAC
 putv_LIBS-$(USE_TIMER)+=rt
 
-putv_CFLAGS-$(DEBUG)+=-g -DDEBUG
+putv_CFLAGS-$(DEBUG)+=-g -DDEBUG -O1
 
 ifeq ($(DECODER_MODULES),y)
 modules-$(DECODER_MAD)+=decoder_mad

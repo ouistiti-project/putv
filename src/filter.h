@@ -48,8 +48,21 @@ struct mono_s
 	sample_t sample;
 	int channel;
 };
-mono_t *mono_init(mono_t *input, int db);
+mono_t *mono_init(mono_t *input, int channel);
 sample_t mono_cb(void *arg, sample_t sample, int bitspersample, int channel);
+
+/**
+ * mono filter sampled
+ */
+typedef struct mixed_s mixed_t;
+struct mixed_s
+{
+	sample_t sample;
+	sample_t samples[10];
+	int nchannels;
+};
+mixed_t *mixed_init(mixed_t *input, int nchannels);
+sample_t mixed_cb(void *arg, sample_t sample, int bitspersample, int channel);
 
 /**
  * statistics filter sampled
@@ -70,7 +83,6 @@ sample_t stats_cb(void *arg, sample_t sample, int bitspersample, int channel);
 #define FILTER_SAMPLED 1
 #define FILTER_FORMAT 2
 #define FILTER_SAMPLERATE 3
-#define FILTER_MONOMIXED 4
 
 #ifndef FILTER_CTX
 typedef void filter_ctx_t;
@@ -97,6 +109,7 @@ struct filter_s
 	stats_t stats;
 #endif
 	mono_t mono;
+	mixed_t mixed;
 };
 
 filter_t *filter_build(const char *name, jitter_t *jitter, const char *info);

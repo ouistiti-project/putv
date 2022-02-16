@@ -76,10 +76,10 @@ typedef enum jitter_format_e
 	PCM_32bits_BE_stereo,
 	MPEG2_3_MP3,
 	FLAC,
-	MPEG2_1 = 0xC0000000,
+	MPEG2_1 = JITTER_VIDEO,
 	MPEG2_2,
 	DVB_frame,
-	SINK_BITSSTREAM = 0xE0000000,
+	SINK_BITSSTREAM = JITTER_OTHER,
 } jitter_format_t;
 
 typedef struct jitter_s jitter_t;

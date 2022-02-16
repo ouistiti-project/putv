@@ -75,12 +75,6 @@ struct filter_ctx_s
 #endif
 
 static sample_t filter_get(filter_ctx_t *ctx, filter_audio_t *audio, int channel, unsigned int index);
-#ifdef FILTER_ONECHANNEL
-static sample_t filter_mono(filter_ctx_t *ctx, filter_audio_t *audio, int channel, unsigned int index);
-#endif
-#ifdef FILTER_MIXED
-static sample_t filter_mix(filter_ctx_t *ctx, filter_audio_t *audio, int channel, unsigned int index);
-#endif
 
 static int filter_set(filter_ctx_t *ctx,...);
 static int filter_setoptions(filter_ctx_t *ctx, va_list params);
@@ -168,11 +162,6 @@ static int filter_setoptions(filter_ctx_t *ctx, va_list params)
 			ctx->sampled->cb = (sampled_t) va_arg(params, sampled_t);
 			ctx->sampled->arg = (void *) va_arg(params, void *);
 		break;
-#ifdef FILTER_MIXED
-		case FILTER_MONOMIXED:
-			ctx->get = filter_mix;
-		break;
-#endif
 		case FILTER_FORMAT:
 			filter_setformat(ctx, (jitter_format_t) va_arg(params, jitter_format_t));
 		break;
@@ -229,26 +218,6 @@ static sample_t filter_get(filter_ctx_t *ctx, filter_audio_t *audio, int channel
 	return audio->samples[(channel % audio->nchannels)][index];
 }
 
-#ifdef FILTER_MIXED
-static sample_t filter_mix(filter_ctx_t *ctx, filter_audio_t *audio, int channel, unsigned int index)
-{
-	static sample_t sample = 0;
-	if (channel == 0)
-		sample = 0;
-	else
-		return sample;
-	/**
-	 * this is not the good algo to mixe the channels
-	 */
-	int j;
-	for (j = 0; j < audio->nchannels; j++)
-	{
-		sample += (audio->samples[j][index] / audio->nchannels);
-	}
-	return sample;
-}
-#endif
-
 static int filter_run(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *buffer, size_t size, sample_get_t get)
 {
 	int j;
@@ -280,13 +249,6 @@ static int filter_interleave(filter_ctx_t *ctx, filter_audio_t *audio, unsigned 
 	return filter_run(ctx, audio, buffer, size, ctx->get);
 }
 
-#ifdef FILTER_MIXED
-static int filter_mixedmono(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *buffer, size_t size)
-{
-	return filter_run(ctx, audio, buffer, size, filter_mix);
-}
-#endif
-
 const filter_ops_t *filter_pcm = &(filter_ops_t)
 {
 	.name = "pcm",
@@ -295,18 +257,6 @@ const filter_ops_t *filter_pcm = &(filter_ops_t)
 	.run = filter_interleave,
 	.destroy = filter_destroy,
 };
-
-
-#ifdef FILTER_MIXED
-const filter_ops_t *filter_pcm_mixed = &(filter_ops_t)
-{
-	.name = "mixed",
-	.init = filter_init,
-	.set = filter_set,
-	.run = filter_mixedmono,
-	.destroy = filter_destroy,
-};
-#endif
 
 static filter_t *_filter_build_pcm(const char *query, jitter_t *jitter, const char *info, const filter_ops_t *filterops)
 {
@@ -346,6 +296,17 @@ static filter_t *_filter_build_pcm(const char *query, jitter_t *jitter, const ch
 		filter->ops->set(filter->ctx, FILTER_SAMPLED, mono_cb, mono);
 	}
 #endif
+#ifdef FILTER_MIXED
+	if (query && strstr(query, "mono=mixed") != NULL)
+	{
+		mixed_t *mixed = NULL;
+		if (jitter->format < (JITTER_AUDIO + 2))
+			mixed = mixed_init(&filter->mixed, 1);
+		else if (jitter->format < (JITTER_AUDIO + 7))
+			mixed = mixed_init(&filter->mixed, 2);
+		filter->ops->set(filter->ctx, FILTER_SAMPLED, mixed_cb, mixed);
+	}
+#endif
 
 	return filter;
 }
@@ -362,10 +323,6 @@ filter_t *filter_build(const char *name, jitter_t *jitter, const char *info)
 	}
 	if (!strncmp(name, filter_pcm->name, length))
 		filter = _filter_build_pcm(query, jitter, info, filter_pcm);
-#ifdef FILTER_MIXED
-	if (!strncmp(name, filter_pcm_mixed->name, length))
-		filter = _filter_build_pcm(query, jitter, info, filter_pcm_mixed);
-#endif
 
 	return filter;
 }

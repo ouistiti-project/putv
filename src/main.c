@@ -133,6 +133,15 @@ void help(const char *name)
 	fprintf(stderr, "\t -R <directory>\tSet the directory for command socket file\n");
 	fprintf(stderr, "\t -d <directory>\tSet the working directory\n");
 	fprintf(stderr, "\t -P <priority>\tSet the process priority\n");
+	fprintf(stderr, "\t -f <filter>\tSet a filter and its features (default: pcm\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "\t filters:\n");
+	fprintf(stderr, "\t pcm\tstereo interleaved stream\n");
+	fprintf(stderr, "\t pcm?mono=left\tmono stream with left channel\n");
+	fprintf(stderr, "\t pcm?mono=right\tmono stream with right channel\n");
+	fprintf(stderr, "\t pcm?mono=mixed\tmono stream with left+right channels\n");
+	fprintf(stderr, "\t pcm?stats\tprint statistics about the stream\n");
+	
 }
 
 #define DAEMONIZE 0x01

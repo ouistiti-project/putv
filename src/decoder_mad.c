@@ -418,13 +418,13 @@ static int _decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 	int ret = 0;
 	ctx->out = jitter;
 	if (ctx->filter)
-		ret = ctx->filter->ops->set(ctx->filter->ctx, FILTER_FORMAT, jitter->format, FILTER_SAMPLERATE, jitter->ctx->frequence, 0);
+		ret = ctx->filter->ops->set(ctx->filter->ctx, FILTER_FORMAT, jitter->format, FILTER_SAMPLERATE, jitter_samplerate(jitter), 0);
 #ifdef DECODER_HEARTBEAT
 	if (heartbeat_samples)
 	{
 		heartbeat_samples_t config =
 		{
-			.samplerate = jitter->ctx->frequence,
+			.samplerate = jitter_samplerate(jitter),
 			.format = jitter->format,
 			.nchannels = 0,
 		};

@@ -95,5 +95,6 @@ struct jitter_s
 #define JITTER_TYPE_RING 0x02
 jitter_t *jitter_init(int type, const char *name, unsigned count, size_t size);
 void jitter_destroy(jitter_t *jitter);
+inline int jitter_samplerate(jitter_t *jitter) {return jitter->ctx->frequence;};
 
 #endif

@@ -28,7 +28,7 @@ putv_SOURCES+=filter_boost.c
 putv_SOURCES-$(FILTER_ONECHANNEL)+=filter_mono.c
 putv_SOURCES-$(FILTER_MIXED)+=filter_mixed.c
 putv_SOURCES-$(FILTER_STATS)+=filter_stats.c
-putv_LIB-$(FILTER_STATS)S+=m
+putv_LIBS-$(FILTER_STATS)+=m
 
 putv_SOURCES-$(MEDIA_SQLITE)+=media_sqlite.c
 putv_LIBRARY-$(MEDIA_SQLITE)+=sqlite3

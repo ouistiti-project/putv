@@ -270,8 +270,14 @@ static filter_t *_filter_build_pcm(const char *query, jitter_t *jitter, const ch
 	int replaygain = 0;
 	if (info != NULL)
 		replaygain = media_boost(info);
+	const char *boostvalue = strstr(query, "boost=");
+	if (query && boostvalue != NULL)
+	{
+		sscanf(boostvalue, "boost=%d", &replaygain);
+	}
 	if (replaygain > 0)
 	{
+		warn("filter: install boost filter %ddB", replaygain);
 		boost_t *boost = boost_init(&filter->boost, replaygain);
 		filter->ops->set(filter->ctx, FILTER_SAMPLED, boost_cb, boost);
 	}
@@ -279,6 +285,7 @@ static filter_t *_filter_build_pcm(const char *query, jitter_t *jitter, const ch
 #ifdef FILTER_STATS
 	if (query && strstr(query, "stats") != NULL)
 	{
+		warn("filter: install statistics filter");
 		stats_t *stats = stats_init(&filter->stats);
 		filter->ops->set(filter->ctx, FILTER_SAMPLED, stats_cb, stats);
 	}

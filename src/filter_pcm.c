@@ -187,13 +187,13 @@ static void filter_destroy(filter_ctx_t *ctx)
 	free(ctx);
 }
 
-int sampled_change(filter_ctx_t *ctx, sample_t sample, int bitspersample, int channel, unsigned char *out)
+int sampled_change(filter_ctx_t *ctx, sample_t sample, int bitspersample, int samplerate, int channel, unsigned char *out)
 {
 	sampled_ctx_t *sampleditem = ctx->sampled;
 	while (sampleditem != NULL)
 	{
 		int length = ((ctx->shift) > bitspersample)?bitspersample:ctx->shift;
-		sample = sampleditem->cb(sampleditem->arg, sample, length, channel);
+		sample = sampleditem->cb(sampleditem->arg, sample, length, samplerate, channel);
 		sampleditem = sampleditem->next;
 	}
 
@@ -233,7 +233,7 @@ static int filter_run(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *b
 
 			sample = get(ctx, audio, j, i);
 			int len = sampled_change(ctx, sample, audio->bitspersample,
-						j, buffer + bufferlen);
+					audio->samplerate, j, buffer + bufferlen);
 			bufferlen += len;
 		}
 	}

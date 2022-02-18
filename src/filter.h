@@ -38,7 +38,7 @@ struct boost_s
 	sample_t (*cb)(boost_t *ctx, sample_t sample, int bitspersample, int channel);
 };
 boost_t *boost_init(boost_t *input, int db);
-sample_t boost_cb(void *arg, sample_t sample, int bitspersample, int channel);
+sample_t boost_cb(void *arg, sample_t sample, int bitspersample, int samplerate, int channel);
 
 /**
  * mono filter sampled
@@ -50,7 +50,7 @@ struct mono_s
 	int channel;
 };
 mono_t *mono_init(mono_t *input, int channel);
-sample_t mono_cb(void *arg, sample_t sample, int bitspersample, int channel);
+sample_t mono_cb(void *arg, sample_t sample, int bitspersample, int samplerate, int channel);
 
 /**
  * mono filter sampled
@@ -63,7 +63,7 @@ struct mixed_s
 	int nchannels;
 };
 mixed_t *mixed_init(mixed_t *input, int nchannels);
-sample_t mixed_cb(void *arg, sample_t sample, int bitspersample, int channel);
+sample_t mixed_cb(void *arg, sample_t sample, int bitspersample, int samplerate, int channel);
 
 /**
  * statistics filter sampled
@@ -79,7 +79,7 @@ struct stats_s
 };
 
 stats_t *stats_init(stats_t *input);
-sample_t stats_cb(void *arg, sample_t sample, int bitspersample, int channel);
+sample_t stats_cb(void *arg, sample_t sample, int bitspersample, int samplerate, int channel);
 
 #define FILTER_SAMPLED 1
 #define FILTER_FORMAT 2
@@ -88,7 +88,7 @@ sample_t stats_cb(void *arg, sample_t sample, int bitspersample, int channel);
 #ifndef FILTER_CTX
 typedef void filter_ctx_t;
 #endif
-typedef sample_t (*sampled_t)(void * ctx, sample_t sample, int bitlength, int channel);
+typedef sample_t (*sampled_t)(void * ctx, sample_t sample, int bitlength, int samplerate, int channel);
 
 typedef struct filter_ops_s filter_ops_t;
 struct filter_ops_s

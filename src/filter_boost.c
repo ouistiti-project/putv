@@ -56,7 +56,7 @@ boost_t *boost_init(boost_t *input, int db)
 	return input;
 }
 
-sample_t boost_cb(void *arg, sample_t sample, int bitspersample, int channel)
+sample_t boost_cb(void *arg, sample_t sample, int bitspersample, int samplerate, int channel)
 {
 	boost_t *ctx = (boost_t *)arg;
 	return ctx->cb(ctx, sample, bitspersample, channel);

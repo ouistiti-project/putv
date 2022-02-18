@@ -43,7 +43,7 @@ typedef   signed long sample_t;
 typedef struct filter_ctx_s filter_ctx_t;
 typedef struct filter_audio_s filter_audio_t;
 typedef sample_t (*sample_get_t)(filter_ctx_t *ctx, filter_audio_t *audio, int channel, unsigned int index);
-typedef sample_t (*sampled_t)(void * ctx, sample_t sample, int bitlength, int channel);
+typedef sample_t (*sampled_t)(void * ctx, sample_t sample, int bitlength, int samplerate, int channel);
 
 typedef struct sampled_ctx_s sampled_ctx_t;
 struct sampled_ctx_s
@@ -180,7 +180,7 @@ static void filter_destroy(filter_ctx_t *ctx)
 	while (sampleditem != NULL)
 	{
 		ctx->sampled = sampleditem->next;
-		sampleditem->cb(sampleditem->arg, INT32_MIN, 0, 0);
+		sampleditem->cb(sampleditem->arg, INT32_MIN, ctx->samplesize, ctx->samplerate, 0);
 		free(sampleditem);
 		sampleditem = ctx->sampled;
 	}

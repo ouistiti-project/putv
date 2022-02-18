@@ -34,6 +34,7 @@ struct boost_s
 	int replaygain;
 	int rgshift;
 	float coef;
+	sample_t max;
 	sample_t (*cb)(boost_t *ctx, sample_t sample, int bitspersample, int channel);
 };
 boost_t *boost_init(boost_t *input, int db);
@@ -114,4 +115,6 @@ struct filter_s
 
 filter_t *filter_build(const char *name, jitter_t *jitter, const char *info);
 
+sample_t filter_minvalue(int bitspersample);
+sample_t filter_maxvalue(int bitspersample);
 #endif

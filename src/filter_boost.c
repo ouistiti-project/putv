@@ -62,6 +62,7 @@ sample_t boost_cb(void *arg, sample_t sample, int bitspersample, int channel)
 	return ctx->cb(ctx, sample, bitspersample, channel);
 }
 
+#if 0
 static sample_t boost_increase(boost_t *ctx, sample_t sample, int bitspersample, int channel)
 {
 	sample_t mask = (((sample_t)0xFFFF) << (bitspersample - 1));
@@ -79,9 +80,25 @@ static sample_t boost_decrease(boost_t *ctx, sample_t sample, int bitspersample,
 	sample |= lead;
 	return sample;
 }
+#endif
 
 static sample_t boost_multi(boost_t *ctx, sample_t sample, int bitspersample, int channel)
 {
-	sample += (sample * ctx->coef);
+	if (ctx->max == 0)
+	{
+		ctx->max = filter_maxvalue(bitspersample);
+	}
+	sample_t increment = sample * ctx->coef;
+	sample += increment;
+	if (sample < -ctx->max)
+	{
+		filter_dbg("boost min");
+		sample = -ctx->max;
+	}
+	else if (sample > ctx->max)
+	{
+		filter_dbg("boost max");
+		sample = ctx->max;
+	}
 	return sample;
 }

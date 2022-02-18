@@ -333,3 +333,13 @@ filter_t *filter_build(const char *name, jitter_t *jitter, const char *info)
 
 	return filter;
 }
+
+sample_t filter_minvalue(int bitspersample)
+{
+	return (~(((sample_t)0x1) << (bitspersample - 1)));
+}
+
+sample_t filter_maxvalue(int bitspersample)
+{
+	return -(~(((sample_t)0x1) << (bitspersample - 1))) - 1;
+}

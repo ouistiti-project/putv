@@ -32,6 +32,20 @@
 
 #include "filter.h"
 
+#define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
+#define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
+#ifdef DEBUG
+#define dbg(format, ...) fprintf(stderr, "\x1B[32m"format"\x1B[0m\n",  ##__VA_ARGS__)
+#else
+#define dbg(...)
+#endif
+
+#define filter_dbg(...)
+
+uint32_t filter_rms1(uint32_t rms, sample_t sample, uint64_t nbs);
+uint32_t filter_rms_sqappend(uint32_t sqrms, sample_t sample, int bitspersample);
+uint32_t filter_rms_finish(uint32_t sqrms, int bitspersample, int laps);
+
 stats_t *stats_init(stats_t *input)
 {
 	if (input == NULL)
@@ -39,17 +53,21 @@ stats_t *stats_init(stats_t *input)
 	return input;
 }
 
-sample_t stats_cb(void *arg, sample_t sample, int bitspersample, int channel)
+sample_t stats_cb(void *arg, sample_t sample, int bitspersample, int samplerate, int channel)
 {
 	stats_t *ctx = (stats_t *)arg;
+	if (channel != 0)
+		return sample;
 
+	if (ctx->lapswindow == 0)
+		ctx->lapswindow = samplerate * 10; // 10s
 	sample_t asample = 0;
 	asample = labs(sample);
 	if (sample == INT32_MIN)
 	{
-		uint64_t max = (1L << (ctx->bitspersample - 1));
+		uint64_t max = filter_maxvalue(bitspersample);
 		fprintf(stdout, "peak %u / %ld\t", ctx->peak, max);
-		fprintf(stdout, "rms %Lf\t", ctx->rms);
+		fprintf(stdout, "rms %u\t", ctx->rms);
 		fprintf(stdout, "boost %ld\t", ((max * 3) / ctx->peak) - 3);
 		fprintf(stdout, "\n");
 	}
@@ -58,20 +76,8 @@ sample_t stats_cb(void *arg, sample_t sample, int bitspersample, int channel)
 		ctx->nbs++;
 		if (ctx->peak < asample)
 			ctx->peak = asample;
-		long double sqrms = ((long double)ctx->rms * (long double)ctx->rms);
-		if (ctx->rms < ctx->nbs)
-		{
-			sqrms *= (ctx->nbs - 1);
-			sqrms /= ctx->nbs;
-		}
-		else
-		{
-			sqrms /= ctx->nbs;
-			sqrms *= (ctx->nbs - 1);
-		}
-		long double sqsample = ((long double)sample * (long double)sample);
-		sqsample /= ctx->nbs;
-		ctx->rms = sqrtl(sqrms + sqsample);
+		if (ctx->bitspersample == 0)
+			ctx->bitspersample = bitspersample;
 /*
 		if (ctx->mean < UINT64_MAX)
 		{
@@ -81,8 +87,44 @@ sample_t stats_cb(void *arg, sample_t sample, int bitspersample, int channel)
 			ctx->mean = mean / ctx->nbs;
 		}
 */
-		if (ctx->bitspersample == 0)
-			ctx->bitspersample = bitspersample;
+		//ctx->rms = filter_rms1(ctx->rms, ctx->nbs);
+		ctx->rms = filter_rms_sqappend(ctx->rms, sample, bitspersample);
+		if (ctx->nbs % ctx->lapswindow == 0)
+		{
+			uint32_t rms = filter_rms_finish(ctx->rms, bitspersample, ctx->lapswindow);
+			warn("filter: RMS on 10s %.010u peak %.010u sqRMS %.010u", rms, ctx->peak, ctx->rms);
+			ctx->rms = 0;
+		}
 	}
 	return sample;
+}
+
+uint32_t filter_rms1(uint32_t rms, sample_t sample, uint64_t nbs)
+{
+	uint64_t sqrms = ((uint64_t)rms * (uint64_t)rms);
+	if (rms < nbs)
+	{
+		sqrms *= (nbs - 1);
+		sqrms /= nbs;
+	}
+	else
+	{
+		sqrms /= nbs;
+		sqrms *= (nbs - 1);
+	}
+	uint64_t sqsample = ((uint64_t)sample * (uint64_t)sample);
+	sqsample /= nbs;
+	rms = sqrtl(sqrms + sqsample);
+	return rms;
+}
+
+uint32_t filter_rms_sqappend(uint32_t sqrms, sample_t sample, int bitspersample)
+{
+	sample_t samplescale = sample >> (bitspersample >> 1);
+	return sqrms + (samplescale * samplescale);
+}
+
+uint32_t filter_rms_finish(uint32_t sqrms, int bitspersample, int laps)
+{
+	return ((sample_t)sqrt(sqrms / laps)) << (bitspersample >> 1);
 }

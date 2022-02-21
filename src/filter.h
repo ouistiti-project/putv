@@ -72,10 +72,11 @@ typedef struct stats_s stats_t;
 struct stats_s
 {
 	uint64_t nbs;
-	long double rms;
+	uint32_t rms;
 	uint32_t mean;
 	uint32_t peak;
 	int bitspersample;
+	int lapswindow;
 };
 
 stats_t *stats_init(stats_t *input);

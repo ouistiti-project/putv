@@ -68,6 +68,8 @@ const char const *mime_audiomp3 = "audio/mp3";
 const char const *mime_audioflac = "audio/flac";
 const char const *mime_audioalac = "audio/alac";
 const char const *mime_audiopcm = "audio/pcm";
+const char const mime_imagejpg[] = "image/jpg";
+const char const mime_imagepng[] = "image/png";
 const char const *mime_directory = "inode/directory";
 
 const char const *str_title = "title";
@@ -284,9 +286,10 @@ static char *media_regfile(char *path, const char *mime, const unsigned char *da
 {
 	int fd = -1;
 	char *ext = strrchr(path, '.');
-	if (!strcmp(mime,"image/png"))
+	if (!strcmp(mime, mime_imagepng))
 		strcpy(ext, ".png");
-	else if (!strcmp(mime,"image/jpeg"))
+	else if (!strcmp(mime, mime_imagejpg) ||
+		!strcmp(mime, "image/jpeg"))
 		strcpy(ext, ".jpg");
 	fd = open(path, O_WRONLY | O_CREAT | O_EXCL, 0666);
 	if (fd > 0)
@@ -305,9 +308,10 @@ static char *media_tmpfile(char *path, const char *mime, const unsigned char *da
 	if (fd > 0)
 		close(fd);
 	char *ext = strrchr(path, '.');
-	if (!strcmp(mime,"image/png"))
+	if (!strcmp(mime, mime_imagepng))
 		strcpy(ext, "XXXXXX.png");
-	if (!strcmp(mime,"image/jpeg"))
+	else if (!strcmp(mime, mime_imagejpg) ||
+		!strcmp(mime, "image/jpeg"))
 		strcpy(ext, "XXXXXX.jpg");
 	fd = mkstemps(path, 4);
 	if (fd > 0)
@@ -318,6 +322,7 @@ static char *media_tmpfile(char *path, const char *mime, const unsigned char *da
 }
 
 #ifdef USE_ID3TAG
+#define ID3MAXFIELDS 5
 int media_parseid3tag(const char *path, json_t *object)
 {
 	struct
@@ -362,19 +367,26 @@ int media_parseid3tag(const char *path, json_t *object)
 		{
 			int fieldid = 0;
 			union id3_field const *field;
-			enum id3_field_textencoding encoding = ID3_FIELD_TEXTENCODING_ISO_8859_1;
+			enum id3_field_textencoding encoding = ID3_FIELD_TEXTENCODING_UTF_8;
 			const unsigned char *data = NULL;
 			unsigned long length = 0;
-			const char *info[5];
-			char *tinfo[5] = {0};
+			const char *info[ID3MAXFIELDS];
+			char *tinfo[ID3MAXFIELDS] = {0};
+			typedef char *(*id3_ucs4_duplicate_t)(id3_ucs4_t const *);
+			id3_ucs4_duplicate_t id3_ucs4_duplicate = (id3_ucs4_duplicate_t)id3_ucs4_utf8duplicate;
+			const char *mimetype = "image/png";
 
-			for (fieldid = 0; (field = id3_frame_field(frame, fieldid)) != NULL && fieldid < 5; fieldid++)
+			for (fieldid = 0; (field = id3_frame_field(frame, fieldid)) != NULL && fieldid < ID3MAXFIELDS; fieldid++)
 			{
-				media_dbg("field[%s][%d] %d", frame->id, fieldid, id3_field_type(field));
+				media_dbg("field[%s][%d] %s %d", frame->id, fieldid, labels[i].label, id3_field_type(field));
 				switch (id3_field_type(field))
 				{
 				case ID3_FIELD_TYPE_TEXTENCODING:
 					encoding = id3_field_gettextencoding(field);
+					if (encoding == ID3_FIELD_TEXTENCODING_ISO_8859_1)
+						id3_ucs4_duplicate = (id3_ucs4_duplicate_t)id3_ucs4_latin1duplicate;
+					if (encoding == ID3_FIELD_TEXTENCODING_UTF_16)
+						id3_ucs4_duplicate = (id3_ucs4_duplicate_t)id3_ucs4_utf16duplicate;
 				break;
 				case ID3_FIELD_TYPE_FRAMEID:
 				{
@@ -396,7 +408,7 @@ int media_parseid3tag(const char *path, json_t *object)
 							ucs4 = id3_field_getstrings(field, k);
 							if (labels[i].id == ID3_FRAME_GENRE)
 								ucs4 = id3_genre_name(ucs4);
-							char *latin1 = id3_ucs4_utf8duplicate(ucs4);
+							char *latin1 = id3_ucs4_duplicate(ucs4);
 							fieldvalue = json_string(latin1);
 							free(latin1);
 							json_array_append(value, fieldvalue);
@@ -409,8 +421,14 @@ int media_parseid3tag(const char *path, json_t *object)
 						ucs4 = id3_field_getstrings(field, k);
 						if (labels[i].id == ID3_FRAME_GENRE)
 							ucs4 = id3_genre_name(ucs4);
-						char *latin1 = id3_ucs4_utf8duplicate(ucs4);
-						fieldvalue = json_string(latin1);
+						char *latin1 = id3_ucs4_duplicate(ucs4);
+						if (labels[i].id == ID3_FRAME_YEAR ||
+							labels[i].id == ID3_FRAME_TRACK ||
+							labels[i].id == "RGAD" ||
+							labels[i].id == "TLEN")
+							fieldvalue = json_integer(atoi(latin1));
+						else
+							fieldvalue = json_string(latin1);
 						free(latin1);
 						value = fieldvalue;
 					}
@@ -422,18 +440,52 @@ int media_parseid3tag(const char *path, json_t *object)
 				case ID3_FIELD_TYPE_INT32:
 				{
 					unsigned long integer = id3_field_getint(field);
+					value = json_integer(integer);
 				}
 				break;
 				case ID3_FIELD_TYPE_STRING:
 				{
+					json_t *fieldvalue;
 					id3_ucs4_t const *ucs4 = NULL;
 					ucs4 = id3_field_getstring(field);
-					tinfo[fieldid] = id3_ucs4_utf8duplicate(ucs4);
+					char *latin1 = id3_ucs4_duplicate(ucs4);
+					if (labels[i].id == ID3_FRAME_YEAR ||
+						labels[i].id == ID3_FRAME_TRACK ||
+						labels[i].id == "RGAD" ||
+						labels[i].id == "TLEN")
+						fieldvalue = json_integer(atoi(latin1));
+					else
+						fieldvalue = json_string(latin1);
+					free(latin1);
+					value = fieldvalue;
+				}
+				break;
+				case ID3_FIELD_TYPE_STRINGFULL:
+				{
+					id3_ucs4_t const *ucs4 = NULL;
+					ucs4 = id3_field_getfullstring(field);
+					tinfo[fieldid] = id3_ucs4_duplicate(ucs4);
+					value = json_string(tinfo[fieldid]);
 				}
 				break;
 				case ID3_FIELD_TYPE_LATIN1:
 				{
-					info[fieldid] = id3_field_getlatin1(field);
+					const char *latin1 = id3_field_getlatin1(field);
+					if (labels[i].id == "APIC")
+						mimetype = latin1;
+					else
+						value = json_string(latin1);
+				}
+				break;
+				case ID3_FIELD_TYPE_LATIN1FULL:
+				{
+					info[fieldid] = id3_field_getfulllatin1(field);
+					value = json_string(info[fieldid]);
+				}
+				break;
+				case ID3_FIELD_TYPE_DATE:
+				{
+
 				}
 				break;
 				case ID3_FIELD_TYPE_BINARYDATA:
@@ -446,26 +498,14 @@ int media_parseid3tag(const char *path, json_t *object)
 						name++;
 					else
 						name = coverpath;
-					if (tinfo[3] != NULL)
-#if 0
-						strcpy(name, tinfo[3]);
-					else
-#else
-					{
-						if (strstr(tinfo[3], ".jpg") != NULL)
-							strcpy(name, "cover.jpg");
-						else
-							strcpy(name, "cover.png");
-					}
-					else
-#endif
-						strcpy(name, "cover.png");
-					value = json_string(media_regfile(coverpath, info[1], data, length));
+					strcpy(name, "cover.XXX");
+					char *latin1 = media_regfile(coverpath, mimetype, data, length);
+					value = json_string(latin1);
 				}
 				break;
 				}
 			}
-			for (fieldid = 0; fieldid < 5; fieldid++)
+			for (fieldid = 0; fieldid < ID3MAXFIELDS; fieldid++)
 				if (tinfo[fieldid] != NULL)
 					free(tinfo[fieldid]);
 			if (value == NULL)
@@ -558,7 +598,7 @@ int media_parseoggmetadata(const char *path, json_t *object)
 			name++;
 		else
 			name = coverpath;
-		strcpy(name, "cover.png");
+		strcpy(name, "cover.XXX");
 
 		json_t *value;
 		value = json_string(media_regfile(coverpath, picture->mime_type, picture->data, picture->data_length));
@@ -715,7 +755,7 @@ char *media_fillinfo(const char *url, const char *mime)
 #else
 	info = json_dumps(object, 0);
 #endif
-	//dbg("media info: %s", info);
+	media_dbg("media info: %s", info);
 	json_decref(object);
 	return info;
 }

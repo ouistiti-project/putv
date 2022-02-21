@@ -678,21 +678,22 @@ char *media_fillinfo(const char *url, const char *mime)
 #endif
 	char coverpath[PATH_MAX];
 	strcpy(coverpath, path);
-	char *dname = strrchr(coverpath, '/');
-	if (strlen(dname) >= 8)
+	if (strlen(coverpath) >= 8)
 	{
+		char *dname = strrchr(coverpath, '/');
 		if (dname == NULL)
 			dname = coverpath;
 		else
 			dname++;
-		strcpy(dname, "cover.jpg");
 
+		strcpy(dname, "cover.jpg");
 		if (!access(coverpath, R_OK))
 		{
 			json_t *value;
 			value = json_string(coverpath);
 			json_object_set(object, str_cover, value);
 		}
+
 		strcpy(dname, "cover.png");
 		if (!access(coverpath, R_OK))
 		{
@@ -700,6 +701,7 @@ char *media_fillinfo(const char *url, const char *mime)
 			value = json_string(coverpath);
 			json_object_set(object, str_cover, value);
 		}
+
 		strcpy(dname, "Notes.nfo");
 		if (!access(coverpath, R_OK))
 		{

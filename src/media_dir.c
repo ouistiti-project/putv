@@ -186,7 +186,7 @@ static int _find_count(void *arg, media_ctx_t *ctx, int mediaid, const char *pat
 
 static int _find(media_ctx_t *ctx, int level, media_dirlist_t **pit, int *pmediaid, _findcb_t cb, void *arg)
 {
-	int ret = -1;
+	int ret = -2;
 	media_dirlist_t *it = *pit;
 
 	if (it == NULL)
@@ -380,27 +380,30 @@ static int media_next(media_ctx_t *ctx)
 		if (media->ctx != ctx)
 			id = -1;
 		else
-			id = player_mediaid(ctx->player);
+			id = ctx->mediaid;
 		_find_mediaid_t data = {id + 1, NULL, NULL};
 		ret = _find(ctx, 0, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
 	}
 	pthread_mutex_unlock(&ctx->mutex);
 	if (ctx->firstmediaid == -1)
 		ctx->firstmediaid = ctx->mediaid;
+	if (ctx->count < ctx->mediaid)
+		ctx->count = ctx->mediaid;
 	if (ret != 0)
 	{
-		if (ctx->count < ctx->mediaid)
-			ctx->count = ctx->mediaid;
 		if (ctx->current)
 		{
 			ctx->current = _free_medialist(ctx->current, 0);
 		}
 		ctx->current = NULL;
-		if (ctx->count > 0 &&
-			((ctx->firstmediaid != ctx->mediaid) ||
-				(ctx->options & OPTION_LOOP)))
+		if (ctx->count > ctx->mediaid)
 		{
+			ctx->mediaid = ctx->mediaid + 1;
 			media_next(ctx);
+		}
+		else if (ctx->options & OPTION_LOOP)
+		{
+			ctx->mediaid = ctx->firstmediaid;
 		}
 		else
 			ctx->mediaid = -1;

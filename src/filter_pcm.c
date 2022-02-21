@@ -270,10 +270,11 @@ static filter_t *_filter_build_pcm(const char *query, jitter_t *jitter, const ch
 	int replaygain = 0;
 	if (info != NULL)
 		replaygain = media_boost(info);
-	const char *boostvalue = strstr(query, "boost=");
-	if (query && boostvalue != NULL)
+	if (query)
 	{
-		sscanf(boostvalue, "boost=%d", &replaygain);
+		const char *boostvalue = strstr(query, "boost=");
+		if (boostvalue != NULL)
+			sscanf(boostvalue, "boost=%d", &replaygain);
 	}
 	if (replaygain > 0)
 	{

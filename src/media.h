@@ -150,6 +150,9 @@ int media_parseid3tag(const char *path, json_t *object);
 int media_parseoggmetadata(const char *path, json_t *object);
 #endif
 char *media_fillinfo(const char *url, const char *mime);
+int media_parse_info(json_t *jinfo, char **ptitle, char **partist,
+		char **palbum, char **pgenre, char **pcover, char **pcomment,
+		int *plikes);
 
 extern const media_ops_t *media_sqlite;
 extern const media_ops_t *media_file;

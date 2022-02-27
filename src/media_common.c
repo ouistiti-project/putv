@@ -765,3 +765,56 @@ const char *media_path()
 {
 	return current_path;
 }
+
+int media_parse_info(json_t *jinfo, char **ptitle, char **partist,
+		char **palbum, char **pgenre, char **pcover, char **pcomment,
+		int *plikes)
+{
+	if (json_is_object(jinfo))
+	{
+		json_t *value;
+		value = json_object_get(jinfo, str_title);
+		if (value != NULL && json_is_string(value))
+		{
+			*ptitle = strdup(json_string_value(value));
+			json_object_del(jinfo, str_title);
+		}
+		value = json_object_get(jinfo, str_artist);
+		if (value != NULL && json_is_string(value))
+		{
+			*partist = strdup(json_string_value(value));
+			json_object_del(jinfo, str_artist);
+		}
+		value = json_object_get(jinfo, str_album);
+		if (value != NULL && json_is_string(value))
+		{
+			*palbum = strdup(json_string_value(value));
+			json_object_del(jinfo, str_album);
+		}
+		value = json_object_get(jinfo, str_genre);
+		if (value != NULL && json_is_string(value))
+		{
+			*pgenre = strdup(json_string_value(value));
+			json_object_del(jinfo, str_genre);
+		}
+		value = json_object_get(jinfo, str_cover);
+		if (value != NULL && json_is_string(value))
+		{
+			*pcover = strdup(json_string_value(value));
+			json_object_del(jinfo, str_cover);
+		}
+		value = json_object_get(jinfo, str_comment);
+		if (value != NULL && json_is_string(value))
+		{
+			*pcomment = strdup(json_string_value(value));
+			json_object_del(jinfo, str_comment);
+		}
+		value = json_object_get(jinfo, str_likes);
+		if (value != NULL && json_is_integer(value))
+		{
+			*plikes = json_integer_value(value);
+			json_object_del(jinfo, str_likes);
+		}
+	}
+	return 0;
+}

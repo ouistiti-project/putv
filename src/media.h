@@ -23,6 +23,7 @@ extern const char const *str_date;
 extern const char const *str_regain;
 extern const char const *str_comment;
 extern const char const *str_cover;
+extern const char const *str_likes;
 
 void utils_srandom();
 const char *utils_getmime(const char *path);

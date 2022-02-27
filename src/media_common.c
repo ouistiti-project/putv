@@ -83,6 +83,7 @@ const char const *str_comment = "comment";
 const char const *str_cover = "cover";
 const char const *str_regain = "replaygain";
 const char const *str_duration = "duration";
+const char const *str_likes = "likes";
 
 void utils_srandom()
 {

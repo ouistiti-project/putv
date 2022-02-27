@@ -36,6 +36,7 @@
 #include <pwd.h>
 
 #include <sqlite3.h>
+#include <jansson.h>
 
 #include "player.h"
 #include "media.h"
@@ -430,10 +431,9 @@ static int album_insert(media_ctx_t *ctx, char *album, int artistid, int coverid
 	return albumid;
 }
 
-#include <jansson.h>
-
 static int opus_parse_info(json_t *jinfo, char **ptitle, char **partist,
-		char **palbum, char **pgenre, char **pcover, char **pcomment)
+		char **palbum, char **pgenre, char **pcover, char **pcomment,
+		int *plikes)
 {
 	if (json_is_object(jinfo))
 	{
@@ -474,12 +474,18 @@ static int opus_parse_info(json_t *jinfo, char **ptitle, char **partist,
 			*pcomment = strdup(json_string_value(value));
 			json_object_del(jinfo, str_comment);
 		}
+		value = json_object_get(jinfo, str_likes);
+		if (value != NULL && json_is_integer(value))
+		{
+			*plikes = json_integer_value(value);
+			json_object_del(jinfo, str_likes);
+		}
 	}
 	return 0;
 }
 
 static int opus_populateinfo(media_ctx_t *ctx, json_t *jinfo, int *ptitleid, int *partistid,
-		char **album, int *pgenreid, int *pcoverid, char **pcomment)
+		char **album, int *pgenreid, int *pcoverid, char **pcomment, int *plikes)
 {
 	char *title = NULL;
 	char *artist = NULL;
@@ -487,7 +493,7 @@ static int opus_populateinfo(media_ctx_t *ctx, json_t *jinfo, int *ptitleid, int
 	char *cover = NULL;
 	int exist = 1;
 
-	opus_parse_info(jinfo, &title, &artist, album, &genre, &cover, pcomment);
+	opus_parse_info(jinfo, &title, &artist, album, &genre, &cover, pcomment, plikes);
 
 	media_dbg("%s , %s , %s", title?title:"", album?album:"", artist?artist:"");
 	if (title != NULL)
@@ -785,10 +791,11 @@ static int opus_insert(media_ctx_t *ctx, json_t *jinfo, int *palbumid, const cha
 	int artistid = -1;
 	int genreid = -1;
 	int coverid = -1;
+	int likes = 1;
 	char *comment = NULL;
 	char *album = NULL;
 
-	opus_populateinfo(ctx, jinfo, &titleid, &artistid, &album, &genreid, &coverid, &comment);
+	opus_populateinfo(ctx, jinfo, &titleid, &artistid, &album, &genreid, &coverid, &comment, &likes);
 
 	if (titleid == -1)
 		return -1;
@@ -1068,13 +1075,14 @@ static int media_modify(media_ctx_t *ctx, int opusid, const char *info)
 			int titleid = -1;
 			int artistid = -1;
 			int genreid = -1;
+			int likes = 1;
 			char *album = NULL;
 			int coverid = -1;
 			char *comment = NULL;
 			json_error_t error;
 
 			jinfo = json_loads(info, 0, &error);
-			opus_populateinfo(ctx, jinfo, &titleid, &artistid, &album, &genreid, &coverid, &comment);
+			opus_populateinfo(ctx, jinfo, &titleid, &artistid, &album, &genreid, &coverid, &comment, &likes);
 
 			opusid = sqlite3_column_int(statememt, 0);
 			if (titleid != -1)

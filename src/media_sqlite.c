@@ -44,6 +44,7 @@
 struct media_ctx_s
 {
 	sqlite3 *db;
+	sqlite3 *dbplaylist;
 	char *path;
 	char *query;
 	int mediaid;
@@ -910,7 +911,7 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 	if (id == -1)
 	{
 		sqlite3_stmt *statement;
-		const char sql[] = "INSERT INTO media (url, mimeid, opusid, albumid, \"info\", likes) VALUES(@PATH , @MIMEID, @OPUSID, @ALBUMID, @INFO, @LIKES);";
+		const char sql[] = "INSERT INTO media (url, mimeid, opusid, albumid, info, likes) VALUES(@PATH , @MIMEID, @OPUSID, @ALBUMID, @INFO, @LIKES);";
 
 		ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
 		SQLITE3_CHECK(ret, -1, sql);
@@ -1235,26 +1236,27 @@ static int media_next(media_ctx_t *ctx)
 	if (ctx->options & OPTION_RANDOM)
 	{
 		sql = "SELECT id, likes FROM playlist WHERE listid=@LISTID AND likes > 0 ORDER BY likes DESC, RANDOM() LIMIT 1";
-		ret = sqlite3_prepare_v2(ctx->db, sql, -1, &statement, NULL);
-		SQLITE3_CHECK(ret, -1, sql);
 	}
 	else if (ctx->mediaid > -1)
 	{
 		sql = "SELECT id, likes FROM playlist WHERE listid=@LISTID AND id > @ID AND likes > 0 LIMIT 1";
-		ret = sqlite3_prepare_v2(ctx->db, sql, -1, &statement, NULL);
-		SQLITE3_CHECK(ret, -1, sql);
-
-		int index = sqlite3_bind_parameter_index(statement, "@ID");
-		ret = sqlite3_bind_int(statement, index, ctx->mediaid);
-		SQLITE3_CHECK(ret, -1, sql);
 	}
 	else
 	{
 		sql = "SELECT id, likes FROM playlist WHERE listid=@LISTID AND likes > 0 LIMIT 1";
-		ret = sqlite3_prepare_v2(ctx->db, sql, -1, &statement, NULL);
+	}
+	ret = sqlite3_prepare_v2(ctx->dbplaylist, sql, -1, &statement, NULL);
+	SQLITE3_CHECK(ret, -1, sql);
+
+	int index;
+	index = sqlite3_bind_parameter_index(statement, "@ID");
+	if (index > 0)
+	{
+		ret = sqlite3_bind_int(statement, index, ctx->mediaid);
 		SQLITE3_CHECK(ret, -1, sql);
 	}
-	int index = sqlite3_bind_parameter_index(statement, "@LISTID");
+
+	index = sqlite3_bind_parameter_index(statement, "@LISTID");
 	ret = sqlite3_bind_int(statement, index, ctx->listid);
 	SQLITE3_CHECK(ret, -1, sql);
 
@@ -1383,7 +1385,7 @@ static int playlist_create(media_ctx_t *ctx, char *playlist, int fill)
 		if (listid == -1)
 			listid = 1;
 
-		sqlite3 *db = ctx->db;
+		sqlite3 *db = ctx->dbplaylist;
 
 		const char sql[] = "INSERT INTO listname (wordid) VALUES (@ID);";
 		sqlite3_stmt *statement;
@@ -1420,7 +1422,7 @@ static int playlist_find(media_ctx_t *ctx, char *playlist)
 {
 	int ret;
 	int listid = -1;
-	sqlite3 *db = ctx->db;
+	sqlite3 *db = ctx->dbplaylist;
 
 	const char sql[] = "SELECT listname.id FROM listname INNER JOIN word ON word.id=listname.wordid WHERE word.name=@NAME";
 	sqlite3_stmt *statement;
@@ -1446,7 +1448,7 @@ static int playlist_find(media_ctx_t *ctx, char *playlist)
 static int playlist_count(media_ctx_t *ctx, int listid)
 {
 	int ret;
-	sqlite3 *db = ctx->db;
+	sqlite3 *db = ctx->dbplaylist;
 	int count = 0;
 
 	sqlite3_stmt *statement;
@@ -1476,7 +1478,7 @@ static int playlist_count(media_ctx_t *ctx, int listid)
 static int playlist_has(media_ctx_t *ctx, int listid, int id)
 {
 	int ret;
-	sqlite3 *db = ctx->db;
+	sqlite3 *db = ctx->dbplaylist;
 	int count = 0;
 
 	sqlite3_stmt *statement;
@@ -1507,7 +1509,7 @@ static int playlist_has(media_ctx_t *ctx, int listid, int id)
 static int playlist_append(media_ctx_t *ctx, int listid, int id, int likes)
 {
 	int ret;
-	sqlite3 *db = ctx->db;
+	sqlite3 *db = ctx->dbplaylist;
 
 	sqlite3_stmt *statement;
 	const char sql[] = "INSERT INTO playlist (id, listid, likes) VALUES (@ID, @LISTID, @LIKES);";
@@ -1542,7 +1544,7 @@ static int playlist_append(media_ctx_t *ctx, int listid, int id, int likes)
 static int playlist_likes(media_ctx_t *ctx, int listid, int id, int likes)
 {
 	int ret;
-	sqlite3 *db = ctx->db;
+	sqlite3 *db = ctx->dbplaylist;
 
 	sqlite3_stmt *statement;
 	const char sql[] = "UPDATE playlist SET likes=@LIKES WHERE id=@ID AND listid=@LISTID;";
@@ -1576,7 +1578,7 @@ static int playlist_likes(media_ctx_t *ctx, int listid, int id, int likes)
 
 static int playlist_remove(media_ctx_t *ctx, int listid, int id)
 {
-	sqlite3 *db = ctx->db;
+	sqlite3 *db = ctx->dbplaylist;
 	int ret = -1;
 	sqlite3_stmt *statement;
 	const char sql[] = "DELETE FROM playlist WHERE id=@ID and listid=@LISTID";
@@ -1603,7 +1605,7 @@ static int playlist_remove(media_ctx_t *ctx, int listid, int id)
 static int playlist_destroy(media_ctx_t *ctx, int listid)
 {
 	int ret = 0;
-	sqlite3 *db = ctx->db;
+	sqlite3 *db = ctx->dbplaylist;
 	sqlite3_stmt *statement;
 	int index;
 
@@ -1779,25 +1781,6 @@ static int _media_opendb(media_ctx_t *ctx, const char *url)
 		ret = SQLITE_CORRUPT;
 	}
 	ctx->listid = 1;
-	if (ctx->query != NULL)
-	{
-		char *fill = strstr(ctx->query, "fill=true");
-		if (fill != NULL)
-		{
-			ctx->fill = 1;
-		}
-		char *playlist = strstr(ctx->query, "playlist=");
-		if (playlist != NULL)
-		{
-			playlist += 9;
-			char tempo[64];
-			strncpy(tempo, playlist, sizeof(tempo));
-			char *end = strchr(tempo, ',');
-			if (end != NULL)
-				*end = '\0';
-			ctx->listid = _media_changelist(ctx, tempo);
-		}
-	}
 	return ret;
 }
 
@@ -1899,9 +1882,6 @@ static const char *query[] = {
 "INSERT INTO speed (id, wordid) VALUES (3, 5);",
 "INSERT INTO speed (id, wordid) VALUES (4, 6);",
 "CREATE TABLE cover (id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL);",
-"CREATE TABLE playlist (id INTEGER, listid INTEGER DEFAULT(1), likes INTEGER DEFAULT(1), " \
-	"FOREIGN KEY (id) REFERENCES media(id) ON UPDATE SET NULL, " \
-	"FOREIGN KEY (listid) REFERENCES listname(id) ON UPDATE SET NULL);",
 "CREATE TABLE word (id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL);",
 "INSERT INTO word (id, name) VALUES (1, \"default\");",
 "INSERT INTO word (id, name) VALUES (2, \"unknown\");",
@@ -1914,11 +1894,9 @@ static const char *query[] = {
 "INSERT INTO word (id, name) VALUES (9, \"rock\");",
 "INSERT INTO word (id, name) VALUES (10, \"jazz\");",
 "INSERT INTO word (id, name) VALUES (11, \"classic\");",
-"CREATE TABLE listname (id INTEGER PRIMARY KEY, wordid INTEGER, " \
-	"FOREIGN KEY (wordid) REFERENCES word(id));",
-"INSERT INTO listname (id, wordid) VALUES (1, 1);",
 				NULL,
 			};
+#endif
 
 static int _media_initdb(sqlite3 *db, const char *query[])
 {
@@ -1941,9 +1919,16 @@ static int _media_initdb(sqlite3 *db, const char *query[])
 	}
 	return ret;
 }
-#else
-#define media_initdb(...) SQLITE_CORRUPT
-#endif
+
+static const char *playlistquery[] = {
+"CREATE TABLE playlist (id INTEGER, listid INTEGER DEFAULT(1), likes INTEGER DEFAULT(1), " \
+	"FOREIGN KEY (id) REFERENCES media(id) ON UPDATE SET NULL, " \
+	"FOREIGN KEY (listid) REFERENCES listname(id) ON UPDATE SET NULL);",
+"CREATE TABLE listname (id INTEGER PRIMARY KEY, wordid INTEGER, " \
+	"FOREIGN KEY (wordid) REFERENCES word(id));",
+"INSERT INTO listname (id, wordid) VALUES (1, 1);",
+				NULL,
+			};
 
 static media_ctx_t *media_init(player_ctx_t *player, const char *url, ...)
 {
@@ -1965,6 +1950,31 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url, ...)
 		if (ret == SQLITE_OK)
 		{
 			warn("media db: %s", url);
+			ret = sqlite3_open_v2(":memory:", &ctx->dbplaylist, SQLITE_OPEN_CREATE |SQLITE_OPEN_READWRITE, NULL);
+			if (ret == SQLITE_OK)
+			{
+				ret = _media_initdb(ctx->dbplaylist, playlistquery);
+				_media_filter(ctx, TABLE_NONE, NULL);
+			}
+			if (ret == SQLITE_OK && ctx->query != NULL)
+			{
+				char *fill = strstr(ctx->query, "fill=true");
+				if (fill != NULL)
+				{
+					ctx->fill = 1;
+				}
+				char *playlist = strstr(ctx->query, "playlist=");
+				if (playlist != NULL)
+				{
+					playlist += 9;
+					char tempo[64];
+					strncpy(tempo, playlist, sizeof(tempo));
+					char *end = strchr(tempo, ',');
+					if (end != NULL)
+						*end = '\0';
+					ctx->listid = _media_changelist(ctx, tempo);
+				}
+			}
 		}
 		else
 		{

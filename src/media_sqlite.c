@@ -1336,12 +1336,12 @@ static int media_next(media_ctx_t *ctx)
 	}
 	else
 		ctx->mediaid = -1;
+	sqlite3_finalize(statement);
 
-	if ((ctx->options & OPTION_LOOP) && (ctx->mediaid == -1))
+	if ((ctx->mediaid == -1) && (ctx->options & OPTION_LOOP))
 	{
 		media_next(ctx);
 	}
-	sqlite3_finalize(statement);
 	return ctx->mediaid;
 }
 

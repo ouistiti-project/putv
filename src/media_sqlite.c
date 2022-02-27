@@ -1505,44 +1505,21 @@ static int playlist_create(media_ctx_t *ctx, char *playlist, int fill)
 	}
 	else
 	{
-		const char *sql;
-		const char sql1[] = "INSERT INTO word (name) VALUES (@NAME);";
-		sql= sql1;
-		sqlite3_stmt *st_insert;
-		ret = sqlite3_prepare_v2(db, sql1, -1, &st_insert, NULL);
-		SQLITE3_CHECK(ret, 1, sql);
-
-		int index;
-
-		index = sqlite3_bind_parameter_index(st_insert, "@NAME");
-		ret = sqlite3_bind_text(st_insert, index, playlist, -1 , SQLITE_STATIC);
-		SQLITE3_CHECK(ret, 1, sql);
-
-		media_dbgsql(st_insert, __LINE__);
-		ret = sqlite3_step(st_insert);
-		if (ret != SQLITE_DONE)
-		{
-			err("media sqlite: error on insert %d", ret);
+		listid = wordtable_insert(ctx, "word", playlist);
+		if (listid == -1)
 			listid = 1;
-		}
-		else
-		{
-			listid = sqlite3_last_insert_rowid(db);
-		}
 
-		sqlite3_finalize(st_insert);
-
-		const char sql2[] = "INSERT INTO listname (\"wordid\") VALUES (@ID);";
-		sql = sql2;
-		ret = sqlite3_prepare_v2(db, sql2, -1, &st_insert, NULL);
+		const char sql[] = "INSERT INTO listname (\"wordid\") VALUES (@ID);";
+		sqlite3_stmt *statement;
+		ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
 		SQLITE3_CHECK(ret, 1, sql);
 
-		index = sqlite3_bind_parameter_index(st_insert, "@ID");
-		ret = sqlite3_bind_int(st_insert, index, listid);
+		index = sqlite3_bind_parameter_index(statement, "@ID");
+		ret = sqlite3_bind_int(statement, index, listid);
 		SQLITE3_CHECK(ret, 1, sql);
 
-		media_dbgsql(st_insert, __LINE__);
-		ret = sqlite3_step(st_insert);
+		media_dbgsql(statement, __LINE__);
+		ret = sqlite3_step(statement);
 		if (ret != SQLITE_DONE)
 		{
 			err("media sqlite: error on insert %d", ret);
@@ -1557,7 +1534,7 @@ static int playlist_create(media_ctx_t *ctx, char *playlist, int fill)
 				media_list(ctx, _media_setlist, ctx);
 			ctx->listid = tempolist;
 		}
-		sqlite3_finalize(st_insert);
+		sqlite3_finalize(statement);
 	}
 	sqlite3_finalize(st_select);
 	return listid;

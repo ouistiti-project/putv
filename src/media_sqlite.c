@@ -114,7 +114,7 @@ static int playlist_find(media_ctx_t *ctx, char *playlist);
 static int playlist_count(media_ctx_t *ctx, int listid);
 static int playlist_has(media_ctx_t *ctx, int listid, int mediaid);
 static int playlist_append(media_ctx_t *ctx, int listid, int mediaid, int likes);
-static int playlist_reset(media_ctx_t *ctx, int listid, int mediaid, int likes);
+static int playlist_likes(media_ctx_t *ctx, int listid, int mediaid, int likes);
 static int playlist_remove(media_ctx_t *ctx, int listid, int id);
 
 static const char str_mediasqlite[] = "sqlite DB";
@@ -1234,13 +1234,13 @@ static int media_next(media_ctx_t *ctx)
 	const char *sql = NULL;
 	if (ctx->options & OPTION_RANDOM)
 	{
-		sql = "SELECT id FROM playlist WHERE listid=@LISTID AND likes > 0 ORDER BY likes, RANDOM() LIMIT 1";
+		sql = "SELECT id, likes FROM playlist WHERE listid=@LISTID AND likes > 0 ORDER BY likes DESC, RANDOM() LIMIT 1";
 		ret = sqlite3_prepare_v2(ctx->db, sql, -1, &statement, NULL);
 		SQLITE3_CHECK(ret, -1, sql);
 	}
 	else if (ctx->mediaid > -1)
 	{
-		sql = "SELECT id FROM playlist WHERE listid=@LISTID AND id > @ID AND likes > 0 LIMIT 1";
+		sql = "SELECT id, likes FROM playlist WHERE listid=@LISTID AND id > @ID AND likes > 0 LIMIT 1";
 		ret = sqlite3_prepare_v2(ctx->db, sql, -1, &statement, NULL);
 		SQLITE3_CHECK(ret, -1, sql);
 
@@ -1250,7 +1250,7 @@ static int media_next(media_ctx_t *ctx)
 	}
 	else
 	{
-		sql = "SELECT id FROM playlist WHERE listid=@LISTID AND likes > 0 LIMIT 1";
+		sql = "SELECT id, likes FROM playlist WHERE listid=@LISTID AND likes > 0 LIMIT 1";
 		ret = sqlite3_prepare_v2(ctx->db, sql, -1, &statement, NULL);
 		SQLITE3_CHECK(ret, -1, sql);
 	}
@@ -1258,11 +1258,13 @@ static int media_next(media_ctx_t *ctx)
 	ret = sqlite3_bind_int(statement, index, ctx->listid);
 	SQLITE3_CHECK(ret, -1, sql);
 
+	int likes;
 	media_dbgsql(statement, __LINE__);
 	ret = sqlite3_step(statement);
 	if (ret == SQLITE_ROW)
 	{
 		ctx->mediaid = sqlite3_column_int(statement, 0);
+		likes = sqlite3_column_int(statement, 1);
 	}
 	else
 		ctx->mediaid = -1;
@@ -1273,6 +1275,10 @@ static int media_next(media_ctx_t *ctx)
 		_media_filter(ctx, TABLE_NONE, NULL);
 		if (ctx->options & OPTION_LOOP)
 			media_next(ctx);
+	}
+	else
+	{
+		playlist_likes(ctx, ctx->listid, ctx->mediaid, likes - 1);
 	}
 	return ctx->mediaid;
 }
@@ -1361,7 +1367,7 @@ static int _media_setlist(void *arg, int id, int likes)
 	media_ctx_t *ctx = (media_ctx_t *)arg;
 
 	if (playlist_has(ctx, ctx->listid, id) > 0)
-		return playlist_reset(ctx, ctx->listid, id, likes);
+		return playlist_likes(ctx, ctx->listid, id, likes);
 	return playlist_append(ctx, ctx->listid, id, likes);
 }
 
@@ -1533,7 +1539,7 @@ static int playlist_append(media_ctx_t *ctx, int listid, int id, int likes)
 	return ret;
 }
 
-static int playlist_reset(media_ctx_t *ctx, int listid, int id, int likes)
+static int playlist_likes(media_ctx_t *ctx, int listid, int id, int likes)
 {
 	int ret;
 	sqlite3 *db = ctx->db;
@@ -1667,7 +1673,7 @@ static int _media_filter(media_ctx_t *ctx, int table, const char *word)
 	SQLITE3_CHECK(ret, -1, sql[table]);
 
 	index = sqlite3_bind_parameter_index(statement, "@NAME");
-	if (index >0)
+	if (index > 0)
 	{
 		ret = sqlite3_bind_text(statement, index, word, -1 , SQLITE_STATIC);
 		SQLITE3_CHECK(ret, 1, sql[table]);

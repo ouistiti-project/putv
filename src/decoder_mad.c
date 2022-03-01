@@ -58,13 +58,13 @@ struct decoder_ctx_s
 	size_t outbufferlen;
 
 	filter_t *filter;
+	rescale_t rescale;
 	player_ctx_t *player;
 
 	heartbeat_t heartbeat;
 	beat_samples_t beat;
 	mad_timer_t position;
 	unsigned int nloops;
-	int boost;
 };
 #define DECODER_CTX
 #include "decoder.h"
@@ -86,10 +86,11 @@ struct decoder_ctx_s
 #define DECODER_HEARTBEAT
 #endif
 
-//#define JITTER_init jitter_scattergather_init
-//#define JITTER_destroy jitter_scattergather_destroy
-#define JITTER_init jitter_ringbuffer_init
-#define JITTER_destroy jitter_ringbuffer_destroy
+/**
+ * FRACBITS value comes from mad decoder
+ */
+#define FRACBITS		28
+#define JITTER_TYPE JITTER_TYPE_RING
 
 static jitter_t *_decoder_jitter(decoder_ctx_t *ctx, jitte_t jitte);
 
@@ -171,7 +172,6 @@ enum mad_flow output(void *data,
 	audio.nchannels = pcm->channels;
 	audio.nsamples = pcm->length;
 	audio.bitspersample = 24;
-	audio.regain = ctx->boost / 3;
 	int i;
 	for (i = 0; i < audio.nchannels && i < MAXCHANNELS; i++)
 	{
@@ -298,6 +298,19 @@ enum mad_flow header(void *data, struct mad_header const *header)
 
 static const char *jitter_name = "mad decoder";
 
+static decoder_ctx_t *_decoder_init(player_ctx_t *player)
+{
+	decoder_ctx_t *ctx = calloc(1, sizeof(*ctx));
+	ctx->ops = decoder_mad;
+	ctx->player = player;
+
+	mad_decoder_init(&ctx->decoder, ctx,
+			input, header /* header */, 0 /* filter */, output,
+			error, 0 /* message */);
+	rescale_init(&ctx->rescale, FRACBITS, 0);
+	return ctx;
+}
+
 #if 0
 static void _decoder_listener(void *arg, const src_t *src, event_t event, void *eventarg)
 {
@@ -314,33 +327,24 @@ static void _decoder_listener(void *arg, const src_t *src, event_t event, void *
 }
 #endif
 
-static decoder_ctx_t *_decoder_init(player_ctx_t *player)
-{
-	decoder_ctx_t *ctx = calloc(1, sizeof(*ctx));
-	ctx->ops = decoder_mad;
-	ctx->player = player;
-
-	ctx->filter = filter_build(player_filtername(player), PCM_24bits4_LE_stereo, sampled_scaling);
-	mad_decoder_init(&ctx->decoder, ctx,
-			input, header /* header */, 0 /* filter */, output,
-			error, 0 /* message */);
-	return ctx;
-}
-
-static int _decoder_prepare(decoder_ctx_t *ctx, const char *info)
+static int _decoder_prepare(decoder_ctx_t *ctx, filter_t *filter, const char *info)
 {
 	decoder_dbg("decoder: prepare");
-	ctx->boost = media_boost(info);
+	ctx->filter = filter;
+	if (ctx->filter != NULL)
+	{
+		ctx->filter->ops->set(ctx->filter->ctx, FILTER_SAMPLED, rescale_cb, &ctx->rescale, 0);
+	}
 	return 0;
 }
+
 static jitter_t *_decoder_jitter(decoder_ctx_t *ctx, jitte_t jitte)
 {
 	if (ctx->in == NULL)
 	{
 		int factor = jitte;
 		int nbbuffer = NBUFFER << factor;
-		jitter_t *jitter = JITTER_init(jitter_name, nbbuffer, BUFFERSIZE);
-		//jitter_t *jitter = jitter_ringbuffer_init(jitter_name, NBUFFER, BUFFERSIZE);
+		jitter_t *jitter = jitter_init(JITTER_TYPE, jitter_name, nbbuffer, BUFFERSIZE);
 		jitter->format = MPEG2_3_MP3;
 		jitter->ctx->thredhold = nbbuffer / 2;
 
@@ -394,13 +398,13 @@ static int _decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 	int ret = 0;
 	ctx->out = jitter;
 	if (ctx->filter)
-		ret = ctx->filter->ops->set(ctx->filter->ctx, NULL, jitter->format, jitter->ctx->frequence);
+		ret = ctx->filter->ops->set(ctx->filter->ctx, FILTER_FORMAT, jitter->format, FILTER_SAMPLERATE, jitter_samplerate(jitter), 0);
 #ifdef DECODER_HEARTBEAT
 	if (heartbeat_samples)
 	{
 		heartbeat_samples_t config =
 		{
-			.samplerate = jitter->ctx->frequence,
+			.samplerate = jitter_samplerate(jitter),
 			.format = jitter->format,
 			.nchannels = 0,
 		};
@@ -455,7 +459,7 @@ static void _decoder_destroy(decoder_ctx_t *ctx)
 		ctx->filter->ops->destroy(ctx->filter->ctx);
 		free(ctx->filter);
 	}
-	JITTER_destroy(ctx->in);
+	jitter_destroy(ctx->in);
 	free(ctx);
 }
 
@@ -464,6 +468,7 @@ const decoder_ops_t _decoder_mad =
 	.name = "mad",
 	.check = _decoder_check,
 	.init = _decoder_init,
+	.prepare = _decoder_prepare,
 	.jitter = _decoder_jitter,
 	.run = _decoder_run,
 	.position = _decoder_position,

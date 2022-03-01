@@ -80,8 +80,8 @@ static unixsocket_t *_init(const char *url)
 	{
 		struct passwd *pw = NULL;
 		pw = getpwuid(geteuid());
-		chdir(pw->pw_dir);
-		path++;
+		if (chdir(pw->pw_dir) == 0)
+			path++;
 		if (path[0] == '/')
 			path++;
 	}

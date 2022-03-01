@@ -57,7 +57,6 @@ static void _player_autonext(void *arg, event_t event, void *eventarg);
 struct player_ctx_s
 {
 	const char *filtername;
-	filter_t *filter;
 
 	media_t *media;
 	media_t *nextmedia;
@@ -73,6 +72,7 @@ struct player_ctx_s
 
 	jitter_t *outstream[MAX_ESTREAM];
 	int noutstreams;
+
 };
 
 player_ctx_t *player_init(const char *filtername)
@@ -113,9 +113,12 @@ int player_change(player_ctx_t *ctx, const char *mediapath, int random, int loop
 	return 0;
 }
 
-void player_next(player_ctx_t *ctx)
+int player_next(player_ctx_t *ctx, int change)
 {
-	if (ctx->media != NULL)
+	int nextid = -1;
+	if (ctx->nextsrc != NULL)
+		nextid = ctx->nextsrc->mediaid;
+	if (ctx->media != NULL && change)
 	{
 		/**
 		 * next command just request the main loop to complete
@@ -125,6 +128,7 @@ void player_next(player_ctx_t *ctx)
 		 */
 		player_state(ctx, STATE_CHANGE);
 	}
+	return nextid;
 }
 
 media_t *player_media(player_ctx_t *ctx)
@@ -230,13 +234,30 @@ static void _player_new_es(player_ctx_t *ctx, void *eventarg)
 	event_new_es_t *event_data = (event_new_es_t *)eventarg;
 	const src_t *src = event_data->src;
 	warn("player: decoder build");
-	event_data->decoder = decoder_build(ctx, event_data->mime);
-	if (event_data->decoder == NULL)
+	decoder_t *decoder;
+	decoder = decoder_build(ctx, event_data->mime);
+	if (decoder == NULL)
 		err("player: decoder not found for %s", event_data->mime);
-	else {
+	else
+	{
+		event_data->decoder = decoder;
 		src->ops->attach(src->ctx, event_data->pid, event_data->decoder);
-		if (event_data->decoder->ops->prepare)
-			event_data->decoder->ops->prepare(event_data->decoder->ctx, src->info);
+		jitter_t *outstream = NULL;
+		int i;
+		for ( i = 0; i < ctx->noutstreams; i++)
+		{
+			outstream = ctx->outstream[i];
+			if (outstream->format & JITTER_AUDIO)
+				break;
+		}
+		filter_t *filter = NULL;
+		if (i < ctx->noutstreams)
+			filter = filter_build(ctx->filtername, outstream, src->info);
+		decoder->filter = filter;
+		if (decoder->ops->prepare)
+		{
+			decoder->ops->prepare(decoder->ctx, filter, src->info);
+		}
 	}
 }
 
@@ -482,11 +503,6 @@ void player_sendevent(player_ctx_t *ctx, event_t event, void *data)
 		it->cb(it->arg, event, data);
 		it = it->next;
 	}
-}
-
-const char *player_filtername(player_ctx_t *ctx)
-{
-	return ctx->filtername;
 }
 
 src_t *player_source(player_ctx_t *ctx)

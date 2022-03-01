@@ -152,7 +152,7 @@ static src_ctx_t *_src_init(player_ctx_t *player, const char *url, const char *m
 static int _src_prepare(src_ctx_t *ctx, const char *info)
 {
 	src_dbg("src: prepare");
-	const src_t src = { .ops = src_file, .ctx = ctx};
+	const src_t src = { .ops = src_file, .ctx = ctx, .info = info, .mediaid = player_mediaid(ctx->player)};
 	event_new_es_t event = {.pid = ctx->pid, .src = &src, .mime = ctx->mime, .jitte = JITTE_LOW};
 	event_listener_t *listener = ctx->listener;
 	while (listener)

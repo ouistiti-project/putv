@@ -586,6 +586,34 @@ $(document).ready(function()
 			}
 		});
 
+	var connectTimer;
+	$('#connect').mouseup(function()
+		{
+			clearTimeout(connectTimer);
+			return false;
+		}).mousedown(function()
+		{
+			connectTimer = window.setTimeout(function()
+				{
+				        var xhr = new XMLHttpRequest();
+				        xhr.onreadystatechange = function()
+				        {
+				                var xhr = this;
+					        if (xhr.readyState === XMLHttpRequest.DONE)
+				                {
+				                        if (xhr.status === 200)
+				                        {
+								g_player.connect();
+							}
+						}
+					}.bind(xhr);
+					xhr.open("GET", "/apps/totem-start.cgi");
+					xhr.responseType = "text/json";
+					xhr.withCredentials = true;
+					xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
+					xhr.send();
+				},1000);
+		});
 });
 
 window.addEventListener('unload', function(event) {

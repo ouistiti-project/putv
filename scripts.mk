@@ -903,16 +903,17 @@ _oldconfig: $(DEFCONFIG) $(PATHCACHE)
 # 2) relaunch with _defconfig target
 defconfig: action:=_defconfig
 defconfig: TMPCONFIG:=$(builddir).tmpconfig
-defconfig: build:=$(action) TMPCONFIG=$(TMPCONFIG) -f $(makemore) file
+defconfig: build:=$(action) TMPCONFIG=$(builddir).tmpconfig -f $(makemore) file
 defconfig: cleanconfig $(builddir) default_action ;
 
 # manage the defconfig files
 # 1) set the DEFCONFIG variable
 # 2) relaunch with _defconfig target
-%_defconfig: action:=_defconfig
-%_defconfig: TMPCONFIG=$(builddir).tmpconfig
-%_defconfig: build:=$(action) DEFCONFIG=$(srcdir)configs/%_defconfig TMPCONFIG=$(TMPCONFIG) -f $(makemore) file
-%_defconfig: cleanconfig $(builddir) default_action ;
+DEFCONFIGFILES:=$(notdir $(wildcard $(srcdir)configs/*))
+$(DEFCONFIGFILES): %_defconfig: cleanconfig $(builddir)
+	$(Q)$(MAKE) _defconfig DEFCONFIG=$(srcdir)configs/$*_defconfig TMPCONFIG=$(builddir).tmpconfig -f $(makemore) file=$(file)
+
+.PHONY: $(DEFCONFIGFILES)
 
 quiet_cmd__saveconfig=DEFCONFIG $(notdir $(DEFCONFIG))
 cmd__saveconfig=printf "$(foreach config,$(CONFIGS),$(config)=$($(config))\n)" > $(CONFIG)
@@ -939,7 +940,8 @@ $(TMPCONFIG): $(DEFCONFIG)
 # recipes) create the .config file with the variables from DEFCONFIG
 _defconfig: action:=_defconfig
 _defconfig: build:=$(action) TMPCONFIG= -f $(makemore) file
-_defconfig: $(CONFIG) $(PATHCACHE) $(subdir-target) _hook
+_defconfig: $(CONFIG) $(PATHCACHE) $(subdir-target) _hook;
+	@:
 
 .PHONY:_defconfig
 else
@@ -953,7 +955,9 @@ $(CONFIG):
 
 _defconfig: action:=_defconfig
 _defconfig: build:=$(action) TMPCONFIG= -f $(makemore) file
-_defconfig: $(subdir-target) _hook
+_defconfig: $(subdir-target) _hook;
+	@:
 
+.PHONY:_defconfig
 endif # ifneq ($(TMPCONFIG),)
 endif

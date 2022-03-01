@@ -122,14 +122,26 @@ void help(const char *name)
 {
 	fprintf(stderr, "%s [-R <websocketdir>][-m <media>][-o <output>][-p <pidfile>]\n", name);
 	fprintf(stderr, "\t...[-f <filtername>][-x][-D][-a][-r][-l][-L <logfile>]\n");
-	fprintf(stderr, "\t...[-d <directory>]\n");
+	fprintf(stderr, "\t...[-d <directory>][-R <directory>]\n");
 	fprintf(stderr, "\t...[-P [0-99]]\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "\t -m <media>\tSet the media supporting audio files\n");
-	fprintf(stderr, "\t -o <output>\tSet the audio sink parameter\n");
+	fprintf(stderr, "\t -o <output>\tSet the sink URL (default: alsa:default)\n");
 	fprintf(stderr, "\t -a\t\tAuto play enabled\n");
 	fprintf(stderr, "\t -r\t\tShuffle enabled\n");
 	fprintf(stderr, "\t -l\t\tLoop enabled\n");
+	fprintf(stderr, "\t -R <directory>\tSet the directory for command socket file\n");
+	fprintf(stderr, "\t -d <directory>\tSet the working directory\n");
+	fprintf(stderr, "\t -P <priority>\tSet the process priority\n");
+	fprintf(stderr, "\t -f <filter>\tSet a filter and its features (default: pcm\n");
+	fprintf(stderr, "\n");
+	fprintf(stderr, "\t filters:\n");
+	fprintf(stderr, "\t pcm\tstereo interleaved stream\n");
+	fprintf(stderr, "\t pcm?mono=left\tmono stream with left channel\n");
+	fprintf(stderr, "\t pcm?mono=right\tmono stream with right channel\n");
+	fprintf(stderr, "\t pcm?mono=mixed\tmono stream with left+right channels\n");
+	fprintf(stderr, "\t pcm?stats\tprint statistics about the stream\n");
+	
 }
 
 #define DAEMONIZE 0x01
@@ -149,7 +161,7 @@ int main(int argc, char **argv)
 	const char *name = basename(argv[0]);
 	const char *user = NULL;
 	const char *pidfile = NULL;
-	const char *filtername = "pcm_stereo";
+	const char *filtername = "pcm";
 	const char *logfile = NULL;
 	const char *cwd = NULL;
 
@@ -235,8 +247,8 @@ int main(int argc, char **argv)
 			err("log file error %s", strerror(errno));
 	}
 
-	if (cwd != NULL)
-		chdir(cwd);
+	if (cwd != NULL && chdir(cwd) != 0)
+		err("main: working directory %s", strerror(errno));
 
 	if (priority > 0)
 	{
@@ -263,6 +275,8 @@ int main(int argc, char **argv)
 	}
 
 	player_ctx_t *player = player_init(filtername);
+	if (player == NULL)
+		return -1;
 	player_change(player, mediapath, ((mode & RANDOM) == RANDOM), ((mode & LOOP) == LOOP), 1);
 
 	uid_t pw_uid = getuid();
@@ -365,9 +379,10 @@ int main(int argc, char **argv)
 #endif
 #endif
 
-	setegid(pw_gid);
+	if (setegid(pw_gid))
+		err("main: change group %s", strerror(errno));
 	if (seteuid(pw_uid))
-		err("Error: start server as root");
+		err("main: start server as root");
 
 	int i;
 	for (i = 0; i < nbcmds; i++)

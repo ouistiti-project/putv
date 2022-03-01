@@ -416,14 +416,14 @@ static int
 output_putv_getvolume(float *value)
 {
 	dbg("UPnP: get volume");
-	client_volume(&gmrenderer_ctx->client, gmrenderer_checkvolume, gmrenderer_ctx, json_null());
+	client_volume(&gmrenderer_ctx->client, gmrenderer_checkvolume, gmrenderer_ctx, 0);
 	return gmrenderer_ctx->volume;
 }
 static int
 output_putv_setvolume(float value)
 {
 	dbg("UPnP: set volume");
-	client_volume(&gmrenderer_ctx->client, NULL, gmrenderer_ctx, json_integer((int) value));
+	client_volume(&gmrenderer_ctx->client, NULL, gmrenderer_ctx, (int)value);
 	return 0;
 }
 static int
@@ -434,7 +434,7 @@ output_putv_getmute(int *value)
 static int
 output_putv_setmute(int value)
 {
-	client_volume(&gmrenderer_ctx->client, NULL, gmrenderer_ctx, json_integer(0));
+	client_volume(&gmrenderer_ctx->client, NULL, gmrenderer_ctx, 0);
 	return 0;
 }
 

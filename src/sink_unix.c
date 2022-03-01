@@ -116,8 +116,8 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 	{
 		struct passwd *pw = NULL;
 		pw = getpwuid(geteuid());
-		chdir(pw->pw_dir);
-		path++;
+		if (chdir(pw->pw_dir) == 0)
+			path++;
 		if (path[0] == '/')
 			path++;
 	}
@@ -127,7 +127,7 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 	ctx->filepath = path;
 
 	unsigned int size;
-	jitter_t *jitter = jitter_scattergather_init(jitter_name, 6, size);
+	jitter_t *jitter = jitter_init(JITTER_TYPE_SG, jitter_name, 6, size);
 	jitter->ctx->frequence = 0;
 	jitter->ctx->thredhold = 2;
 	jitter->format = format;
@@ -401,7 +401,7 @@ static void sink_destroy(sink_ctx_t *ctx)
 	{
 		pthread_join(ctx->thread, NULL);
 	}
-	jitter_scattergather_destroy(ctx->in);
+	jitter_destroy(ctx->in);
 #ifdef SINK_UNIX_ASYNC
 	pthread_mutex_destroy(&ctx->mutex);
 	pthread_cond_destroy(&ctx->event);
@@ -413,6 +413,8 @@ static void sink_destroy(sink_ctx_t *ctx)
 
 const sink_ops_t *sink_unix = &(sink_ops_t)
 {
+	.name = "unix",
+	.default_ = "unix:///tmp/stream",
 	.init = sink_init,
 	.jitter = sink_jitter,
 	.attach = sink_attach,

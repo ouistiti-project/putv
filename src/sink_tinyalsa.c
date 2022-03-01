@@ -92,7 +92,7 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 	}
 	ctx->playback_handle = pcm_open(0, 0, PCM_OUT, &config);
 
-	jitter_t *jitter = jitter_scattergather_init(jitter_name, 10, size);
+	jitter_t *jitter = jitter_init(JITTER_TYPE_SG, jitter_name, 10, size);
 	ctx->in = jitter;
 	jitter->format = format;
 
@@ -145,12 +145,13 @@ static void alsa_destroy(sink_ctx_t *ctx)
 	if (ctx->thread)
 		pthread_join(ctx->thread, NULL);
 	pcm_close(ctx->playback_handle);
-	jitter_scattergather_destroy(ctx->in);
+	jitter_destroy(ctx->in);
 	free(ctx);
 }
 
 const sink_ops_t *sink_tinyalsa = &(sink_ops_t)
 {
+	.name = "tinyalsa",
 	.init = alsa_init,
 	.jitter = alsa_jitter,
 	.attach = sink_attach,

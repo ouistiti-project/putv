@@ -162,7 +162,8 @@ static void *_src_thread(void *arg)
 	int ret = curl_easy_perform(ctx->curl);
 	if ( ret != CURLE_OK)
 	{
-		dbg("src curl error %d on %p", ret, ctx->curl);
+		err("src curl error %d on %p", ret, ctx->curl);
+		return 0;
 	}
 	dbg("src: end of stream");
 	ctx->out->ops->flush(ctx->out->ctx);

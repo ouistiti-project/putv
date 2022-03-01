@@ -68,14 +68,18 @@ static int method_subscribe(json_t *json_params, json_t **result, void *userdata
 
 static int answer_proto(client_data_t * data, json_t *json_params)
 {
+	client_event_prototype_t func;
+	void *funcdata;
 	pthread_mutex_lock(&data->mutex);
 	data->pid = 0;
-	if (data->proto)
-		data->proto(data->data, json_params);
+	func = data->proto;
+	funcdata = data->data;
 	data->proto = NULL;
 	data->data = NULL;
 	pthread_mutex_unlock(&data->mutex);
 	pthread_cond_broadcast(&data->cond);
+	if (func)
+		func(funcdata, json_params);
 	return 0;
 }
 
@@ -101,21 +105,11 @@ static int answer_stdparams(json_t *json_params, json_t **result, void *userdata
 	client_data_t *data = userdata;
 
 	answer_proto(data, json_params);
-	return 0;
-}
-
-static int method_volume(json_t *json_params, json_t **result, void *userdata)
-{
-	client_data_t *data = userdata;
-	if (json_is_integer(data->params))
-	{
-		*result = json_object();
-		json_object_set(*result, "step", data->params);
-	}
-	else if (json_is_object(data->params))
-	{
-		*result = data->params;
-	}
+#ifdef DEBUG
+	char * dump = json_dumps(json_params, JSON_INDENT(2));
+	dbg("answer params %s", dump);
+	free(dump);
+#endif
 	return 0;
 }
 
@@ -123,15 +117,11 @@ static int method_stdparams(json_t *json_params, json_t **result, void *userdata
 {
 	client_data_t *data = userdata;
 	*result = data->params;
-	return 0;
-}
-
-static int method_list(json_t *json_params, json_t **result, void *userdata)
-{
-	client_data_t *data = userdata;
-	json_error_t error;
-	*result = json_object();
-	json_object_set(*result, "first", json_integer(data->list->first));
+#ifdef DEBUG
+	char * dump = json_dumps(*result, JSON_INDENT(2));
+	dbg("method params %s", dump);
+	free(dump);
+#endif
 	return 0;
 }
 
@@ -166,16 +156,22 @@ struct jsonrpc_method_entry_t table[] =
 	{'a',"stop", answer_stdparams, "o", 0, NULL},
 	{'r',"status", method_nullparam, "", 0, NULL},
 	{'a',"status", answer_stdparams, "o", 0, NULL},
-	{'r',"volume", method_volume, "o", 0, NULL},
+	{'r',"setnext", method_stdparams, "o", 0, NULL},
+	{'a',"setnext", answer_stdparams, "o", 0, NULL},
+	{'r',"volume", method_stdparams, "o", 0, NULL},
 	{'a',"volume", answer_stdparams, "o", 0, NULL},
 	{'r',"change", method_stdparams, "o", 0, NULL},
 	{'a',"change", answer_stdparams, "o", 0, NULL},
 	{'r',"append", method_stdparams, "o", 0, NULL},
 	{'a',"append", answer_stdparams, "o", 0, NULL},
+	{'r',"setinfo", method_stdparams, "o", 0, NULL},
+	{'a',"setinfo", answer_stdparams, "o", 0, NULL},
 	{'r',"remove", method_stdparams, "o", 0, NULL},
 	{'a',"remove", answer_stdparams, "o", 0, NULL},
-	{'r',"list", method_list, "o", 0, NULL},
+	{'r',"list", method_stdparams, "o", 0, NULL},
 	{'a',"list", answer_stdparams, "o", 0, NULL},
+	{'r',"info", method_stdparams, "o", 0, NULL},
+	{'a',"info", answer_stdparams, "o", 0, NULL},
 	{'r',"getposition", method_nullparam, "", 0, NULL},
 	{'a',"getposition", answer_stdparams, "o", 0, NULL},
 	{'r',"options", method_stdparams, "", 0, NULL},
@@ -195,7 +191,10 @@ int client_unix(const char *socketpath, client_data_t *data)
 		strncpy(addr.sun_path, socketpath, sizeof(addr.sun_path));
 		int ret = connect(sock, (const struct sockaddr *)&addr, sizeof(addr.sun_path));
 		if (ret != 0)
+		{
 			sock = 0;
+			err("client: connect error %s", strerror(errno));
+		}
 		data->sock = sock;
 		pthread_cond_init(&data->cond, NULL);
 		pthread_mutex_init(&data->mutex, NULL);
@@ -212,7 +211,7 @@ void client_async(client_data_t *data,int async)
 		data->options &= ~OPTION_ASYNC;
 }
 
-unsigned long int client_cmd(client_data_t *data, char * cmd)
+unsigned long int client_cmd(client_data_t *data, const char * cmd)
 {
 	int ret;
 	char *buffer = jsonrpc_request(cmd, strlen(cmd), table, (char*)data, &data->pid);
@@ -245,7 +244,7 @@ int client_wait(client_data_t *data, unsigned long int pid)
 	return 0;
 }
 
-int client_next(client_data_t *data, client_event_prototype_t proto, void *protodata)
+static int _client_generic(client_data_t *data, client_event_prototype_t proto, void *protodata, const char *cmd)
 {
 	if (data->pid > 0)
 	{
@@ -254,7 +253,7 @@ int client_next(client_data_t *data, client_event_prototype_t proto, void *proto
 	pthread_mutex_lock(&data->mutex);
 	data->proto = proto;
 	data->data = protodata;
-	long int pid = client_cmd(data, "next");
+	long int pid = client_cmd(data, cmd);
 	if (pid == -1)
 	{
 		pthread_mutex_unlock(&data->mutex);
@@ -263,115 +262,50 @@ int client_next(client_data_t *data, client_event_prototype_t proto, void *proto
 	client_wait(data, (unsigned long int)pid);
 	pthread_mutex_unlock(&data->mutex);
 	return 0;
+}
+
+int client_next(client_data_t *data, client_event_prototype_t proto, void *protodata)
+{
+	return _client_generic(data, proto, protodata, "next");
 }
 
 int client_play(client_data_t *data, client_event_prototype_t proto, void *protodata)
 {
-	if (data->pid > 0)
-		return -2;
-	pthread_mutex_lock(&data->mutex);
-	data->proto = proto;
-	data->data = protodata;
-	long int pid = client_cmd(data, "play");
-	if (pid == -1)
-	{
-		pthread_mutex_unlock(&data->mutex);
-		return -1;
-	}
-	client_wait(data, (unsigned long int)pid);
-	pthread_mutex_unlock(&data->mutex);
-	return 0;
+	return _client_generic(data, proto, protodata, "play");
 }
 
 int client_pause(client_data_t *data, client_event_prototype_t proto, void *protodata)
 {
-	if (data->pid > 0)
-		return -2;
-	pthread_mutex_lock(&data->mutex);
-	data->proto = proto;
-	data->data = protodata;
-	long int pid = client_cmd(data, "pause");
-	if (pid == -1)
-	{
-		pthread_mutex_unlock(&data->mutex);
-		return -1;
-	}
-	client_wait(data, (unsigned long int)pid);
-	pthread_mutex_unlock(&data->mutex);
-	return 0;
+	return _client_generic(data, proto, protodata, "pause");
 }
 
 int client_stop(client_data_t *data, client_event_prototype_t proto, void *protodata)
 {
-	if (data->pid > 0)
-		return -2;
-	pthread_mutex_lock(&data->mutex);
-	data->proto = proto;
-	data->data = protodata;
-	long int pid = client_cmd(data, "stop");
-	if (pid == -1)
-	{
-		pthread_mutex_unlock(&data->mutex);
-		return -1;
-	}
-	client_wait(data, (unsigned long int)pid);
-	pthread_mutex_unlock(&data->mutex);
-	return 0;
+	return _client_generic(data, proto, protodata, "stop");
 }
 
 int client_status(client_data_t *data, client_event_prototype_t proto, void *protodata)
 {
-	if (data->pid > 0)
-		return -2;
-	pthread_mutex_lock(&data->mutex);
-	data->proto = proto;
-	data->data = protodata;
-	long int pid = client_cmd(data, "status");
-	if (pid == -1)
-	{
-		pthread_mutex_unlock(&data->mutex);
-		return -1;
-	}
-	client_wait(data, (unsigned long int)pid);
-	pthread_mutex_unlock(&data->mutex);
-	return 0;
+	return _client_generic(data, proto, protodata, "status");
 }
 
 int client_getposition(client_data_t *data, client_event_prototype_t proto, void *protodata)
 {
-	if (data->pid > 0)
-		return -2;
-	pthread_mutex_lock(&data->mutex);
-	data->proto = proto;
-	data->data = protodata;
-	long int pid = client_cmd(data, "getposition");
-	if (pid == -1)
-	{
-		pthread_mutex_unlock(&data->mutex);
-		return -1;
-	}
-	client_wait(data, (unsigned long int)pid);
-	pthread_mutex_unlock(&data->mutex);
-	return 0;
+	return _client_generic(data, proto, protodata, "getposition");
 }
 
-int client_volume(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *step)
+int client_volume(client_data_t *data, client_event_prototype_t proto, void *protodata, int step)
 {
-	if (data->pid > 0)
-		return -2;
-	pthread_mutex_lock(&data->mutex);
-	data->proto = proto;
-	data->data = protodata;
-	data->params = step;
-	long int pid = client_cmd(data, "volume");
-	if (pid == -1)
-	{
-		pthread_mutex_unlock(&data->mutex);
-		return -1;
-	}
-	client_wait(data, (unsigned long int)pid);
-	pthread_mutex_unlock(&data->mutex);
-	return 0;
+	data->params = json_object();
+	json_object_set_new(data->params, "step", json_integer(step));
+	return _client_generic(data, proto, protodata, "volume");
+}
+
+int client_setnext(client_data_t *data, client_event_prototype_t proto, void *protodata, int id)
+{
+	data->params = json_object();
+	json_object_set_new(data->params, "id", json_integer(id));
+	return _client_generic(data, proto, protodata, "setnext");
 }
 
 int client_eventlistener(client_data_t *data, const char *name, client_event_prototype_t proto, void *protodata)
@@ -387,100 +321,57 @@ int client_eventlistener(client_data_t *data, const char *name, client_event_pro
 
 int media_change(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *media)
 {
-	if (data->pid > 0)
-		return -2;
-	pthread_mutex_lock(&data->mutex);
-	data->proto = proto;
-	data->data = protodata;
 	data->params = media;
-	long int pid = client_cmd(data, "change");
-	if (pid == -1)
-	{
-		pthread_mutex_unlock(&data->mutex);
-		return -1;
-	}
-	dbg("client: new media %s", json_string_value(json_object_get(media, "name")));
-	client_wait(data, (unsigned long int)pid);
-	pthread_mutex_unlock(&data->mutex);
-	return 0;
+	return _client_generic(data, proto, protodata, "change");
 }
 
 int media_insert(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *media)
 {
-	if (data->pid > 0)
-		return -2;
-	pthread_mutex_lock(&data->mutex);
-	data->proto = proto;
-	data->data = protodata;
 	data->params = media;
-	long int pid = client_cmd(data, "append");
-	if (pid == -1)
-	{
-		pthread_mutex_unlock(&data->mutex);
-		return -1;
-	}
-	client_wait(data, (unsigned long int)pid);
-	pthread_mutex_unlock(&data->mutex);
-	return 0;
+	return _client_generic(data, proto, protodata, "append");
+}
+
+int media_setinfo(client_data_t *data, client_event_prototype_t proto, void *protodata, int id, json_t *info)
+{
+	data->params = json_object();
+	json_object_set_new(data->params, "id", json_integer(id));
+	json_object_set_new(data->params, "info", info);
+	return _client_generic(data, proto, protodata, "setinfo");
 }
 
 int media_remove(client_data_t *data, client_event_prototype_t proto, void *protodata, json_t *media)
 {
-	if (data->pid > 0)
-		return -2;
-	pthread_mutex_lock(&data->mutex);
-	data->proto = proto;
-	data->data = protodata;
 	data->params = media;
-	long int pid = client_cmd(data, "remove");
-	if (pid == -1)
-	{
-		pthread_mutex_unlock(&data->mutex);
-		return -1;
-	}
-	client_wait(data, (unsigned long int)pid);
-	pthread_mutex_unlock(&data->mutex);
-	return 0;
+	return _client_generic(data, proto, protodata, "remove");
 }
 
-int media_list(client_data_t *data, client_event_prototype_t proto, void *protodata, list_t *list)
+int media_list(client_data_t *data, client_event_prototype_t proto, void *protodata, int first, int maxitems)
 {
-	if (data->pid > 0)
-		return -2;
-	pthread_mutex_lock(&data->mutex);
-	data->proto = proto;
-	data->data = protodata;
-	data->list = list;
-	long int pid = client_cmd(data, "list");
-	if (pid == -1)
-	{
-		pthread_mutex_unlock(&data->mutex);
-		return -1;
-	}
-	client_wait(data, (unsigned long int)pid);
-	pthread_mutex_unlock(&data->mutex);
-	return 0;
+	data->params = json_object();
+	json_object_set_new(data->params, "first", json_integer(first));
+	json_object_set_new(data->params, "maxitems", json_integer(maxitems));
+	return _client_generic(data, proto, protodata, "list");
+}
+
+int media_info(client_data_t *data, client_event_prototype_t proto, void *protodata, int id)
+{
+	data->params = json_object();
+	json_object_set_new(data->params, "id", json_integer(id));
+	return _client_generic(data, proto, protodata, "info");
 }
 
 int media_options(client_data_t *data, client_event_prototype_t proto, void *protodata, int random, int loop)
 {
-	if (data->pid > 0)
-		return -2;
-	pthread_mutex_lock(&data->mutex);
-	data->proto = proto;
-	data->data = protodata;
 	data->params = json_object();
-	json_object_set_new(data->params, "random", json_boolean(random));
-	json_object_set_new(data->params, "loop", json_boolean(loop));
-	long int pid = client_cmd(data, "options");
-	if (pid == -1)
-	{
-		pthread_mutex_unlock(&data->mutex);
-		return -1;
-	}
-	client_wait(data, (unsigned long int)pid);
-	pthread_mutex_unlock(&data->mutex);
-	return 0;
+	if (random == 1)
+		json_object_set_new(data->params, "random", json_true());
+	else if (random == 0)
+		json_object_set_new(data->params, "random", json_false());
+	if (loop == 1)
+		json_object_set_new(data->params, "loop", json_true());
+	else if (loop == 0)
+		json_object_set_new(data->params, "loop", json_false());
+	return _client_generic(data, proto, protodata, "options");
 }
 
 #ifdef JSONRPC_LARGEPACKET
@@ -491,8 +382,12 @@ static size_t recv_cb(void *buffer, size_t len, void *arg)
 	if (data->message == NULL)
 	{
 		ret = recv(data->sock, buffer, len, MSG_NOSIGNAL);
-		if (ret == 0)
-			data->run = 0;
+		if (ret <= 0)
+		{
+			strncpy(buffer, "{}",len);
+			client_disconnect(data);
+			return -1;
+		}
 	}
 	else
 	{
@@ -565,6 +460,7 @@ int client_loop(client_data_t *data)
 				{
 					err("client: receive mal formated json %s", error.text);
 					data->pid = 0;
+					data->run = 0;
 				}
 			} while (data->message != NULL);
 #else
@@ -575,12 +471,25 @@ int client_loop(client_data_t *data)
 			buffer[ret] = 0;
 			if (ret > 0)
 				jsonrpc_handler(buffer, strlen(buffer), table, data);
-			if (ret == 0)
+			else //if (ret == 0)
 				data->run = 0;
 #endif
 		}
 	}
+	dbg("client: end loop");
+	if (data->sock > 0)
+	{
+		shutdown(data->sock, SHUT_WR);
+		close(data->sock);
+	}
+	data->sock = 0;
 	pthread_cond_destroy(&data->cond);
 	pthread_mutex_destroy(&data->mutex);
 	return 0;
+}
+
+void client_disconnect(client_data_t *data)
+{
+	data->run = 0;
+	shutdown(data->sock, SHUT_RD);
 }

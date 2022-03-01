@@ -75,6 +75,8 @@ static int sink_write(sink_ctx_t *ctx, unsigned char *buff, int len)
 static sink_ctx_t *sink_init(player_ctx_t *ctx, const char *path)
 {
 	int fd;
+	if (!strncmp(path, "file://", 7))
+		path += 7;
 	if (!strcmp(path, "-"))
 		fd = 1;
 	else
@@ -86,8 +88,7 @@ static sink_ctx_t *sink_init(player_ctx_t *ctx, const char *path)
 		sink->fd = fd;
 		sink->ctx = ctx;
 
-		jitter_t *jitter = jitter_ringbuffer_init(jitter_name, 1, BUFFERSIZE);
-		//jitter_t *jitter = jitter_scattergather_init(jitter_name, 3, BUFFERSIZE);
+		jitter_t *jitter = jitter_init(JITTER_TYPE_RING, jitter_name, 1, BUFFERSIZE);
 		dbg("sink: add consumer to %s", jitter->ctx->name);
 		jitter->ctx->consume = (consume_t)sink_write;
 		jitter->ctx->consumer = (void *)sink;
@@ -115,14 +116,15 @@ static int sink_attach(sink_ctx_t *ctx, const char *mime)
 
 static void sink_destroy(sink_ctx_t *sink)
 {
-	//jitter_ringbuffer_destroy(sink->in);
-	jitter_scattergather_destroy(sink->in);
+	jitter_destroy(sink->in);
 	close(sink->fd);
 	free(sink);
 }
 
 const sink_ops_t *sink_file = &(sink_ops_t)
 {
+	.name = "file",
+	.default_ = "file:///tmp/default.wav",
 	.init = sink_init,
 	.jitter = sink_jitter,
 	.attach = sink_attach,

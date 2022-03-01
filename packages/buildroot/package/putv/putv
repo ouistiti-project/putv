@@ -1,8 +1,10 @@
 # putv config.
 
-case $1 in
+DAEMON=totem
+
+case $DAEMON in
   totem)
-    OUTPUT="alsa:default?format=24le,mixer=Master"
+    OUTPUT="default?format=24le,mixer=Master"
     ;;
   putv)
     OUTPUT="unix://${WEBSOCKETDIR}/totem.mp3"

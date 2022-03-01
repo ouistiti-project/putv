@@ -1,0 +1,7 @@
+.geany
+*.o
+*.a
+*.so
+.config
+.config.old
+.pathcache

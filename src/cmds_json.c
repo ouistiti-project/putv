@@ -205,7 +205,8 @@ static int method_list(json_t *json_params, json_t **result, void *userdata)
 
 	entry.count = 0;
 	media->ops->list(media->ctx, _append_entry, (void *)&entry);
-	*result = json_pack("{s:i,s:i,s:o}", "count", count, "nbitems", entry.count, "playlist", entry.list);
+	*result = json_pack("{s:i,s:i,s:o}",
+		"count", count, "nbitems", entry.count, "playlist", entry.list);
 
 	return 0;
 }
@@ -229,6 +230,70 @@ static int method_info(json_t *json_params, json_t **result, void *userdata)
 		int id = json_integer_value(id_js);
 		*result = json_object();
 		media->ops->find(media->ctx, id, _print_entry, (void *)*result);
+		json_object_set(*result, "id", id_js);
+	}
+	else
+	{
+		*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "id not found", json_null());
+	}
+
+	return 0;
+}
+
+typedef struct
+{
+	media_t *media;
+	const char *info;
+	json_t *result;
+} _setinfo_t;
+static int _setinfo(void *arg, int id, const char *url,
+		const char *info, const char *mime)
+{
+	if (url == NULL)
+		return -1;
+	_setinfo_t *data = (_setinfo_t *)arg;
+	media_t *media = data->media;
+	const char *newinfo = data->info;
+	if (newinfo && info && strcmp(newinfo, info))
+	{
+		if (media->ops->modify(media->ctx, id, newinfo) != 0)
+		{
+			json_object_set(data->result, "status", json_string("KO"));
+			json_object_set(data->result, "message", json_string("storage error"));
+			return -2;
+		}
+	}
+	json_object_set(data->result, "status", json_string("OK"));
+	return 0;
+}
+
+static int method_setinfo(json_t *json_params, json_t **result, void *userdata)
+{
+	int ret;
+	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
+	media_t *media = player_media(ctx->player);
+	cmds_dbg("cmds: setinfo");
+
+	if (media->ops->modify == NULL)
+	{
+		*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
+		return -1;
+	}
+
+	json_t *id_js = json_object_get(json_params, "id");
+	if (id_js && json_is_integer(id_js))
+	{
+		int id = json_integer_value(id_js);
+		char * info = json_dumps(json_object_get(json_params, "info"), 0);
+		*result = json_object();
+		_setinfo_t data = {
+			.media = media,
+			.info = info,
+			.result = *result,
+		};
+		media->ops->find(media->ctx, id, _setinfo, &data);
+		free(info);
+		json_object_set(*result, "id", id_js);
 	}
 	else
 	{
@@ -252,9 +317,6 @@ static int method_filter(json_t *json_params, json_t **result, void *userdata)
 		*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
 		return -1;
 	}
-
-	entry_t entry;
-	entry.list = json_array();
 
 	json_t *value;
 	value = json_object_get(json_params, "keyword");
@@ -307,6 +369,7 @@ static int method_remove(json_t *json_params, json_t **result, void *userdata)
 		*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
 		return -1;
 	}
+	int id = -1;
 
 	if (json_is_array(json_params))
 	{
@@ -332,7 +395,7 @@ static int method_remove(json_t *json_params, json_t **result, void *userdata)
 		value = json_object_get(json_params, "id");
 		if (json_is_integer(value))
 		{
-			int id = json_integer_value(value);
+			id = json_integer_value(value);
 			ret = media->ops->remove(media->ctx, id, NULL);
 		}
 		value = json_object_get(json_params, "url");
@@ -351,6 +414,8 @@ static int method_remove(json_t *json_params, json_t **result, void *userdata)
 	else
 	{
 		*result = json_pack("{s:s,s:s}", "status", "DONE", "message", "media removed");
+		if (id != -1)
+			json_object_set(*result, "id", json_integer(id));
 		ret = 0;
 	}
 	return ret;
@@ -375,9 +440,9 @@ static int method_append(json_t *json_params, json_t **result, void *userdata)
 
 	int ret = -1;
 	if (json_is_array(json_params)) {
-		size_t index;
+		size_t i;
 		json_t *value;
-		json_array_foreach(json_params, index, value)
+		json_array_foreach(json_params, i, value)
 		{
 			if (json_is_string(value))
 			{
@@ -387,22 +452,28 @@ static int method_append(json_t *json_params, json_t **result, void *userdata)
 			}
 			else if (json_is_object(value))
 			{
-				json_t * path = json_object_get(value, "url");
 				json_t * info = json_object_get(value, "info");
-				json_t * mime = json_object_get(value, "mime");
-				if (json_is_string(info))
+				json_t * sources = json_object_get(value, "sources");
+				json_t * source = NULL;
+				size_t j;
+				json_array_foreach(sources, j, source)
 				{
-					ret = append_cb(media->ctx,
-							json_string_value(path),
-							json_string_value(info),
-							json_string_value(mime));
-				}
-				else if (json_is_object(info))
-				{
-					ret = append_cb(media->ctx,
-							json_string_value(path),
-							json_dumps(info, 0),
-							json_string_value(mime));
+					json_t * path = json_object_get(source, "url");
+					json_t * mime = json_object_get(value, "mime");\
+					if (json_is_string(info))
+					{
+						ret = append_cb(media->ctx,
+								json_string_value(path),
+								json_string_value(info),
+								json_string_value(mime));
+					}
+					else if (json_is_object(info))
+					{
+						ret = append_cb(media->ctx,
+								json_string_value(path),
+								json_dumps(info, 0),
+								json_string_value(mime));
+					}
 				}
 			}
 			if (ret == -1)
@@ -502,7 +573,7 @@ static int method_next(json_t *json_params, json_t **result, void *userdata)
 	int ret = -1;
 	cmds_dbg("cmds: next");
 
-	player_next(ctx->player);
+	int id = player_next(ctx->player, 1);
 	switch (player_state(ctx->player, STATE_UNKNOWN))
 	{
 	case STATE_STOP:
@@ -511,11 +582,11 @@ static int method_next(json_t *json_params, json_t **result, void *userdata)
 	break;
 	case STATE_PLAY:
 	case STATE_CHANGE:
-		*result = json_pack("{ss}", "state", str_play);
+		*result = json_pack("{ss,s:i}", "state", str_play, "id", id);
 		ret = 0;
 	break;
 	case STATE_PAUSE:
-		*result = json_pack("{ss}", "state", str_pause);
+		*result = json_pack("{ss,s:i}", "state", str_pause, "id", id);
 		ret = 0;
 	break;
 	default:
@@ -721,7 +792,7 @@ static int method_onchange(json_t *json_params, json_t **result, void *userdata)
 		*result = json_pack("{s:s}", "state", str_stop);
 	}
 
-	int next = media->ops->play(media->ctx, NULL, NULL);
+	int next = player_next(ctx->player, 0);
 	json_object_set(*result, "next", json_integer(next));
 
 	int count = media->ops->count(media->ctx);
@@ -732,9 +803,13 @@ static int method_onchange(json_t *json_params, json_t **result, void *userdata)
 
 	json_t *options = json_array();
 	if (media->ops->loop && media->ops->loop(media->ctx, OPTION_REQUEST) == OPTION_ENABLE)
+	{
 		json_array_append(options, json_string("loop"));
+	}
 	if (media->ops->random && media->ops->random(media->ctx, OPTION_REQUEST) == OPTION_ENABLE)
+	{
 		json_array_append(options, json_string("random"));
+	}
 	json_object_set(*result, "options", options);
 
 	if (ctx->sink && ctx->sink->ops->getvolume != NULL)
@@ -757,15 +832,15 @@ static int method_options(json_t *json_params, json_t **result, void *userdata)
 	int ret = -1;
 	media_t *media = player_media(ctx->player);
 
-	json_t *value = NULL;
-	json_t *loop_value = NULL;
-	json_t *random_value = NULL;
 	if (json_is_object(json_params))
 	{
+		json_t *value = NULL;
+		int state = -1;
+
 		value = json_object_get(json_params, "loop");
 		if (json_is_boolean(value))
 		{
-			int state = json_boolean_value(value);
+			state = json_boolean_value(value);
 			if (media->ops->loop)
 			{
 				media->ops->loop(media->ctx, state);
@@ -777,12 +852,11 @@ static int method_options(json_t *json_params, json_t **result, void *userdata)
 				return -1;
 			}
 
-			loop_value = json_boolean(state);
 		}
 		value = json_object_get(json_params, "random");
 		if (json_is_boolean(value))
 		{
-			int state = json_boolean_value(value);
+			state = json_boolean_value(value);
 			if (media->ops->random)
 			{
 				state = media->ops->random(media->ctx, state);
@@ -800,14 +874,14 @@ static int method_options(json_t *json_params, json_t **result, void *userdata)
 				*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
 				return -1;
 			}
-
-			random_value = json_boolean(state);
 		}
 		*result = json_object();
-		if (loop_value != NULL)
-			json_object_set(*result, "loop", loop_value);
-		if (random_value != NULL)
-			json_object_set(*result, "random", random_value);
+		state = media->ops->loop(media->ctx, OPTION_REQUEST);
+		value = json_boolean(state);
+		json_object_set(*result, "loop", value);
+		state = media->ops->random(media->ctx, OPTION_REQUEST);
+		value = json_boolean(state);
+		json_object_set(*result, "random", value);
 	}
 	return 0;
 }
@@ -1157,6 +1231,7 @@ static struct jsonrpc_method_entry_t method_table[] = {
 	{ 'r', "setnext", method_setnext, "o" },
 	{ 'r', "list", method_list, "o" },
 	{ 'r', "info", method_info, "o" },
+	{ 'r', "setinfo", method_setinfo, "o" },
 	{ 'r', "filter", method_filter, "o" },
 	{ 'r', "append", method_append, "[]" },
 	{ 'r', "remove", method_remove, "o" },
@@ -1201,9 +1276,11 @@ static size_t _cmds_recv(void *buff, size_t size, void *userctx)
 
 	size = recv(sock,
 		buff, size, MSG_PEEK | MSG_DONTWAIT | MSG_NOSIGNAL);
-	if (size <= 0)
+	if ((ssize_t)size <= 0)
 	{
 		err("cmds: json recv error %s", strerror(errno));
+		close(sock);
+		info->sock = -1;
 		return size;
 	}
 
@@ -1248,6 +1325,7 @@ static int jsonrpc_sendevent(cmds_ctx_t *ctx, thread_info_t *info, const char *e
 		ret = send(sock, message, length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
 		dbg("cmds: send notification %d", ret);
 		fsync(sock);
+		free(message);
 		json_decref(notification);
 	}
 	else
@@ -1270,11 +1348,12 @@ static int _jsonrpc_sendresponse(thread_info_t *info, json_t *request)
 	if (response != NULL)
 	{
 		char *buff = json_dumps(response, JSONRPC_DEBUG_FORMAT );
-		cmds_dbg("cmds: send response %ld %s", strlen(buff), buff);
-		ret = send(sock, buff, strlen(buff) + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
+		int length = strlen(buff);
+		cmds_dbg("cmds: send response %ld %s", length, buff);
+		ret = send(sock, buff, length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
 		dbg("cmds: send response %d", ret);
 		fsync(sock);
-		json_decref(response);
+		free(buff);
 	}
 	else
 	{
@@ -1286,21 +1365,22 @@ static int _jsonrpc_sendresponse(thread_info_t *info, json_t *request)
 
 static void _cmds_json_removeinfo(cmds_ctx_t *ctx, thread_info_t *info)
 {
-		thread_info_t *it = ctx->info;
-		if (ctx->info == info)
+	thread_info_t *it = ctx->info;
+	if (ctx->info == info)
+	{
+		ctx->info = ctx->info->next;
+	}
+	else
+	{
+		while (it != NULL && it->next != NULL && it->next != info)
 		{
-			it = ctx->info;
-			ctx->info = ctx->info->next;
-		}
-		else
-		{
-			while (it != NULL && it->next != NULL && it->next != info)
-			{
-				it = it->next;
-			}
+			it = it->next;
 		}
 		if (it != NULL)
-			unixserver_remove(it);
+			it->next = info->next;
+	}
+
+	unixserver_remove(info);
 }
 /**
  * this is the main loop for the sending
@@ -1351,7 +1431,11 @@ static void *_cmds_json_pthreadsend(void *arg)
 
 				/** free the client **/
 				if (request->info != NULL)
+				{
+					pthread_mutex_lock(&ctx->mutex);
 					_cmds_json_removeinfo(ctx, request->info);
+					pthread_mutex_unlock(&ctx->mutex);
+				}
 				/** free the request **/
 				json_decref(request->request);
 				free(request);
@@ -1372,8 +1456,10 @@ static void *_cmds_json_pthreadsend(void *arg)
 					int ret = jsonrpc_sendevent(ctx, info, "onchange");
 					if (ret < 0)
 					{
+						pthread_mutex_lock(&ctx->mutex);
 						err("cmds: sendevent error %d", ret);
 						_cmds_json_removeinfo(ctx, info);
+						pthread_mutex_unlock(&ctx->mutex);
 					}
 					info = next;
 				}
@@ -1462,13 +1548,13 @@ static int jsonrpc_command(thread_info_t *info)
 		}
 		else
 		{
-			dbg("recv nothing");
+			cmds_dbg("cmds: recv nothing");
 			if (info->sock == -1)
 				run = 0;
 		}
 	}
-	warn("cmds: json socket %d leave", sock);
 	pthread_mutex_lock(&ctx->mutex);
+	warn("cmds: json socket %d leave", info->sock);
 	_cmds_json_removeinfo(ctx, info);
 	pthread_mutex_unlock(&ctx->mutex);
 	return ret;

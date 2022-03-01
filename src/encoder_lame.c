@@ -158,7 +158,7 @@ static encoder_ctx_t *encoder_init(player_ctx_t *player)
 		ctx->samplerate,
 		ctx->samplesize,
 		ctx->nchannels);
-	jitter_t *jitter = jitter_scattergather_init(jitter_name, NB_BUFFERS,
+	jitter_t *jitter = jitter_init(JITTER_TYPE_SG, jitter_name, NB_BUFFERS,
 				ctx->samplesframe * ctx->samplesize * ctx->nchannels);
 	ctx->in = jitter;
 	jitter->format = PCM_16bits_LE_stereo;
@@ -307,7 +307,7 @@ static void encoder_destroy(encoder_ctx_t *ctx)
 	ctx->heartbeat.ops->destroy(ctx->heartbeat.ctx);
 #endif
 	/* release the decoder */
-	jitter_scattergather_destroy(ctx->in);
+	jitter_destroy(ctx->in);
 	free(ctx);
 }
 

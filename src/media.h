@@ -23,6 +23,7 @@ extern const char const *str_date;
 extern const char const *str_regain;
 extern const char const *str_comment;
 extern const char const *str_cover;
+extern const char const *str_likes;
 
 void utils_srandom();
 const char *utils_getmime(const char *path);
@@ -88,6 +89,10 @@ struct media_ops_s
 	 */
 	int (*append)(media_ctx_t *ctx, const char *path, const char *info, const char *mime);
 	/**
+	 * optional
+	 */
+	int (*modify)(media_ctx_t *ctx, int id, const char *info);
+	/**
 	 * mandatory
 	 */
 	int (*find)(media_ctx_t *ctx, int id, media_parse_t cb, void *data);
@@ -145,6 +150,9 @@ int media_parseid3tag(const char *path, json_t *object);
 int media_parseoggmetadata(const char *path, json_t *object);
 #endif
 char *media_fillinfo(const char *url, const char *mime);
+int media_parse_info(json_t *jinfo, char **ptitle, char **partist,
+		char **palbum, char **pgenre, char **pcover, char **pcomment,
+		int *plikes);
 
 extern const media_ops_t *media_sqlite;
 extern const media_ops_t *media_file;

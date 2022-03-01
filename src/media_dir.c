@@ -25,6 +25,7 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *****************************************************************************/
+#define _GNU_SOURCE
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -35,7 +36,6 @@
 #include <errno.h>
 #include <sys/stat.h>
 
-#define __USE_GNU
 #include <pthread.h>
 
 #ifdef USE_INOTIFY
@@ -59,6 +59,7 @@ struct media_ctx_s
 	unsigned int options;
 	int inotifyfd;
 	int dirfd;
+	int fd;
 	pthread_t thread;
 	media_dirlist_t *first;
 	media_dirlist_t *current;
@@ -97,6 +98,8 @@ struct media_dirlist_s
 #else
 #define dbg(...)
 #endif
+
+#define media_dbg(...)
 
 static int media_count(media_ctx_t *ctx);
 static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data);
@@ -183,7 +186,7 @@ static int _find_count(void *arg, media_ctx_t *ctx, int mediaid, const char *pat
 
 static int _find(media_ctx_t *ctx, int level, media_dirlist_t **pit, int *pmediaid, _findcb_t cb, void *arg)
 {
-	int ret = -1;
+	int ret = -2;
 	media_dirlist_t *it = *pit;
 
 	if (it == NULL)
@@ -217,6 +220,20 @@ static int _find(media_ctx_t *ctx, int level, media_dirlist_t **pit, int *pmedia
 		}
 		switch (it->items[it->index]->d_type)
 		{
+			case DT_LNK:
+			{
+				int fddir = open(it->path, O_PATH);
+				struct stat filestat;
+				if (fstatat(fddir, it->items[it->index]->d_name, &filestat, 0) != 0)
+				{
+					dbg("media link error");
+					break;
+				}
+				if (!S_ISDIR(filestat.st_mode))
+					break;
+				close(fddir);
+			}
+			// continue as directory
 			case DT_DIR:
 			{
 				media_dirlist_t *new = calloc(1, sizeof(*new));
@@ -363,27 +380,30 @@ static int media_next(media_ctx_t *ctx)
 		if (media->ctx != ctx)
 			id = -1;
 		else
-			id = player_mediaid(ctx->player);
+			id = ctx->mediaid;
 		_find_mediaid_t data = {id + 1, NULL, NULL};
 		ret = _find(ctx, 0, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
 	}
 	pthread_mutex_unlock(&ctx->mutex);
 	if (ctx->firstmediaid == -1)
 		ctx->firstmediaid = ctx->mediaid;
+	if (ctx->count < ctx->mediaid)
+		ctx->count = ctx->mediaid;
 	if (ret != 0)
 	{
-		if (ctx->count < ctx->mediaid)
-			ctx->count = ctx->mediaid;
 		if (ctx->current)
 		{
 			ctx->current = _free_medialist(ctx->current, 0);
 		}
 		ctx->current = NULL;
-		if (ctx->count > 0 &&
-			((ctx->firstmediaid != ctx->mediaid) ||
-				(ctx->options & OPTION_LOOP)))
+		if (ctx->count > ctx->mediaid)
 		{
+			ctx->mediaid = ctx->mediaid + 1;
 			media_next(ctx);
+		}
+		else if (ctx->options & OPTION_LOOP)
+		{
+			ctx->mediaid = ctx->firstmediaid;
 		}
 		else
 			ctx->mediaid = -1;
@@ -445,6 +465,7 @@ static void *_check_dir(void *arg)
 {
 	media_ctx_t *ctx = (media_ctx_t *)arg;
 	int inotifyfd = ctx->inotifyfd;
+	media_dbg("media: directory survey %s", ctx->url);
 	while (ctx->options & OPTION_INOTIFY)
 	{
 		char buffer[BUF_LEN];
@@ -456,42 +477,38 @@ static void *_check_dir(void *arg)
 			err("inotify read");
 			break;
 		}
-
+		media_dbg("media: new event on directory");
 		while (i < length)
 		{
 			struct inotify_event *event =
 				(struct inotify_event *) &buffer[i];
 			if (event->len)
 			{
-				if ((event->mask & (IN_CREATE | IN_ISDIR)) == (IN_CREATE | IN_ISDIR))
+				if (event->mask & (IN_CREATE|IN_DELETE))
 				{
-					/*
-					 * dirty patch but between the event and the directory is ready
-					 * it may take some time
-					 */
-					sleep(1);
-					int count = _count_media(ctx);
-					if (count > 0)
+					struct stat filestat;
+					fstatat(ctx->fd, event->name, &filestat, 0);
+					if (S_ISDIR(filestat.st_mode))
 					{
-						//media_next(ctx);
-						player_state(ctx->player, STATE_CHANGE);
+						media_dbg("new directory %s", event->name);
+						/*
+						 * dirty patch but between the event and the directory is ready
+						 * it may take some time
+						 */
+						sleep(1);
+						int count = _count_media(ctx);
+						if (count > 0)
+						{
+							//media_next(ctx);
+							player_state(ctx->player, STATE_PLAY);
+						}
+						else
+						{
+							media_end(ctx);
+							player_state(ctx->player, STATE_STOP);
+						}
 					}
 				}
-				else if (event->mask & IN_DELETE)
-				{
-					int count = _count_media(ctx);
-					if (count == 0)
-					{
-						media_end(ctx);
-						player_state(ctx->player, STATE_STOP);
-					}
-				}
-#if 0
-				else if (event->mask & IN_MODIFY)
-				{
-					dbg("The file %s was modified.", event->name);
-				}
-#endif
 			}
 			i += EVENT_SIZE + event->len;
 		}
@@ -535,6 +552,7 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url,...)
 		_count_media(ctx);
 
 #ifdef USE_INOTIFY
+		ctx->fd = open(path, O_PATH);
 		ctx->inotifyfd = inotify_init();
 		ctx->dirfd = inotify_add_watch(ctx->inotifyfd, path,
 						IN_MODIFY | IN_CREATE | IN_DELETE);
@@ -556,6 +574,7 @@ static void media_destroy(media_ctx_t *ctx)
 	close(ctx->inotifyfd);
 	pthread_join(ctx->thread, NULL);
 	close(ctx->inotifyfd);
+	close(ctx->fd);
 #endif
 	_free_medialist(ctx->current, 0);
 	pthread_mutex_destroy(&ctx->mutex);

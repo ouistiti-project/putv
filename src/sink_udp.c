@@ -262,7 +262,7 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 		}
 
 		unsigned int size = mtu;
-		jitter_t *jitter = jitter_scattergather_init(jitter_name, 6, size);
+		jitter_t *jitter = jitter_init(JITTER_TYPE_SG, jitter_name, 6, size);
 #ifdef USE_REALTIME
 		jitter->ops->lock(jitter->ctx);
 #endif
@@ -280,6 +280,11 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 	free(value);
 
 	return ctx;
+}
+
+static sink_ctx_t *sink_init_rtp(player_ctx_t *player, const char *url)
+{
+	return sink_init(player, url);
 }
 
 static int sink_attach(sink_ctx_t *ctx, const char *mime)
@@ -445,7 +450,7 @@ static void sink_destroy(sink_ctx_t *ctx)
 {
 	if (ctx->thread)
 		pthread_join(ctx->thread, NULL);
-	jitter_scattergather_destroy(ctx->in);
+	jitter_destroy(ctx->in);
 	int i = 0;
 	while (ctx->sink_txt[i] != NULL)
 		free(ctx->sink_txt[i++]);
@@ -458,7 +463,21 @@ static void sink_destroy(sink_ctx_t *ctx)
 
 const sink_ops_t *sink_udp = &(sink_ops_t)
 {
+	.name = "udp",
+	.default_ = "udp://127.0.0.1:440",
 	.init = sink_init,
+	.jitter = sink_jitter,
+	.attach = sink_attach,
+	.run = sink_run,
+	.service = sink_service,
+	.destroy = sink_destroy,
+};
+
+const sink_ops_t *sink_rtp = &(sink_ops_t)
+{
+	.name = "rtp",
+	.default_ = "rtp://127.0.0.1:440",
+	.init = sink_init_rtp,
 	.jitter = sink_jitter,
 	.attach = sink_attach,
 	.run = sink_run,

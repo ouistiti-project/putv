@@ -27,6 +27,7 @@
  *****************************************************************************/
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 #define __USE_GNU
 #include <pthread.h>
@@ -42,9 +43,6 @@
 #else
 #define dbg(...)
 #endif
-
-#define jitter_dbg(...)
-
 typedef struct scatter_s scatter_t;
 struct scatter_s
 {
@@ -92,6 +90,8 @@ static void jitter_reset(jitter_ctx_t *jitter);
 
 static const jitter_ops_t *jitter_scattergather;
 
+static void jitter_scattergather_destroy(jitter_t *);
+
 jitter_t *jitter_scattergather_init(const char *name, unsigned int count, size_t size)
 {
 	jitter_ctx_t *ctx = calloc(1, sizeof(*ctx));
@@ -137,11 +137,12 @@ jitter_t *jitter_scattergather_init(const char *name, unsigned int count, size_t
 	jitter_t *jitter = calloc(1, sizeof(*jitter));
 	jitter->ctx = ctx;
 	jitter->ops = jitter_scattergather;
+	jitter->destroy = &jitter_scattergather_destroy;
 	dbg("jitter %s create scattergather (%d*%ld) %p", name, count, size, private->sg);
 	return jitter;
 }
 
-void jitter_scattergather_destroy(jitter_t *jitter)
+static void jitter_scattergather_destroy(jitter_t *jitter)
 {
 	jitter_ctx_t *ctx = jitter->ctx;
 	jitter_private_t *private = (jitter_private_t *)ctx->private;
@@ -205,7 +206,7 @@ static unsigned char *jitter_pull(jitter_ctx_t *jitter)
 		 * free some buffer.
 		 */
 
-		jitter_dbg("jitter %s pull block on %p %d %d", jitter->name, private->in, private->state, private->level);
+		jitter_dbg(jitter, "pull block on %p %d %d", private->in, private->state, private->level);
 		pthread_cond_wait(&private->condpush, &private->mutex);
 
 	}
@@ -218,7 +219,7 @@ static unsigned char *jitter_pull(jitter_ctx_t *jitter)
 		ret = private->in->data;
 	}
 	pthread_mutex_unlock(&private->mutex);
-	jitter_dbg("jitter %s pull %p", jitter->name, private->in);
+	jitter_dbg(jitter, "pull %p", private->in);
 	return ret;
 }
 
@@ -226,7 +227,7 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 {
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
 
-	jitter_dbg("jitter %s push %p", jitter->name, private->in);
+	jitter_dbg(jitter, "push %p", private->in);
 	if (private->in->state != SCATTER_PULL)
 	{
 		/**
@@ -244,7 +245,7 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 		/**
 		 * the producer push empty buffer to end the stream
 		 */
-		dbg("jitter sg %s push 0", jitter->name);
+		jitter_dbg(jitter, "push 0");
 		pthread_mutex_lock(&private->mutex);
 		private->in->state = SCATTER_FREE;
 		private->state = JITTER_COMPLETE;
@@ -383,7 +384,7 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter, void **beat)
 			/**
 			 * The consumer find the empty buffer to stop the stream
 			 */
-			jitter_dbg("jitter %s peer empty on %p", jitter->name, private->out);
+			jitter_dbg(jitter, "peer empty on %p", private->out);
 			return NULL;
 		}
 	}
@@ -396,7 +397,7 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter, void **beat)
 		 * The scatter gather is empty and the producer fills.
 		 * The consumer is waiting that the thredhold is reached.
 		 */
-		jitter_dbg("jitter %s peer block on %p %d %d", jitter->name, private->out, private->state, private->out->state);
+		jitter_dbg(jitter, "peer block on %p %d %d", private->out, private->state, private->out->state);
 		pthread_cond_wait(&private->condpeer, &private->mutex);
 	}
 	private->out->state = SCATTER_POP;
@@ -418,7 +419,7 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter, void **beat)
 		int ret;
 		heartbeat_t *heartbeat = jitter->heartbeat;
 		ret = heartbeat->ops->wait(heartbeat->ctx, private->out->beat);
-		jitter_dbg("jitter %s boom", jitter->name);
+		jitter_dbg(jitter, "boom");
 		if (ret == -1)
 			heartbeat->ops->start(heartbeat->ctx);
 		private->out->beat = NULL;
@@ -431,7 +432,7 @@ static void jitter_pop(jitter_ctx_t *jitter, size_t len)
 {
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
 
-	jitter_dbg("jitter %s pop %p %d", jitter->name, private->out, private->state);
+	jitter_dbg(jitter, "pop %p %d", private->out, private->state);
 	if ((private->state == JITTER_STOP) ||
 		(private->out->state != SCATTER_POP))
 	{
@@ -475,7 +476,7 @@ static void jitter_flush(jitter_ctx_t *jitter)
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
 	if (private->state == JITTER_FLUSH)
 		return;
-	jitter_dbg("jitter %s flush on %p %d %d", jitter->name, private->in, private->in->state, private->out->state);
+	jitter_dbg(jitter, "flush on %p %d %d", private->in, private->in->state, private->out->state);
 	pthread_mutex_lock(&private->mutex);
 	private->state = JITTER_FLUSH;
 	pthread_mutex_unlock(&private->mutex);
@@ -500,7 +501,7 @@ static void jitter_reset(jitter_ctx_t *jitter)
 {
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
 
-	jitter_dbg("jitter %s reset", jitter->name);
+	jitter_dbg(jitter, "reset");
 	jitter_flush(jitter);
 
 	pthread_mutex_lock(&private->mutex);

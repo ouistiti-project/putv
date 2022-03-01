@@ -328,6 +328,8 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 	jitter_format_t format = SINK_ALSA_FORMAT;
 	sink_ctx_t *ctx = calloc(1, sizeof(*ctx));
 
+	if (!strncmp(jitter_name, soundcard,4) && soundcard[4] == ':')
+		soundcard += 5;
 	ctx->soundcard = strdup(soundcard);
 	ctx->mixerch = ALSA_MIXER;
 #ifdef SINK_ALSA_CONFIG
@@ -396,7 +398,7 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 #endif
 
 	dbg("sink: alsa card %s mixer %s", ctx->soundcard, ctx->mixerch);
-	jitter_t *jitter = jitter_scattergather_init(jitter_name, NB_BUFFER, size);
+	jitter_t *jitter = jitter_init(JITTER_TYPE_SG, jitter_name, NB_BUFFER, size);
 #ifdef SAMPLERATE_AUTO
 	jitter->ctx->frequence = 0;
 #else
@@ -453,8 +455,10 @@ static void *sink_thread(void *arg)
 	int divider = ctx->samplesize * ctx->nchannels;
 
 	/* start decoding */
-	while (ctx->in->ops->empty(ctx->in->ctx))
+	while (ctx->in->ops->empty(ctx->in->ctx)){
+		sched_yield();
 		usleep(LATENCE_MS * 1000);
+	}
 	while (ctx->state != STATE_ERROR)
 	{
 		unsigned char *buff = NULL;
@@ -542,7 +546,6 @@ static int sink_attach(sink_ctx_t *ctx, const char *mime)
 
 static int alsa_run(sink_ctx_t *ctx)
 {
-#ifdef USE_REALTIME
 	int ret;
 
 	pthread_attr_t attr;
@@ -550,6 +553,7 @@ static int alsa_run(sink_ctx_t *ctx)
 
 	pthread_attr_init(&attr);
 
+#ifdef USE_REALTIME
 	ret = pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
 	if (ret < 0)
 		err("setdetachstate error %s", strerror(errno));
@@ -560,15 +564,14 @@ static int alsa_run(sink_ctx_t *ctx)
 	if (ret < 0)
 		err("setschedpolicy error %s", strerror(errno));
 	pthread_attr_setschedparam(&attr, &params);
-	if (params.sched_priority > sched_get_priority_min(SINK_POLICY))
-		params.sched_priority -= 1;
-	else
-		params.sched_priority = sched_get_priority_min(SINK_POLICY);
+	params.sched_priority = sched_get_priority_min(SINK_POLICY) + 5;
 	ret = pthread_attr_setschedparam(&attr, &params);
 	if (ret < 0)
 		err("setschedparam error %s", strerror(errno));
 	if (getuid() == 0)
+	{
 		ret = pthread_attr_setinheritsched(&attr, PTHREAD_EXPLICIT_SCHED);
+	}
 	else
 	{
 		warn("run server as root to use realtime");
@@ -576,16 +579,20 @@ static int alsa_run(sink_ctx_t *ctx)
 	}
 	if (ret < 0)
 		err("setinheritsched error %s", strerror(errno));
-	pthread_create(&ctx->thread, &attr, sink_thread, ctx);
-	pthread_attr_destroy(&attr);
-#else
-	pthread_create(&ctx->thread, NULL, sink_thread, ctx);
+	warn("sink: alsa realtime %s prio %d",
+			(SINK_POLICY == SCHED_RR)?"rr_sched":"fifo", params.sched_priority);
 #endif
-	return 0;
+	warn("sink: alsa start thread");
+	ret = pthread_create(&ctx->thread, &attr, sink_thread, ctx);
+	pthread_attr_destroy(&attr);
+	if (ret < 0)
+		err("pthread error %s", strerror(errno));
+	return ret;
 }
 
 static void alsa_destroy(sink_ctx_t *ctx)
 {
+	warn("sink: alsa join thread");
 	if (ctx->thread)
 		pthread_join(ctx->thread, NULL);
 	_pcm_close(ctx);
@@ -595,13 +602,15 @@ static void alsa_destroy(sink_ctx_t *ctx)
 #endif
 
 	free(ctx->noise);
-	jitter_scattergather_destroy(ctx->in);
+	jitter_destroy(ctx->in);
 	free(ctx->soundcard);
 	free(ctx);
 }
 
 const sink_ops_t *sink_alsa = &(sink_ops_t)
 {
+	.name = "alsa",
+	.default_ = "alsa:default",
 	.init = alsa_init,
 	.jitter = alsa_jitter,
 	.attach = sink_attach,

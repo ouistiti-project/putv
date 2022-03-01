@@ -171,11 +171,11 @@ int input_parseevent(input_ctx_t *ctx, const struct input_event *event)
 	break;
 	case KEY_VOLUMEDOWN:
 		dbg("key KEY_VOLUMEDOWN");
-		ret = client_volume(ctx->client, NULL, ctx, json_integer(-5));
+		ret = client_volume(ctx->client, NULL, ctx, -5);
 	break;
 	case KEY_VOLUMEUP:
 		dbg("key KEY_VOLUMEUP");
-		ret = client_volume(ctx->client, NULL, ctx, json_integer(+5));
+		ret = client_volume(ctx->client, NULL, ctx, +5);
 	break;
 	case KEY_SHUFFLE:
 		dbg("key KEY_SHUFFLE");
@@ -227,6 +227,7 @@ int run_client(void *arg)
 	client_eventlistener(&data, "onchange", input_checkstate, ctx);
 	ctx->client = &data;
 
+	dbg("start of client");
 	pthread_t thread;
 	pthread_create(&thread, NULL, (__start_routine_t)client_loop, (void *)&data);
 
@@ -285,6 +286,7 @@ int run_client(void *arg)
 	close(ctx->inputfd);
 #endif
 	dbg("end of client");
+	client_disconnect(&data);
 	pthread_join(thread, NULL);
 	return 0;
 }
@@ -323,6 +325,7 @@ static void *_check_socket(void *arg)
 			{
 				if (event->mask & IN_CREATE)
 				{
+					sleep(1);
 				}
 #if 0
 				else if (event->mask & IN_DELETE)

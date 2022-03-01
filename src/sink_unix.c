@@ -116,8 +116,8 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 	{
 		struct passwd *pw = NULL;
 		pw = getpwuid(geteuid());
-		chdir(pw->pw_dir);
-		path++;
+		if (chdir(pw->pw_dir) == 0)
+			path++;
 		if (path[0] == '/')
 			path++;
 	}

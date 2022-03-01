@@ -247,8 +247,8 @@ int main(int argc, char **argv)
 			err("log file error %s", strerror(errno));
 	}
 
-	if (cwd != NULL)
-		chdir(cwd);
+	if (cwd != NULL && chdir(cwd) != 0)
+		err("main: working directory %s", strerror(errno));
 
 	if (priority > 0)
 	{
@@ -379,9 +379,10 @@ int main(int argc, char **argv)
 #endif
 #endif
 
-	setegid(pw_gid);
+	if (setegid(pw_gid))
+		err("main: change group %s", strerror(errno));
 	if (seteuid(pw_uid))
-		err("Error: start server as root");
+		err("main: start server as root");
 
 	int i;
 	for (i = 0; i < nbcmds; i++)

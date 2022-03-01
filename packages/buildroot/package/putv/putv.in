@@ -1,0 +1,16 @@
+# putv config.
+
+case $1 in
+  totem)
+    OUTPUT="alsa:default?format=24le,mixer=Master"
+    ;;
+  putv)
+    OUTPUT="unix://${WEBSOCKETDIR}/totem.mp3"
+    ;;
+  ouiradio)
+    OUTPUT="rtp://224.0.0.0:4400"
+    ;;
+esac
+
+CINPUT_DEVICE="/dev/input/event0"
+CINPUT_JSON="/home/ouiradio.json"

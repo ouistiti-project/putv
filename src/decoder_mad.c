@@ -58,6 +58,7 @@ struct decoder_ctx_s
 	size_t outbufferlen;
 
 	filter_t *filter;
+	rescale_t rescale;
 	player_ctx_t *player;
 
 	heartbeat_t heartbeat;
@@ -86,31 +87,9 @@ struct decoder_ctx_s
 #endif
 
 /**
- * @brief this function comes from mad decoder
- *
- * @arg sample the 32bits sample
- * @arg length the length of scaling (16 or 24)
- *
- * @return sample
+ * FRACBITS value comes from mad decoder
  */
-# define FRACBITS		28
-# define ONE		((sample_t)(0x10000000L))
-
-static
-sample_t scale_sample(void *ctx, sample_t sample, int bitlength)
-{
-	/* round */
-	sample += (1L << (FRACBITS - bitlength));
-	/* clip */
-	if (sample >= ONE)
-		sample = ONE - 1;
-	else if (sample < -ONE)
-		sample = -ONE;
-	/* quantize */
-	sample = sample >> (FRACBITS + 1 - bitlength);
-	return sample;
-}
-
+#define FRACBITS		28
 #define JITTER_TYPE JITTER_TYPE_RING
 
 static jitter_t *_decoder_jitter(decoder_ctx_t *ctx, jitte_t jitte);
@@ -319,6 +298,19 @@ enum mad_flow header(void *data, struct mad_header const *header)
 
 static const char *jitter_name = "mad decoder";
 
+static decoder_ctx_t *_decoder_init(player_ctx_t *player)
+{
+	decoder_ctx_t *ctx = calloc(1, sizeof(*ctx));
+	ctx->ops = decoder_mad;
+	ctx->player = player;
+
+	mad_decoder_init(&ctx->decoder, ctx,
+			input, header /* header */, 0 /* filter */, output,
+			error, 0 /* message */);
+	rescale_init(&ctx->rescale, FRACBITS, 0);
+	return ctx;
+}
+
 #if 0
 static void _decoder_listener(void *arg, const src_t *src, event_t event, void *eventarg)
 {
@@ -335,25 +327,13 @@ static void _decoder_listener(void *arg, const src_t *src, event_t event, void *
 }
 #endif
 
-static decoder_ctx_t *_decoder_init(player_ctx_t *player)
-{
-	decoder_ctx_t *ctx = calloc(1, sizeof(*ctx));
-	ctx->ops = decoder_mad;
-	ctx->player = player;
-
-	mad_decoder_init(&ctx->decoder, ctx,
-			input, header /* header */, 0 /* filter */, output,
-			error, 0 /* message */);
-	return ctx;
-}
-
 static int _decoder_prepare(decoder_ctx_t *ctx, filter_t *filter, const char *info)
 {
 	decoder_dbg("decoder: prepare");
 	ctx->filter = filter;
 	if (ctx->filter != NULL)
 	{
-		ctx->filter->ops->set(ctx->filter->ctx, FILTER_SAMPLED, scale_sample, NULL, 0);
+		ctx->filter->ops->set(ctx->filter->ctx, FILTER_SAMPLED, rescale_cb, &ctx->rescale, 0);
 	}
 	return 0;
 }

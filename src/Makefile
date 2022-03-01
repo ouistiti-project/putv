@@ -24,6 +24,7 @@ putv_SOURCES+=decoder_common.c
 putv_SOURCES+=sink_common.c
 
 putv_SOURCES+=filter_pcm.c
+putv_SOURCES+=filter_rescale.c
 putv_SOURCES+=filter_boost.c
 putv_SOURCES-$(FILTER_ONECHANNEL)+=filter_mono.c
 putv_SOURCES-$(FILTER_MIXED)+=filter_mixed.c

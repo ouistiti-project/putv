@@ -26,6 +26,18 @@ struct filter_audio_s
 };
 
 /**
+ * rescale filter sampled
+ */
+typedef struct rescale_s rescale_t;
+struct rescale_s
+{;
+	int inbits;
+	sample_t one;
+};
+rescale_t *rescale_init(rescale_t *input, int inbits, jitter_format_t informat);
+sample_t rescale_cb(void *arg, sample_t sample, int bitspersample, int samplerate, int channel);
+
+/**
  * boost filter sampled
  */
 typedef struct boost_s boost_t;

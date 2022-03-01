@@ -1235,7 +1235,7 @@ static int media_next(media_ctx_t *ctx)
 	const char *sql = NULL;
 	if (ctx->options & OPTION_RANDOM)
 	{
-		sql = "SELECT id, likes FROM playlist WHERE listid=@LISTID AND likes > 0 ORDER BY likes DESC, RANDOM() LIMIT 1";
+		sql = "SELECT id, likes FROM playlist WHERE listid=@LISTID AND likes > 0 ORDER BY RANDOM() LIMIT 1";
 	}
 	else if (ctx->mediaid > -1)
 	{

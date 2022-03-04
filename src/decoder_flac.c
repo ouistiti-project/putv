@@ -167,7 +167,6 @@ output_cb(const FLAC__StreamDecoder *decoder,
 		audio.samples[i] = (sample_t *)buffer[i];
 	decoder_dbg("decoder: audio frame %d Hz, %d channels, %d samples size %d bits", audio.samplerate, audio.nchannels, audio.nsamples, audio.bitspersample);
 
-	unsigned int nsamples;
 	if (audio.nchannels == 1)
 		audio.samples[1] = audio.samples[0];
 
@@ -193,11 +192,6 @@ output_cb(const FLAC__StreamDecoder *decoder,
 			ctx->filter->ops->run(ctx->filter->ctx, &audio,
 				ctx->outbuffer + ctx->outbufferlen,
 				ctx->out->ctx->size - ctx->outbufferlen);
-		if (ctx->nsamples == ctx->samplerate)
-		{
-			ctx->position++;
-			ctx->nsamples = 0;
-		}
 
 		ctx->outbufferlen += len;
 		if (ctx->outbufferlen >= ctx->out->ctx->size)
@@ -206,6 +200,12 @@ output_cb(const FLAC__StreamDecoder *decoder,
 			ctx->outbuffer = NULL;
 			ctx->outbufferlen = 0;
 		}
+	}
+	ctx->nsamples += audio.nsamples;
+	if (ctx->nsamples == ctx->samplerate)
+	{
+		ctx->position++;
+		ctx->nsamples = 0;
 	}
 
 	return FLAC__STREAM_DECODER_WRITE_STATUS_CONTINUE;

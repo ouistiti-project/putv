@@ -152,6 +152,7 @@ output_cb(const FLAC__StreamDecoder *decoder,
 	audio.nsamples = frame->header.blocksize;
 	audio.bitspersample = FLAC__stream_decoder_get_bits_per_sample(decoder);
 	audio.regain = 0;
+	audio.mode = 0;
 	int i;
 	for (i = 0; i < audio.nchannels && i < MAXCHANNELS; i++)
 		audio.samples[i] = (sample_t *)buffer[i];

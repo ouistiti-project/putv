@@ -14,6 +14,8 @@ typedef   signed long sample_t;
 #endif
 
 #define MAXCHANNELS 8
+#define AUDIO_MODE_INTERLEAVED 0x01
+
 typedef struct filter_audio_s filter_audio_t;
 struct filter_audio_s
 {
@@ -23,6 +25,7 @@ struct filter_audio_s
 	char bitspersample;
 	char nchannels;
 	char regain;
+	char mode;
 };
 
 /**

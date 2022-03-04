@@ -85,7 +85,6 @@ static void filter_destroy(filter_ctx_t *ctx);
 static filter_ctx_t *filter_init(jitter_format_t format, int samplerate)
 {
 	filter_ctx_t *ctx = calloc(1, sizeof(*ctx));
-	ctx->get = filter_get;
 
 	if (samplerate == 0)
 		samplerate = 44100;
@@ -217,7 +216,14 @@ int sampled_change(filter_ctx_t *ctx, sample_t sample, int bitspersample, int sa
 
 static sample_t filter_get(filter_ctx_t *ctx, filter_audio_t *audio, int channel, unsigned int index)
 {
-	return audio->samples[(channel % audio->nchannels)][index];
+	sample_t *channelsample = audio->samples[(channel % audio->nchannels)];
+	return channelsample[index];
+}
+
+static sample_t filter_getinterleaved(filter_ctx_t *ctx, filter_audio_t *audio, int channel, unsigned int index)
+{
+	sample_t *channelsample = audio->samples[0];
+	return channelsample[index * audio->nchannels + channel];
 }
 
 static int filter_run(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *buffer, size_t size, sample_get_t get)
@@ -248,7 +254,9 @@ filter_exit:
 
 static int filter_interleave(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *buffer, size_t size)
 {
-	return filter_run(ctx, audio, buffer, size, ctx->get);
+	if (audio->mode == AUDIO_MODE_INTERLEAVED)
+		return filter_run(ctx, audio, buffer, size, filter_getinterleaved);
+	return filter_run(ctx, audio, buffer, size, filter_get);
 }
 
 const filter_ops_t *filter_pcm = &(filter_ops_t)
@@ -356,14 +364,14 @@ int filter_filloutput(filter_t *filter, filter_audio_t *audio, jitter_t *out)
 #endif
 	int pcm_length = audio->nsamples;
 
-	if (out->ctx->frequence == 0)
+	if (jitter_samplerate(out) == 0)
 	{
 		filter_dbg("filter: change samplerate to %u", audio->samplerate);
 		out->ctx->frequence = audio->samplerate;
 	}
-	else if (out->ctx->frequence != audio->samplerate)
+	else if (jitter_samplerate(out) != audio->samplerate)
 	{
-		err("filter: samplerate %d not supported", out->ctx->frequence);
+		err("filter: samplerate %d not supported", jitter_samplerate(out));
 	}
 
 	if (outbuffer == NULL)

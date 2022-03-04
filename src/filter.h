@@ -127,6 +127,7 @@ struct filter_s
 };
 
 filter_t *filter_build(const char *name, jitter_t *jitter, const char *info);
+int filter_filloutput(filter_t *filter, filter_audio_t *audio, jitter_t *out);
 
 sample_t filter_minvalue(int bitspersample);
 sample_t filter_maxvalue(int bitspersample);

@@ -184,54 +184,14 @@ enum mad_flow output(void *data,
 
 	while (audio.nsamples > 0)
 	{
-		if (ctx->outbuffer == NULL)
+		if (filter_filloutput(ctx->filter, &audio, ctx->out) < 0)
 		{
-			ctx->outbuffer = ctx->out->ops->pull(ctx->out->ctx);
 			/**
-			 * the pipe is broken. close the src and the decoder
+			 * flush the src jitter to break the stream
 			 */
-			if (ctx->outbuffer == NULL)
-			{
-				ctx->outbufferlen = 0;
-				/**
-				 * flush the src jitter to break the stream
-				 */
-				ctx->in->ops->flush(ctx->in->ctx);
-				return MAD_FLOW_STOP;
-			}
+			ctx->in->ops->flush(ctx->in->ctx);
+			return MAD_FLOW_STOP;
 		}
-
-		ctx->outbufferlen +=
-			ctx->filter->ops->run(ctx->filter->ctx, &audio,
-				ctx->outbuffer + ctx->outbufferlen,
-				ctx->out->ctx->size - ctx->outbufferlen);
-
-		if (ctx->outbufferlen >= ctx->out->ctx->size)
-		{
-			if (ctx->outbufferlen > ctx->out->ctx->size)
-				err("decoder: out %ld %ld", ctx->outbufferlen, ctx->out->ctx->size);
-#ifdef DECODER_HEARTBEAT
-			ctx->beat.nsamples += pcm->length - audio.nsamples;
-			if (ctx->nloops == ctx->out->ctx->count)
-			{
-				decoder_dbg("decoder: heart boom %d", ctx->beat.nsamples);
-				ctx->out->ops->push(ctx->out->ctx, ctx->out->ctx->size, &ctx->beat);
-				ctx->beat.nsamples = 0;
-				ctx->nloops = 0;
-			}
-			else
-#endif
-				ctx->out->ops->push(ctx->out->ctx, ctx->out->ctx->size, NULL);
-			ctx->nloops++;
-			ctx->outbuffer = NULL;
-			ctx->outbufferlen = 0;
-		}
-#ifdef DECODER_HEARTBEAT
-		else
-		{
-			ctx->beat.nsamples += pcm->length;
-		}
-#endif
 	}
 
 	return MAD_FLOW_CONTINUE;

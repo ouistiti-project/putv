@@ -344,3 +344,57 @@ sample_t filter_maxvalue(int bitspersample)
 {
 	return -(~(((sample_t)0x1) << (bitspersample - 1))) - 1;
 }
+
+int filter_filloutput(filter_t *filter, filter_audio_t *audio, jitter_t *out)
+{
+	static char *outbuffer = NULL;
+	static int outbufferlen = 0;
+#ifdef DECODER_HEARTBEAT
+	static beat_samples_t beat;
+#endif
+	int pcm_length = audio->nsamples;
+
+	if (outbuffer == NULL)
+	{
+		outbuffer = out->ops->pull(out->ctx);
+		/**
+		 * the pipe is broken. close the src and the decoder
+		 */
+		if (outbuffer == NULL)
+		{
+			return -1;
+		}
+	}
+
+	outbufferlen += filter->ops->run(filter->ctx, audio,
+			outbuffer + outbufferlen, out->ctx->size - outbufferlen);
+
+	if (outbufferlen >= out->ctx->size)
+	{
+		if (outbufferlen > out->ctx->size)
+			err("decoder: out %d %ld", outbufferlen, out->ctx->size);
+#ifdef DECODER_HEARTBEAT
+		beat.nsamples += pcm_length - audio->nsamples;
+		beat.nloops++;
+		if (beat.nloops == out->ctx->count + 1)
+		{
+			decoder_dbg("decoder: heart boom %d", beat.nsamples);
+			out->ops->push(out->ctx, out->ctx->size, &beat);
+			beat.nsamples = 0;
+			beat.nloops = 0;
+		}
+		else
+#endif
+			out->ops->push(out->ctx, out->ctx->size, NULL);
+		outbuffer = NULL;
+		outbufferlen = 0;
+	}
+#ifdef DECODER_HEARTBEAT
+	else
+	{
+		beat->nsamples += pcm_length;
+	}
+#endif
+	return outbufferlen;
+}
+

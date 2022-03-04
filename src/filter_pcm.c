@@ -74,6 +74,8 @@ struct filter_ctx_s
 #define dbg(...)
 #endif
 
+#define filter_dbg(...)
+
 static sample_t filter_get(filter_ctx_t *ctx, filter_audio_t *audio, int channel, unsigned int index);
 
 static int filter_set(filter_ctx_t *ctx,...);
@@ -353,6 +355,16 @@ int filter_filloutput(filter_t *filter, filter_audio_t *audio, jitter_t *out)
 	static beat_samples_t beat;
 #endif
 	int pcm_length = audio->nsamples;
+
+	if (out->ctx->frequence == 0)
+	{
+		filter_dbg("filter: change samplerate to %u", audio->samplerate);
+		out->ctx->frequence = audio->samplerate;
+	}
+	else if (out->ctx->frequence != audio->samplerate)
+	{
+		err("filter: samplerate %d not supported", out->ctx->frequence);
+	}
 
 	if (outbuffer == NULL)
 	{

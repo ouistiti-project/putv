@@ -159,16 +159,6 @@ enum mad_flow output(void *data,
 #endif
 
 	audio.samplerate = pcm->samplerate;
-	if (ctx->out->ctx->frequence == 0)
-	{
-		decoder_dbg("decoder mad: change samplerate to %u", pcm->samplerate);
-		ctx->out->ctx->frequence = pcm->samplerate;
-	}
-	else if (ctx->out->ctx->frequence != pcm->samplerate)
-	{
-		err("decoder mad: samplerate %d not supported", ctx->out->ctx->frequence);
-	}
-
 	audio.nchannels = pcm->channels;
 	audio.nsamples = pcm->length;
 	audio.bitspersample = 24;

@@ -148,16 +148,6 @@ output_cb(const FLAC__StreamDecoder *decoder,
 	/* pcm->samplerate contains the sampling frequency */
 
 	audio.samplerate = FLAC__stream_decoder_get_sample_rate(decoder);
-	if (ctx->out->ctx->frequence == 0)
-	{
-		decoder_dbg("decoder flac: change samplerate to %u", audio.samplerate);
-		ctx->out->ctx->frequence = audio.samplerate;
-	}
-	else if (ctx->out->ctx->frequence != audio.samplerate)
-	{
-		err("decoder: samplerate %d not supported", ctx->out->ctx->frequence);
-	}
-
 	audio.nchannels = FLAC__stream_decoder_get_channels(decoder);
 	audio.nsamples = frame->header.blocksize;
 	audio.bitspersample = FLAC__stream_decoder_get_bits_per_sample(decoder);

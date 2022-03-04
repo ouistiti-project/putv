@@ -178,33 +178,13 @@ output_cb(const FLAC__StreamDecoder *decoder,
 	}
 	while (audio.nsamples > 0)
 	{
-		if (ctx->outbuffer == NULL)
+		if (filter_filloutput(ctx->filter, &audio, ctx->out) < 0)
 		{
-			ctx->outbuffer = ctx->out->ops->pull(ctx->out->ctx);
 			/**
-			 * the pipe is broken. close the src and the decoder
+			 * flush the src jitter to break the stream
 			 */
-			if (ctx->outbuffer == NULL)
-			{
-				/**
-				 * flush the src jitter to break the stream
-				 */
-				ctx->in->ops->flush(ctx->in->ctx);
-				return FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
-			}
-		}
-
-		int len =
-			ctx->filter->ops->run(ctx->filter->ctx, &audio,
-				ctx->outbuffer + ctx->outbufferlen,
-				ctx->out->ctx->size - ctx->outbufferlen);
-
-		ctx->outbufferlen += len;
-		if (ctx->outbufferlen >= ctx->out->ctx->size)
-		{
-			ctx->out->ops->push(ctx->out->ctx, ctx->out->ctx->size, NULL);
-			ctx->outbuffer = NULL;
-			ctx->outbufferlen = 0;
+			ctx->in->ops->flush(ctx->in->ctx);
+			return FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
 		}
 	}
 

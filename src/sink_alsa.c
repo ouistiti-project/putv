@@ -461,7 +461,6 @@ static void *sink_thread(void *arg)
 
 #ifdef SINK_ALSA_DUMP
 	ctx->dumpfd = open("./alsa_dump.wav", O_RDWR | O_CREAT, 0644);
-	err("OPEN DUMP %d", ctx->dumpfd);
 #endif
 
 	/* start decoding */

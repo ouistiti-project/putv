@@ -76,6 +76,7 @@ typedef enum jitter_format_e
 	PCM_32bits_BE_stereo,
 	MPEG2_3_MP3,
 	FLAC,
+	MPEG4_AAC,
 	MPEG2_1 = JITTER_VIDEO,
 	MPEG2_2,
 	DVB_frame,

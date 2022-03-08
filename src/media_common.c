@@ -67,6 +67,7 @@ const char const *mime_octetstream = "octet/stream";
 const char const *mime_audiomp3 = "audio/mp3";
 const char const *mime_audioflac = "audio/flac";
 const char const *mime_audioalac = "audio/alac";
+const char const *mime_audioaac = "audio/aac";
 const char const *mime_audiopcm = "audio/pcm";
 const char const mime_imagejpg[] = "image/jpg";
 const char const mime_imagepng[] = "image/png";

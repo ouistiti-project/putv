@@ -39,5 +39,6 @@ const decoder_ops_t *decoder_check(const char *path);
 
 extern const decoder_ops_t *decoder_mad;
 extern const decoder_ops_t *decoder_flac;
+extern const decoder_ops_t *decoder_faad2;
 extern const decoder_ops_t *decoder_passthrough;
 #endif

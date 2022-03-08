@@ -56,6 +56,8 @@ putv_SOURCES-$(DECODER_MAD)+=decoder_mad.c
 putv_LIBRARY-$(DECODER_MAD)+=mad
 putv_SOURCES-$(DECODER_FLAC)+=decoder_flac.c
 putv_LIBRARY-$(DECODER_FLAC)+=flac
+putv_SOURCES-$(DECODER_FAAD2)+=decoder_faad2.c
+putv_LIBRARY-$(DECODER_FAAD2)+=faad2
 endif
 putv_LIBS-$(DECODER_MODULES)+=dl
 putv_SOURCES-$(ENCODER_PASSTHROUGH)+=encoder_passthrough.c

@@ -156,6 +156,9 @@ static void _decoder_init(void)
 #ifdef DECODER_FLAC
 		decoder_flac,
 #endif
+#ifdef DECODER_FAAD2
+		decoder_faad2,
+#endif
 #endif
 #ifdef DECODER_PASSTHROUGH
 		decoder_passthrough,

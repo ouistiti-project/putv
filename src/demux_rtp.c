@@ -114,14 +114,28 @@ struct demux_ctx_s
 
 static const char *jitter_name = "rtp demux";
 
-static demux_ctx_t *demux_init(player_ctx_t *player, const char *protocol, const char *mime)
+static demux_ctx_t *demux_init(player_ctx_t *player, const char *url, const char *mime)
 {
 	demux_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->mime = utils_mime2mime(mime);
 	demux_profile_t *profile = NULL;
 
+	char pt = 20;
+	const char *search = strchr(url, '?');
+	if (search != NULL)
+	{
+		const char *string = NULL;
+		string = strstr(search, "pt=");
+		if (string != NULL)
+		{
+			string += 3;
+			sscanf("%2d", string, &pt);
+		}
+	}
+
 	demux_rtp_addprofile(ctx, 14, mime_audiomp3);
 	demux_rtp_addprofile(ctx, 11, mime_audiopcm);
+	demux_rtp_addprofile(ctx, pt, mime);
 
 	return ctx;
 }

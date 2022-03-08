@@ -245,7 +245,7 @@ static src_ctx_t *_src_init(player_ctx_t *player, const char *url, const char *m
 	if (protocol == NULL)
 		return NULL;
 
-	demux_t *demux = demux_build(player, protocol, mime);
+	demux_t *demux = demux_build(player, url, mime);
 	if (demux == NULL)
 		return NULL;
 

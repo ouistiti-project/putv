@@ -445,6 +445,13 @@ static void jitter_pop(jitter_ctx_t *jitter, size_t len)
 		return;
 	}
 
+	/**
+	 * len = -1 equivalent as buffer full
+	 * len is unused except for debug and in this case
+	 * len = -1 equivalent len = MAX_SIZE_T
+	 * if ((len + 1) == 0)
+	 *	len = private->out->len;
+	 */
 	if (private->out->len > len)
 	{
 		dbg("buffer %s pop not empty %ld/%ld", jitter->name, len, private->out->len);

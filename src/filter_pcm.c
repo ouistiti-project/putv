@@ -29,6 +29,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 #include "media.h"
 
@@ -62,6 +64,9 @@ struct filter_ctx_s
 	unsigned char shift;
 	unsigned char nchannels;
 	unsigned char channel;
+#ifdef FILTER_DUMP
+	int dumpfd;
+#endif
 };
 #define FILTER_CTX
 #include "filter.h"
@@ -89,6 +94,9 @@ static filter_ctx_t *filter_init(jitter_format_t format, int samplerate)
 	if (samplerate == 0)
 		samplerate = 44100;
 	filter_set(ctx, FILTER_FORMAT, format, FILTER_SAMPLERATE, samplerate, 0);
+#ifdef FILTER_DUMP
+	ctx->dumpfd = open("./filter_dump.wav", O_RDWR | O_CREAT, 0644);
+#endif
 	return ctx;
 }
 
@@ -185,6 +193,9 @@ static void filter_destroy(filter_ctx_t *ctx)
 		free(sampleditem);
 		sampleditem = ctx->sampled;
 	}
+#ifdef FILTER_DUMP
+	close(ctx->dumpfd);
+#endif
 	free(ctx);
 }
 
@@ -240,6 +251,9 @@ static int filter_run(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *b
 				goto filter_exit;
 
 			sample = get(ctx, audio, j, i);
+#ifdef FILTER_DUMP
+			write(ctx->dumpfd, &sample, ctx->samplesize);
+#endif
 			int len = sampled_change(ctx, sample, audio->bitspersample,
 					audio->samplerate, j, buffer + bufferlen);
 			bufferlen += len;

@@ -369,12 +369,14 @@ filter_t *filter_build(const char *name, jitter_t *jitter, const char *info)
 
 sample_t filter_minvalue(int bitspersample)
 {
-	return (~(((sample_t)0x1) << (bitspersample - 1)));
+	sample_t min = (~(((sample_t)0x1) << (bitspersample - 1))) + 1;
+	return min;
 }
 
 sample_t filter_maxvalue(int bitspersample)
 {
-	return -(~(((sample_t)0x1) << (bitspersample - 1))) - 1;
+	sample_t max = -(~(((sample_t)0x1) << (bitspersample - 1))) - 2;
+	return max;
 }
 
 int filter_filloutput(filter_t *filter, filter_audio_t *audio, jitter_t *out)

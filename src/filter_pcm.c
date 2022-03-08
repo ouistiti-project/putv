@@ -216,11 +216,14 @@ int sampled_change(filter_ctx_t *ctx, sample_t sample, int bitspersample, int sa
 		{
 			out[i] = 0;
 			j++;
+			continue;
 		}
-		else if ((i * 8) > (ctx->shift))
+		if ((i * 8) > (ctx->shift))
+		{
 			out[i] = 0;
-		else
-			out[i] = sample >> ((i - j) * 8);
+			continue;
+		}
+		out[i] = sample >> ((i - j) * 8);
 	}
 	return ctx->samplesize;
 }
@@ -234,14 +237,19 @@ static sample_t filter_get(filter_ctx_t *ctx, filter_audio_t *audio, int channel
 static sample_t filter_getinterleaved(filter_ctx_t *ctx, filter_audio_t *audio, int channel, unsigned int index)
 {
 	sample_t *channelsample = audio->samples[0];
-	return channelsample[index * audio->nchannels + channel];
+	index *= audio->nchannels;
+	index += channel;
+	return channelsample[index];
 }
 
-static int filter_run(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *buffer, size_t size, sample_get_t get)
+static int filter_run(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *buffer, size_t size)
 {
 	int j;
 	int i;
 	int bufferlen = 0;
+	sample_get_t get = filter_get;
+	if (audio->mode == AUDIO_MODE_INTERLEAVED)
+		get = filter_getinterleaved;
 	for (i = 0; i < audio->nsamples; i++)
 	{
 		sample_t sample;
@@ -262,15 +270,15 @@ static int filter_run(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *b
 filter_exit:
 	audio->nsamples -= i;
 	for (j = 0; j < audio->nchannels; j++)
+	{
+		if (audio->mode == AUDIO_MODE_INTERLEAVED)
+		{
+			audio->samples[0] += i;
+			continue;
+		}
 		audio->samples[j] += i;
+	}
 	return bufferlen;
-}
-
-static int filter_interleave(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *buffer, size_t size)
-{
-	if (audio->mode == AUDIO_MODE_INTERLEAVED)
-		return filter_run(ctx, audio, buffer, size, filter_getinterleaved);
-	return filter_run(ctx, audio, buffer, size, filter_get);
 }
 
 const filter_ops_t *filter_pcm = &(filter_ops_t)
@@ -278,7 +286,7 @@ const filter_ops_t *filter_pcm = &(filter_ops_t)
 	.name = "pcm",
 	.init = filter_init,
 	.set = filter_set,
-	.run = filter_interleave,
+	.run = filter_run,
 	.destroy = filter_destroy,
 };
 

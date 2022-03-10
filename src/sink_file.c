@@ -40,7 +40,7 @@ typedef struct sink_ctx_s sink_ctx_t;
 struct sink_ctx_s
 {
 	int fd;
-	player_ctx_t *ctx;
+	player_ctx_t *player;
 	jitter_t *in;
 };
 #define SINK_CTX
@@ -72,7 +72,7 @@ static int sink_write(sink_ctx_t *ctx, unsigned char *buff, int len)
 	return ret;
 }
 
-static sink_ctx_t *sink_init(player_ctx_t *ctx, const char *path)
+static sink_ctx_t *sink_init(player_ctx_t *player, const char *path)
 {
 	int fd;
 	if (!strncmp(path, "file://", 7))
@@ -84,16 +84,16 @@ static sink_ctx_t *sink_init(player_ctx_t *ctx, const char *path)
 
 	if (fd >= 0)
 	{
-		sink_ctx_t *sink = calloc(1, sizeof(*sink));
-		sink->fd = fd;
-		sink->ctx = ctx;
+		sink_ctx_t *ctx = calloc(1, sizeof(*ctx));
+		ctx->fd = fd;
+		ctx->player = player;
 
 		jitter_t *jitter = jitter_init(JITTER_TYPE_RING, jitter_name, 1, BUFFERSIZE);
 		dbg("sink: add consumer to %s", jitter->ctx->name);
 		jitter->ctx->consume = (consume_t)sink_write;
-		jitter->ctx->consumer = (void *)sink;
-		sink->in = jitter;
-		return sink;
+		jitter->ctx->consumer = (void *)ctx;
+		ctx->in = jitter;
+		return ctx;
 	}
 	err("sink file error: %s", strerror(errno));
 	return NULL;

@@ -18,7 +18,7 @@ struct encoder_s
 	void (*destroy)(encoder_ctx_t *);
 };
 
-const encoder_t *encoder_get(encoder_ctx_t *ctx);
+const encoder_t *encoder_check(const char *path);
 
 extern const encoder_t *encoder_passthrough;
 extern const encoder_t *encoder_lame;

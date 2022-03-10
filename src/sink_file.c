@@ -35,6 +35,7 @@
 #include <errno.h>
 
 #include "player.h"
+#include "encoder.h"
 typedef struct sink_s sink_t;
 typedef struct sink_ctx_s sink_ctx_t;
 struct sink_ctx_s
@@ -42,6 +43,7 @@ struct sink_ctx_s
 	int fd;
 	player_ctx_t *player;
 	jitter_t *in;
+	const encoder_t *encoder;
 };
 #define SINK_CTX
 #include "sink.h"
@@ -87,6 +89,7 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *path)
 		sink_ctx_t *ctx = calloc(1, sizeof(*ctx));
 		ctx->fd = fd;
 		ctx->player = player;
+		ctx->encoder = encoder_check(path);
 
 		jitter_t *jitter = jitter_init(JITTER_TYPE_RING, jitter_name, 1, BUFFERSIZE);
 		dbg("sink: add consumer to %s", jitter->ctx->name);
@@ -114,6 +117,11 @@ static int sink_attach(sink_ctx_t *ctx, const char *mime)
 	return 0;
 }
 
+static const encoder_t *sink_encoder(sink_ctx_t *ctx)
+{
+	return ctx->encoder;
+}
+
 static void sink_destroy(sink_ctx_t *sink)
 {
 	jitter_destroy(sink->in);
@@ -128,6 +136,7 @@ const sink_ops_t *sink_file = &(sink_ops_t)
 	.init = sink_init,
 	.jitter = sink_jitter,
 	.attach = sink_attach,
+	.encoder = sink_encoder,
 	.run = sink_run,
 	.destroy = sink_destroy,
 };

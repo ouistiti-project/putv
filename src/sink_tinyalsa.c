@@ -33,6 +33,7 @@
 #include <tinyalsa/asoundlib.h>
 
 #include "player.h"
+#include "encoder.h"
 #include "jitter.h"
 typedef struct sink_s sink_t;
 typedef struct sink_ctx_s sink_ctx_t;
@@ -113,6 +114,11 @@ static jitter_t *alsa_jitter(sink_ctx_t *ctx, int index)
 	return ctx->in;
 }
 
+static const encoder_t *sink_encoder(sink_ctx_t *ctx)
+{
+	return encoder_passthrough;
+}
+
 static void *alsa_thread(void *arg)
 {
 	int ret;
@@ -155,6 +161,7 @@ const sink_ops_t *sink_tinyalsa = &(sink_ops_t)
 	.init = alsa_init,
 	.jitter = alsa_jitter,
 	.attach = sink_attach,
+	.encoder = sink_encoder,
 	.run = alsa_run,
 	.destroy = alsa_destroy,
 };

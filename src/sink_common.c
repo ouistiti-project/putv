@@ -1,7 +1,9 @@
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "sink.h"
+#include "media.h"
 
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
@@ -51,11 +53,19 @@ sink_t *sink_build(player_ctx_t *player, const char *arg)
 	if (!strcmp(arg, "none"))
 		return NULL;
 	int i = 0;
+	char *protocol = NULL;
+	char *host = NULL;
+	char *port = NULL;
+	char *path = NULL;
+	char *search = NULL;
+	char *url = utils_parseurl(arg, &protocol, &host, &port, &path, &search);
+	if (protocol == NULL)
+		protocol = arg;
 	while (sinklist[i] != NULL)
 	{
 		dbg("sink: test %s", sinklist[i]->name);
 		int len = strlen(sinklist[i]->name);
-		if (!strncmp(sinklist[i]->name, arg, len))
+		if (protocol && !strcmp(sinklist[i]->name, protocol))
 			break;
 		i++;
 	}
@@ -68,5 +78,7 @@ sink_t *sink_build(player_ctx_t *player, const char *arg)
 	if (_sink.ctx == NULL)
 		return NULL;
 	_sink.ops = sinkops;
+	free(url);
 	return &_sink;
 }
+

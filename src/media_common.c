@@ -177,7 +177,7 @@ char *utils_parseurl(const char *url, char **protocol, char **host, char **port,
 	strcpy(turl, url);
 
 	char *str_protocol = turl;
-	char *str_host = strstr(turl, "://");
+	char *str_host = strchr(turl, ':');
 	if (str_host == NULL)
 	{
 		if (protocol)
@@ -189,7 +189,9 @@ char *utils_parseurl(const char *url, char **protocol, char **host, char **port,
 		return turl;
 	}
 	*str_host = '\0';
-	str_host += 3;
+	str_host += 1;
+	if (!strncmp(str_host, "//", 2))
+		str_host += 2;
 	char *str_port = strchr(str_host, ':');
 	char *str_path = strchr(str_host, '/');
 	char *str_search = strchr(str_host, '?');

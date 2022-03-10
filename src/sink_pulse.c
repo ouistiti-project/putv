@@ -35,6 +35,7 @@
 #include <pulse/error.h>
  
 #include "player.h"
+#include "encoder.h"
 #include "jitter.h"
 typedef struct sink_s sink_t;
 typedef struct sink_ctx_s sink_ctx_t;
@@ -247,6 +248,11 @@ static int sink_attach(sink_ctx_t *ctx, const char *mime)
 	return 0;
 }
 
+static const encoder_t *sink_encoder(sink_ctx_t *ctx)
+{
+	return encoder_passthrought;
+}
+
 static int sink_run(sink_ctx_t *ctx)
 {
 #ifdef USE_REALTIME
@@ -308,6 +314,7 @@ const sink_ops_t *sink_pulse = &(sink_ops_t)
 	.init = sink_init,
 	.jitter = sink_jitter,
 	.attach = sink_attach,
+	.encoder = sink_encoder,
 	.run = sink_run,
 	.destroy = sink_destroy,
 };

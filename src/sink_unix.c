@@ -42,6 +42,7 @@
 
 #include "player.h"
 #include "jitter.h"
+#include "encoder.h"
 #include "unix_server.h"
 typedef struct sink_s sink_t;
 typedef struct sink_ctx_s sink_ctx_t;
@@ -153,6 +154,11 @@ static int sink_attach(sink_ctx_t *ctx, const char *mime)
 static jitter_t *sink_jitter(sink_ctx_t *ctx, int index)
 {
 	return ctx->in;
+}
+
+static const encoder_t *sink_encoder(sink_ctx_t *ctx)
+{
+	return ENCODER;
 }
 
 static int sink_unxiclient(thread_info_t *info)
@@ -418,6 +424,7 @@ const sink_ops_t *sink_unix = &(sink_ops_t)
 	.init = sink_init,
 	.jitter = sink_jitter,
 	.attach = sink_attach,
+	.encoder = sink_encoder,
 	.run = sink_run,
 	.destroy = sink_destroy,
 };

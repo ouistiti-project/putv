@@ -103,7 +103,7 @@ static int run_player(player_ctx_t *player, sink_t *sink)
 	jitter_t *encoder_jitter = NULL;
 	jitter_t *sink_jitter;
 
-	encoder = ENCODER;
+	encoder = sink->ops->encoder(sink->ctx);
 	encoder_ctx = encoder->init(player);
 	int index = sink->ops->attach(sink->ctx, encoder->mime(encoder_ctx));
 	sink_jitter = sink->ops->jitter(sink->ctx, index);

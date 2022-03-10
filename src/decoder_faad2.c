@@ -66,7 +66,7 @@ struct decoder_ctx_s
 	unsigned int nloops;
 	int bitspersample;
 
-#ifdef DECODER_FAAD2_DUMP
+#ifdef DECODER_DUMP
 	int dumpfd;
 #endif
 };
@@ -203,7 +203,7 @@ static int _faad_loop(decoder_ctx_t *ctx)
 			ret = -1;
 			break;
 		}
-#ifdef DECODER_FAAD2_DUMP
+#ifdef DECODER_DUMP
 		write(ctx->dumpfd, samples, frameInfo.samples * 4);
 #endif
 		if (frameInfo.header_type == 2)
@@ -280,7 +280,7 @@ static void *_decoder_thread(void *arg)
 	ctx->heartbeat.ops->start(ctx->heartbeat.ctx);
 #endif
 	dbg("decoder: start running");
-#ifdef DECODER_FAAD2_DUMP
+#ifdef DECODER_DUMP
 	ctx->dumpfd = open("./faad2_dump.wav", O_RDWR | O_CREAT, 0644);
 #endif
 #ifdef DEBUG
@@ -314,7 +314,7 @@ static void *_decoder_thread(void *arg)
 	}
 	dbg("decoder: stop running");
 	player_state(ctx->player, STATE_CHANGE);
-#ifdef DECODER_FAAD2_DUMP
+#ifdef DECODER_DUMP
 	close(ctx->dumpfd);
 #endif
 

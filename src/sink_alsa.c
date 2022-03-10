@@ -58,7 +58,7 @@ struct sink_ctx_s
 	unsigned char *noise;
 	unsigned int noisecnt;
 
-#ifdef SINK_ALSA_DUMP
+#ifdef SINK_DUMP
 	int dumpfd;
 #endif
 };
@@ -459,7 +459,7 @@ static void *sink_thread(void *arg)
 	sink_ctx_t *ctx = (sink_ctx_t *)arg;
 	int divider = ctx->samplesize * ctx->nchannels;
 
-#ifdef SINK_ALSA_DUMP
+#ifdef SINK_DUMP
 	ctx->dumpfd = open("./alsa_dump.wav", O_RDWR | O_CREAT, 0644);
 #endif
 
@@ -514,7 +514,7 @@ static void *sink_thread(void *arg)
 		}
 		//snd_pcm_mmap_begin
 		ret = snd_pcm_writei(ctx->playback_handle, buff, length / divider);
-#ifdef SINK_ALSA_DUMP
+#ifdef SINK_DUMP
 		write(ctx->dumpfd, buff, length);
 #endif
 		sink_dbg("sink  alsa : write %d/%d %d/%d %d", ret * divider, length, ret, length / divider, divider);
@@ -548,7 +548,7 @@ static void *sink_thread(void *arg)
 		}
 	}
 	dbg("sink: thread end");
-#ifdef SINK_ALSA_DUMP
+#ifdef SINK_DUMP
 	close(ctx->dumpfd);
 #endif
 	return NULL;

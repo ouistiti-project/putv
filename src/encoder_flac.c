@@ -360,11 +360,3 @@ const encoder_t *encoder_flac = &(encoder_t)
 	.mime = encoder_mime,
 	.destroy = encoder_destroy,
 };
-
-#ifndef ENCODER_GET
-#define ENCODER_GET
-const encoder_t *encoder_get(encoder_ctx_t *ctx)
-{
-	return ctx->ops;
-}
-#endif

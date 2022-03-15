@@ -34,10 +34,10 @@ struct filter_audio_s
 typedef struct rescale_s rescale_t;
 struct rescale_s
 {;
-	int inbits;
+	int outbits;
 	sample_t one;
 };
-rescale_t *rescale_init(rescale_t *input, int inbits, jitter_format_t informat);
+rescale_t *rescale_init(rescale_t *input, int outbits, jitter_format_t outformat);
 sample_t rescale_cb(void *arg, sample_t sample, int bitspersample, int samplerate, int channel);
 
 /**

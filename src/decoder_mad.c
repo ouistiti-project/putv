@@ -161,7 +161,7 @@ enum mad_flow output(void *data,
 	audio.samplerate = pcm->samplerate;
 	audio.nchannels = pcm->channels;
 	audio.nsamples = pcm->length;
-	audio.bitspersample = 24;
+	audio.bitspersample = FRACBITS;
 	audio.mode = 0;
 	int i;
 	for (i = 0; i < audio.nchannels && i < MAXCHANNELS; i++)
@@ -258,7 +258,6 @@ static decoder_ctx_t *_decoder_init(player_ctx_t *player)
 	mad_decoder_init(&ctx->decoder, ctx,
 			input, header /* header */, 0 /* filter */, output,
 			error, 0 /* message */);
-	rescale_init(&ctx->rescale, FRACBITS, 0);
 	return ctx;
 }
 
@@ -282,10 +281,6 @@ static int _decoder_prepare(decoder_ctx_t *ctx, filter_t *filter, const char *in
 {
 	decoder_dbg("decoder: prepare");
 	ctx->filter = filter;
-	if (ctx->filter != NULL)
-	{
-		ctx->filter->ops->set(ctx->filter->ctx, FILTER_SAMPLED, rescale_cb, &ctx->rescale, 0);
-	}
 	return 0;
 }
 
@@ -349,7 +344,14 @@ static int _decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 	int ret = 0;
 	ctx->out = jitter;
 	if (ctx->filter)
+	{
+		if (jitter->format > JITTER_24BITS4_INTERLEAVED)
+			rescale_init(&ctx->rescale, 24, 0);
+		else
+			rescale_init(&ctx->rescale, 0, jitter->format);
+		ctx->filter->ops->set(ctx->filter->ctx, FILTER_SAMPLED, rescale_cb, &ctx->rescale, 0);
 		ret = ctx->filter->ops->set(ctx->filter->ctx, FILTER_FORMAT, jitter->format, FILTER_SAMPLERATE, jitter_samplerate(jitter), 0);
+	}
 #ifdef DECODER_HEARTBEAT
 	if (heartbeat_samples)
 	{

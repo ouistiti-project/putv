@@ -41,26 +41,26 @@
 
 #define filter_dbg(...)
 
-rescale_t *rescale_init(rescale_t *input, int inbits, jitter_format_t informat)
+rescale_t *rescale_init(rescale_t *input, int outbits, jitter_format_t outformat)
 {
-	switch (informat)
+	switch (outformat)
 	{
 	case 0:
 	break;
 	case PCM_8bits_mono:
-		inbits = 8;
+		outbits = 8;
 	break;
 	case PCM_16bits_LE_mono:
 	case PCM_16bits_LE_stereo:
-		inbits = 16;
+		outbits = 16;
 	break;
 	case PCM_24bits3_LE_stereo:
 	case PCM_24bits4_LE_stereo:
-		inbits = 24;
+		outbits = 24;
 	break;
 	case PCM_32bits_LE_stereo:
 	case PCM_32bits_BE_stereo:
-		inbits = 32;
+		outbits = 32;
 	break;
 	default:
 		return NULL;
@@ -68,8 +68,8 @@ rescale_t *rescale_init(rescale_t *input, int inbits, jitter_format_t informat)
 
 	if (input == NULL)
 		input = calloc(1, sizeof(*input));
-	input->inbits = inbits;
-	input->one = ((sample_t)1 << inbits);
+	input->outbits = outbits;
+	input->one = ((sample_t)1 << outbits);
 	return input;
 }
 
@@ -84,15 +84,19 @@ rescale_t *rescale_init(rescale_t *input, int inbits, jitter_format_t informat)
 sample_t rescale_cb(void *arg, sample_t sample, int bitspersample, int samplerate, int channel)
 {
 	rescale_t *ctx = (rescale_t *)arg;
+	if (bitspersample < ctx->outbits)
+		return sample;
 
+	sample_t one = ((sample_t)1 << bitspersample);
+	//sample &= (one - 1);
 	/* round */
-	sample += (1L << (ctx->inbits - bitspersample));
+	sample += (1L << (bitspersample - ctx->outbits));
 	/* clip */
-	if (sample >= ctx->one)
-		sample = ctx->one - 1;
-	else if (sample < -ctx->one)
-		sample = -ctx->one;
+	if (sample >= one)
+		sample = one - 1;
+	else if (sample < -one)
+		sample = -one;
 	/* quantize */
-	sample = sample >> (ctx->inbits + 1 - bitspersample);
+	sample = sample >> (bitspersample + 1 - ctx->outbits);
 	return sample;
 }

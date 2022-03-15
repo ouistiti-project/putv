@@ -56,6 +56,7 @@ struct decoder_ctx_s
 	uint32_t nsamples;
 	uint32_t position;
 	uint32_t duration;
+	rescale_t rescale;
 };
 #define DECODER_CTX
 #include "decoder.h"
@@ -266,8 +267,12 @@ static int _decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 	 * Initialization of the filter here.
 	 * Because we need the jitter out.
 	 */
-	if (ctx->filter)
-		ret = ctx->filter->ops->set(ctx->filter->ctx, FILTER_FORMAT, jitter->format, FILTER_SAMPLERATE, jitter->ctx->frequence, 0);
+	if (ctx->filter != NULL)
+	{
+		rescale_init(&ctx->rescale, 0, jitter->format);
+		ctx->filter->ops->set(ctx->filter->ctx, FILTER_SAMPLED, rescale_cb, &ctx->rescale, 0);
+		ret = ctx->filter->ops->set(ctx->filter->ctx, FILTER_FORMAT, jitter->format, FILTER_SAMPLERATE, jitter_samplerate(jitter), 0);
+	}
 	if (ret == 0)
 		pthread_create(&ctx->thread, NULL, _decoder_thread, ctx);
 	return ret;

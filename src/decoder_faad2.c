@@ -152,14 +152,12 @@ static int _faad_loop(decoder_ctx_t *ctx)
 	size_t len = ctx->in->ctx->size;
 
 	ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx, NULL);
-    len = 0;
-    if (!memcmp(ctx->inbuffer, "ID3", 3))
-    {
-		warn("ID3 tags");
-        len = uint32(ctx->inbuffer + 6);
-
-        len += 10;
-    }
+	len = 0;
+	if (!memcmp(ctx->inbuffer, "ID3", 3))
+	{
+		len = uint32(ctx->inbuffer + 6);
+		len += 10;
+	}
 	ctx->in->ops->pop(ctx->in->ctx, len);
 
 	ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx, NULL);
@@ -326,7 +324,11 @@ static int _decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 	int ret = 0;
 	ctx->out = jitter;
 	if (ctx->filter)
+	{
+		rescale_init(&ctx->rescale, 0, jitter->format);
+		ctx->filter->ops->set(ctx->filter->ctx, FILTER_SAMPLED, rescale_cb, &ctx->rescale, 0);
 		ret = ctx->filter->ops->set(ctx->filter->ctx, FILTER_FORMAT, jitter->format, FILTER_SAMPLERATE, jitter_samplerate(jitter), 0);
+	}
 	NeAACDecConfigurationPtr conf = NeAACDecGetCurrentConfiguration(ctx->decoder);
 	switch (jitter->format)
 	{

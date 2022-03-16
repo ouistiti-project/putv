@@ -95,6 +95,7 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *path)
 		dbg("sink: add consumer to %s", jitter->ctx->name);
 		jitter->ctx->consume = (consume_t)sink_write;
 		jitter->ctx->consumer = (void *)ctx;
+		jitter->format = SINK_BITSSTREAM;
 		ctx->in = jitter;
 		return ctx;
 	}

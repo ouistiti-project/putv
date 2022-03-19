@@ -25,10 +25,19 @@
  * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
+#include <stdio.h>
 #include <string.h>
 
 #include "encoder.h"
 #include "media.h"
+
+#define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
+#define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
+#ifdef DEBUG
+#define dbg(format, ...) fprintf(stderr, "\x1B[32m"format"\x1B[0m\n",  ##__VA_ARGS__)
+#else
+#define dbg(...)
+#endif
 
 const encoder_t *encoder_check(const char *path)
 {
@@ -54,14 +63,13 @@ const encoder_t *encoder_check(const char *path)
 	else
 	{
 #ifdef ENCODER_LAME
-		if (!strncmp(ext, mime_audiomp3, len))
+		if (!strncmp(path, mime_audiomp3, len))
 			encoder = encoder_lame;
 #endif
 #ifdef ENCODER_FLAC
-		if (!strncmp(ext, mime_audioflac, len))
+		if (!strncmp(path, mime_audioflac, len))
 			encoder = encoder_flac;
 #endif
 	}
 	return encoder;
 }
-

@@ -33,7 +33,7 @@
 #include <stdlib.h>
 #include <pulse/simple.h>
 #include <pulse/error.h>
- 
+
 #include "player.h"
 #include "encoder.h"
 #include "jitter.h"
@@ -199,17 +199,21 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *arg)
 	}
 
 	jitter_t *jitter = jitter_init(JITTER_TYPE_SG, jitter_name, NB_BUFFER, size);
-	jitter->ctx->frequence = DEFAULT_SAMPLERATE;
 	jitter->ctx->thredhold = NB_BUFFER/2;
 	jitter->format = ctx->format;
+	ctx->in = jitter;
+	ctx->in->ctx->frequence = DEFAULT_SAMPLERATE;
+
 	ctx->player = player;
 
 	return ctx;
 }
 
-static jitter_t *sink_jitter(sink_ctx_t *ctx, int index)
+static jitter_t *sink_jitter(sink_ctx_t *ctx, unsigned int index)
 {
-	return ctx->in;
+	if (index == 0)
+		return ctx->in;
+	return NULL;
 }
 
 static void *sink_thread(void *arg)
@@ -243,7 +247,7 @@ static void *sink_thread(void *arg)
 	return NULL;
 }
 
-static int sink_attach(sink_ctx_t *ctx, const char *mime)
+static unsigned int sink_attach(sink_ctx_t *ctx, const char *mime)
 {
 	return 0;
 }

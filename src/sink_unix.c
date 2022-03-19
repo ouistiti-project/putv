@@ -91,11 +91,12 @@ struct sink_ctx_s
 #define SINK_PRIORITY 65
 #endif
 
+#define BUFFERSIZE ENCODER_FRAME_SIZE
+
 static const char *jitter_name = "unix socket";
 static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 {
 	int count = 2;
-	jitter_format_t format = SINK_BITSSTREAM;
 
 	const char *path = NULL;
 
@@ -127,18 +128,17 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 
 	ctx->filepath = path;
 
-	unsigned int size;
-	jitter_t *jitter = jitter_init(JITTER_TYPE_SG, jitter_name, 6, size);
+	jitter_t *jitter = jitter_init(JITTER_TYPE_SG, jitter_name, 6, BUFFERSIZE);
 	jitter->ctx->frequence = 0;
 	jitter->ctx->thredhold = 2;
-	jitter->format = format;
+	jitter->format = SINK_BITSSTREAM;
 	ctx->in = jitter;
 
 #ifdef SINK_UNIX_ASYNC
 	pthread_mutex_init(&ctx->mutex, NULL);
 	pthread_cond_init(&ctx->event, NULL);
 	pthread_cond_init(&ctx->ack, NULL);
-	ctx->out = calloc(1, size);
+	ctx->out = calloc(1, BUFFERSIZE);
 #endif
 
 	ctx->player = player;
@@ -146,14 +146,16 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 	return ctx;
 }
 
-static int sink_attach(sink_ctx_t *ctx, const char *mime)
+static unsigned int sink_attach(sink_ctx_t *ctx, const char *mime)
 {
 	return 0;
 }
 
-static jitter_t *sink_jitter(sink_ctx_t *ctx, int index)
+static jitter_t *sink_jitter(sink_ctx_t *ctx, unsigned int index)
 {
-	return ctx->in;
+	if (index == 0)
+		return ctx->in;
+	return NULL;
 }
 
 static const encoder_t *sink_encoder(sink_ctx_t *ctx)

@@ -296,7 +296,7 @@ static sink_ctx_t *sink_init_rtp(player_ctx_t *player, const char *url)
 	return sink_init(player, url);
 }
 
-static int sink_attach(sink_ctx_t *ctx, const char *mime)
+static unsigned int sink_attach(sink_ctx_t *ctx, const char *mime)
 {
 #ifdef MUX
 	return ctx->mux->ops->attach(ctx->mux->ctx, mime);
@@ -305,7 +305,7 @@ static int sink_attach(sink_ctx_t *ctx, const char *mime)
 #endif
 }
 
-static jitter_t *sink_jitter(sink_ctx_t *ctx, int index)
+static jitter_t *sink_jitter(sink_ctx_t *ctx, unsigned int index)
 {
 #ifdef MUX
 	return ctx->mux->ops->jitter(ctx->mux->ctx, index);

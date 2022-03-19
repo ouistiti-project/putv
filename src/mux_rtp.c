@@ -1,5 +1,5 @@
 /*****************************************************************************
- * mux_passthrough.c
+ * mux_rtp.c
  * this file is part of https://github.com/ouistiti-project/putv
  *****************************************************************************
  * Copyright (C) 2016-2017
@@ -75,12 +75,6 @@ static mux_ctx_t *mux_init(player_ctx_t *player, const char *mime)
 	ctx->header.b.x = 0;
 	ctx->header.b.cc = 0;
 	ctx->header.b.m = 1;
-	if (mime == mime_audiomp3)
-		ctx->header.b.pt = 14;
-	if (mime == mime_audiopcm)
-		ctx->header.b.pt = 11;
-	if (mime == mime_audioalac)
-		ctx->header.b.pt = 46;
 	ctx->header.b.seqnum = random();
 	ctx->header.timestamp = random();
 	ctx->header.ssrc = random();
@@ -88,7 +82,7 @@ static mux_ctx_t *mux_init(player_ctx_t *player, const char *mime)
 	return ctx;
 }
 
-static jitter_t *mux_jitter(mux_ctx_t *ctx, int index)
+static jitter_t *mux_jitter(mux_ctx_t *ctx, unsigned int index)
 {
 	return ctx->in;
 }
@@ -161,7 +155,7 @@ static int mux_run(mux_ctx_t *ctx, jitter_t *sink_jitter)
 	return 0;
 }
 
-static int mux_attach(mux_ctx_t *ctx, const char *mime)
+static unsigned int mux_attach(mux_ctx_t *ctx, const char *mime)
 {
 	ctx->mime = mime;
 	if (mime == mime_audiomp3)

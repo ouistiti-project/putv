@@ -401,15 +401,17 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 #endif
 
 	dbg("sink: alsa card %s mixer %s", ctx->soundcard, ctx->mixerch);
-	jitter_t *jitter = jitter_init(JITTER_TYPE_SG, jitter_name, NB_BUFFER, size);
-#ifdef SAMPLERATE_AUTO
-	jitter->ctx->frequence = 0;
-#else
-	jitter->ctx->frequence = DEFAULT_SAMPLERATE;
-#endif
+	jitter_t *jitter = jitter_init(JITTER_TYPE_SG, jitter_name, NB_BUFFER, ctx->buffersize);
 	jitter->ctx->thredhold = NB_BUFFER/2;
 	jitter->format = ctx->format;
 	ctx->in = jitter;
+
+#ifdef SAMPLERATE_AUTO
+	ctx->in->ctx->frequence = 0;
+#else
+	ctx->in->ctx->frequence = DEFAULT_SAMPLERATE;
+#endif
+
 	ctx->noise = malloc(ctx->buffersize);
 	int i = 0;
 	for (i = 0; i < ctx->buffersize; i++)
@@ -422,9 +424,11 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 	return ctx;
 }
 
-static jitter_t *alsa_jitter(sink_ctx_t *ctx, int index)
+static jitter_t *alsa_jitter(sink_ctx_t *ctx, unsigned int index)
 {
-	return ctx->in;
+	if (index == 0)
+		return ctx->in;
+	return NULL;
 }
 
 static int _alsa_checksamplerate(sink_ctx_t *ctx)
@@ -554,7 +558,7 @@ static void *sink_thread(void *arg)
 	return NULL;
 }
 
-static int sink_attach(sink_ctx_t *ctx, const char *mime)
+static unsigned int sink_attach(sink_ctx_t *ctx, const char *mime)
 {
 	return 0;
 }

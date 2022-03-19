@@ -97,6 +97,7 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *path)
 		jitter->ctx->consumer = (void *)ctx;
 		jitter->format = SINK_BITSSTREAM;
 		ctx->in = jitter;
+
 		return ctx;
 	}
 	err("sink file error: %s", strerror(errno));
@@ -108,12 +109,14 @@ static int sink_run(sink_ctx_t *sink)
 	return 0;
 }
 
-static jitter_t *sink_jitter(sink_ctx_t *sink, int index)
+static jitter_t *sink_jitter(sink_ctx_t *ctx, unsigned int index)
 {
-	return sink->in;
+	if (index == 0)
+		return ctx->in;
+	return NULL;
 }
 
-static int sink_attach(sink_ctx_t *ctx, const char *mime)
+static unsigned int sink_attach(sink_ctx_t *ctx, const char *mime)
 {
 	return 0;
 }

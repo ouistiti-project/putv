@@ -13,10 +13,10 @@ struct mux_ops_s
 {
 	const char *protocol;
 	mux_ctx_t *(*init)(player_ctx_t *player, const char *arg);
-	jitter_t *(*jitter)(mux_ctx_t *ctx, int index);
-	int (*attach)(mux_ctx_t *ctx, const char *mime);
+	jitter_t *(*jitter)(mux_ctx_t *ctx, unsigned int index);
+	unsigned int (*attach)(mux_ctx_t *ctx, const char *mime);
 	int (*run)(mux_ctx_t *ctx, jitter_t *sink_jitter);
-	const char *(*mime)(mux_ctx_t *ctx, int index);
+	const char *(*mime)(mux_ctx_t *ctx, unsigned int index);
 	void (*destroy)(mux_ctx_t *ctx);
 };
 

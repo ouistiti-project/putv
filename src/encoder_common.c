@@ -46,7 +46,7 @@ const encoder_t *encoder_check(const char *path)
 	if (pathend == NULL)
 		pathend = strchr(path, '&');
 	int len = pathend - path;
-	if (pathend != NULL)
+	if (pathend == NULL)
 		len = strlen(path);
 	const char *ext = strrchr(path, '.');
 	if (ext != NULL)

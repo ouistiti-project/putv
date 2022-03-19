@@ -54,7 +54,6 @@ struct mux_ctx_s
 	jitter_t *out;
 	rtpheader_t header;
 	pthread_t thread;
-	const char *mime;
 };
 #define MUX_CTX
 #include "mux.h"
@@ -125,7 +124,7 @@ static int _mux_run(mux_ctx_t *ctx, unsigned char pt, jitter_t *in)
 		int i;
 		fprintf(stderr, "header: ");
 		for (i = 0; i < len; i++)
-			fprintf(stderr, "%.2x ", outbuffer[i]);
+			fprintf(stderr, "%.2hhx ", outbuffer[i]);
 		fprintf(stderr, "\n");
 #endif
 		memcpy(outbuffer + len, inbuffer, inlength);
@@ -147,7 +146,7 @@ static void *mux_thread(void *arg)
 	while (run)
 	{
 		run = 0;
-		for (int i = 0; i < MAX_ESTREAM && ctx->estreams[i].pt != 0; i++)
+		for (int i = 0; i < MAX_ESTREAM && ctx->estreams[i].in != NULL; i++)
 		{
 			jitter_t *in = ctx->estreams[i].in;
 			if (heart == NULL)

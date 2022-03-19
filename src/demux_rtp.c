@@ -206,7 +206,7 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 		out->mime = demux_profile(ctx, header->b.pt);
 		out->next = ctx->out;
 		ctx->out = out;
-		warn("demux: new  rtp substream %d %s", out->ssrc, out->mime);
+		warn("demux: new rtp substream %d %s(%d)", out->ssrc, out->mime, header->b.pt);
 		event_listener_t *listener = ctx->listener;
 		const src_t src = { .ops = demux_rtp, .ctx = ctx };
 		event_new_es_t event = {.pid = out->ssrc, .src = &src, .mime = out->mime, .jitte = JITTE_HIGH};

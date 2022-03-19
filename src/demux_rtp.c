@@ -135,6 +135,7 @@ static demux_ctx_t *demux_init(player_ctx_t *player, const char *url, const char
 
 	demux_rtp_addprofile(ctx, 14, mime_audiomp3);
 	demux_rtp_addprofile(ctx, 11, mime_audiopcm);
+	demux_rtp_addprofile(ctx, 46, mime_audioflac);
 	demux_rtp_addprofile(ctx, pt, mime);
 
 	return ctx;
@@ -410,8 +411,8 @@ static const char *demux_mime(demux_ctx_t *ctx, int index)
 		out = out->next;
 		index--;
 	}
-	if (ctx->out != NULL)
-		return ctx->out->mime;
+	if (out != NULL)
+		return out->mime;
 	return ctx->mime;
 }
 

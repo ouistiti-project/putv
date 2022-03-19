@@ -73,10 +73,35 @@ struct mux_ctx_s
 #define LATENCE_MS 5
 
 static const char *jitter_name = "rtp muxer";
-static mux_ctx_t *mux_init(player_ctx_t *player, const char *mime)
+static mux_ctx_t *mux_init(player_ctx_t *player, const char *search)
 {
 	mux_ctx_t *ctx = calloc(1, sizeof(*ctx));
-	ctx->mime = mime;
+	int i;
+	while (search)
+	{
+		for (i = 0; i < MAX_ESTREAM && ctx->estreams[i].pt != 0; i++);
+		const char *mime = strstr(search, "mime=");
+		if (mime)
+		{
+			mime += 5;
+			mime = utils_mime2mime(mime);
+		}
+		else
+			mime = mime_octetstream;
+		unsigned char pt = 0;
+		const char *ptstr = strstr(search, "pt=");
+		if (ptstr)
+		{
+			ptstr += 3;
+			pt = atoi(ptstr);
+		}
+		if (i < MAX_ESTREAM && pt != 0)
+		{
+			ctx->estreams[i].pt = pt;
+			ctx->estreams[i].mime = mime;
+		}
+		search = ptstr;
+	}
 
 	ctx->header.b.v = 2;
 	ctx->header.b.p = 0;
@@ -180,7 +205,13 @@ static unsigned int mux_attach(mux_ctx_t *ctx, const char *mime)
 	if (ctx->out == NULL)
 		return (unsigned int)-1;
 	int i;
-	for (i = 0; i < MAX_ESTREAM && ctx->estreams[i].pt != 0; i++);
+	for (i = 0; i < MAX_ESTREAM; i++)
+	{
+		if (ctx->estreams[i].pt == 0)
+			break;
+		if (!strcmp(ctx->estreams[i].mime, mime))
+			break;
+	}
 	if ( i < MAX_ESTREAM)
 	{
 		int size = ctx->out->ctx->size - sizeof(rtpheader_t) - sizeof(uint32_t);
@@ -198,7 +229,7 @@ static unsigned int mux_attach(mux_ctx_t *ctx, const char *mime)
 			pt = 11;
 			jitter->format = PCM_16bits_LE_mono;
 		}
-		else if (mime == mime_audioalac)
+		else if (mime == mime_audioflac)
 		{
 			pt = 46;
 			jitter->format = FLAC;
@@ -209,8 +240,10 @@ static unsigned int mux_attach(mux_ctx_t *ctx, const char *mime)
 			jitter->format = SINK_BITSSTREAM;
 		}
 		ctx->estreams[i].in = jitter;
-		ctx->estreams[i].pt = pt;
+		if (ctx->estreams[i].pt == 0)
+			ctx->estreams[i].pt = pt;
 		ctx->estreams[i].mime = mime;
+		warn("sink: rtp attach %s %d", mime, ctx->estreams[i].pt);
 	}
 	return 0;
 }

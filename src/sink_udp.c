@@ -148,7 +148,7 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 		const char *mime = strstr(search, "mime=");
 		if (mime != NULL)
 		{
-			encoder = encoder_check(mime);
+			encoder = encoder_check(mime + 5);
 		}
 	}
 

@@ -129,13 +129,14 @@ static demux_ctx_t *demux_init(player_ctx_t *player, const char *url, const char
 		if (string != NULL)
 		{
 			string += 3;
-			sscanf("%2d", string, &pt);
+			sscanf(string, "%hhd", &pt);
 		}
 	}
 
 	demux_rtp_addprofile(ctx, 14, mime_audiomp3);
 	demux_rtp_addprofile(ctx, 11, mime_audiopcm);
 	demux_rtp_addprofile(ctx, 46, mime_audioflac);
+	warn("demux add %s %d", mime, pt);
 	demux_rtp_addprofile(ctx, pt, mime);
 
 	return ctx;

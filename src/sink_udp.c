@@ -95,7 +95,7 @@ static const char *jitter_name = "udp socket";
 static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 {
 	int ret = 0;
-	const encoder_t *encoder;
+	const encoder_t *encoder = encoder_lame;
 
 	char *protocol = NULL;
 	char *host = NULL;

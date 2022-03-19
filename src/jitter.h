@@ -11,7 +11,7 @@ extern int __jitter_dbg__;
 #define jitter_dbg(jitter,format, ...) \
 	do { \
 		if (__jitter_dbg__ >= 0 && jitter->id == __jitter_dbg__) \
-			fprintf(stderr, "\x1B[32mjitter_sg(%s) "format"\x1B[0m\n", jitter->name,  ##__VA_ARGS__); \
+			fprintf(stderr, "\x1B[32mjitter(%s) "format"\x1B[0m\n", jitter->name,  ##__VA_ARGS__); \
 	} while (0)
 #else
 #define jitter_dbg(...)

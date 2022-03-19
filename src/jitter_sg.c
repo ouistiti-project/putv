@@ -254,7 +254,9 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 	else
 	{
 		if (len < jitter->size)
-			warn("jitter: scatter not full");
+		{
+			jitter_dbg(jitter, "scatter not full (%lu)", len);
+		}
 		pthread_mutex_lock(&private->mutex);
 		private->in->len = len;
 		private->in->beat = beat;
@@ -276,7 +278,7 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 			{
 				heartbeat_t *heartbeat = jitter->heartbeat;
 				heartbeat->ops->wait(heartbeat->ctx, private->out->beat);
-				jitter_dbg("jitter %s boom", jitter->name);
+				jitter_dbg(jitter, "boom");
 				private->out->beat = NULL;
 			}
 #endif

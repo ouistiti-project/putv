@@ -280,7 +280,7 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 		jitter->format = format;
 		ctx->in = jitter;
 #ifdef MUX
-		ctx->mux = mux_build(player, protocol);
+		ctx->mux = mux_build(player, protocol, search);
 #endif
 #ifdef UDP_DUMP
 		ctx->dumpfd = open("udp_dump.stream", O_RDWR | O_CREAT, 0644);

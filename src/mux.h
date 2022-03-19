@@ -27,7 +27,7 @@ struct mux_s
 	mux_ctx_t *ctx;
 };
 
-mux_t *mux_build(player_ctx_t *player, const char *mime);
+mux_t *mux_build(player_ctx_t *player, const char *protocol, const char *search);
 
 extern const mux_ops_t *mux_rtp;
 extern const mux_ops_t *mux_mpegts;

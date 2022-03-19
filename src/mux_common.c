@@ -46,7 +46,7 @@
 
 #define mux_dbg(...)
 
-mux_t *mux_build(player_ctx_t *player, const char *protocol)
+mux_t *mux_build(player_ctx_t *player, const char *protocol, const char *search)
 {
 	mux_t *mux = NULL;
 	const mux_ops_t *ops = NULL;
@@ -69,7 +69,7 @@ mux_t *mux_build(player_ctx_t *player, const char *protocol)
 
 	if (ops != NULL)
 	{
-		ctx = ops->init(player, "");
+		ctx = ops->init(player, search);
 	}
 	if (ctx != NULL)
 	{

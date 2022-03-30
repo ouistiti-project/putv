@@ -1,5 +1,5 @@
 /*****************************************************************************
- * mux_passthrough.c
+ * mux_rtp.c
  * this file is part of https://github.com/ouistiti-project/putv
  *****************************************************************************
  * Copyright (C) 2016-2017
@@ -40,14 +40,20 @@
 typedef struct mux_s mux_t;
 typedef struct mux_ops_s mux_ops_t;
 typedef struct mux_ctx_s mux_ctx_t;
+typedef struct mux_estream_s
+{
+	const char *mime;
+	jitter_t *in;
+	unsigned char pt;
+} mux_estream_t;
+#define MAX_ESTREAM 2
 struct mux_ctx_s
 {
 	player_ctx_t *ctx;
-	jitter_t *in;
+	mux_estream_t estreams[MAX_ESTREAM];
 	jitter_t *out;
 	rtpheader_t header;
 	pthread_t thread;
-	const char *mime;
 };
 #define MUX_CTX
 #include "mux.h"
@@ -64,23 +70,44 @@ struct mux_ctx_s
 
 #define mux_dbg(...)
 
+#define LATENCE_MS 5
+
 static const char *jitter_name = "rtp muxer";
-static mux_ctx_t *mux_init(player_ctx_t *player, const char *mime)
+static mux_ctx_t *mux_init(player_ctx_t *player, const char *search)
 {
 	mux_ctx_t *ctx = calloc(1, sizeof(*ctx));
-	ctx->mime = mime;
+	int i;
+	while (search)
+	{
+		for (i = 0; i < MAX_ESTREAM && ctx->estreams[i].pt != 0; i++);
+		const char *mime = strstr(search, "mime=");
+		if (mime)
+		{
+			mime += 5;
+			mime = utils_mime2mime(mime);
+		}
+		else
+			mime = mime_octetstream;
+		unsigned char pt = 0;
+		const char *ptstr = strstr(search, "pt=");
+		if (ptstr)
+		{
+			ptstr += 3;
+			pt = atoi(ptstr);
+		}
+		if (i < MAX_ESTREAM && pt != 0)
+		{
+			ctx->estreams[i].pt = pt;
+			ctx->estreams[i].mime = mime;
+		}
+		search = ptstr;
+	}
 
 	ctx->header.b.v = 2;
 	ctx->header.b.p = 0;
 	ctx->header.b.x = 0;
 	ctx->header.b.cc = 0;
 	ctx->header.b.m = 1;
-	if (mime == mime_audiomp3)
-		ctx->header.b.pt = 14;
-	if (mime == mime_audiopcm)
-		ctx->header.b.pt = 11;
-	if (mime == mime_audioalac)
-		ctx->header.b.pt = 46;
 	ctx->header.b.seqnum = random();
 	ctx->header.timestamp = random();
 	ctx->header.ssrc = random();
@@ -88,9 +115,50 @@ static mux_ctx_t *mux_init(player_ctx_t *player, const char *mime)
 	return ctx;
 }
 
-static jitter_t *mux_jitter(mux_ctx_t *ctx, int index)
+static jitter_t *mux_jitter(mux_ctx_t *ctx, unsigned int index)
 {
-	return ctx->in;
+	if (index < MAX_ESTREAM && ctx->estreams[index].pt != 0)
+	{
+		return ctx->estreams[index].in;
+	}
+	return NULL;
+}
+
+static int _mux_run(mux_ctx_t *ctx, unsigned char pt, jitter_t *in)
+{
+	void *beat = NULL;
+	char *inbuffer;
+	inbuffer = in->ops->peer(in->ctx, &beat);
+	unsigned long inlength = in->ops->length(in->ctx);
+	if (inbuffer != NULL)
+	{
+		int len = sizeof(ctx->header);
+		char *outbuffer = ctx->out->ops->pull(ctx->out->ctx);
+
+		mux_dbg("mux: rtp seqnum %d", ctx->header.b.seqnum);
+		ctx->header.b.pt = pt;
+		memcpy(outbuffer, &ctx->header, len);
+		ctx->header.b.m = 0;
+		ctx->header.b.seqnum++;
+		if (ctx->header.b.seqnum == UINT16_MAX)
+		{
+			ctx->header.b.seqnum = 0;
+			ctx->header.b.m = 1;
+		}
+#ifdef DEBUG_0
+		int i;
+		fprintf(stderr, "header: ");
+		for (i = 0; i < len; i++)
+			fprintf(stderr, "%.2hhx ", outbuffer[i]);
+		fprintf(stderr, "\n");
+#endif
+		memcpy(outbuffer + len, inbuffer, inlength);
+		len += inlength;
+
+		ctx->out->ops->push(ctx->out->ctx, len, beat);
+		in->ops->pop(in->ctx, inlength);
+	}
+	return 1;
 }
 
 static void *mux_thread(void *arg)
@@ -98,44 +166,28 @@ static void *mux_thread(void *arg)
 	int result = 0;
 	int run = 1;
 	mux_ctx_t *ctx = (mux_ctx_t *)arg;
-	heartbeat_t *heart = ctx->in->ops->heartbeat(ctx->in->ctx, NULL);
-	if (heart != NULL)
-		ctx->out->ops->heartbeat(ctx->out->ctx, heart);
+	heartbeat_t *heart = NULL;
+	int heartset = 0;
 	while (run)
 	{
-		void *beat = NULL;
-		char *inbuffer;
-		if (heart)
-			inbuffer = ctx->in->ops->peer(ctx->in->ctx, &beat);
-		else
-			inbuffer = ctx->in->ops->peer(ctx->in->ctx, NULL);
-		unsigned long inlength = ctx->in->ops->length(ctx->in->ctx);
-		if (inbuffer != NULL)
+		run = 0;
+		for (int i = 0; i < MAX_ESTREAM && ctx->estreams[i].in != NULL; i++)
 		{
-			int len = sizeof(ctx->header);
-			char *outbuffer = ctx->out->ops->pull(ctx->out->ctx);
-
-			mux_dbg("mux: rtp seqnum %d", ctx->header.b.seqnum);
-			memcpy(outbuffer, &ctx->header, len);
-			ctx->header.b.m = 0;
-			ctx->header.b.seqnum++;
-			if (ctx->header.b.seqnum == UINT16_MAX)
+			jitter_t *in = ctx->estreams[i].in;
+			if (heart == NULL)
+				heart = in->ops->heartbeat(in->ctx, NULL);
+			if (!heartset && heart != NULL)
 			{
-				ctx->header.b.seqnum = 0;
-				ctx->header.b.m = 1;
+				ctx->out->ops->heartbeat(ctx->out->ctx, heart);
+				heartset = 1;
 			}
-#ifdef DEBUG_0
-			int i;
-			fprintf(stderr, "header: ");
-			for (i = 0; i < len; i++)
-				fprintf(stderr, "%.2x ", outbuffer[i]);
-			fprintf(stderr, "\n");
-#endif
-			memcpy(outbuffer + len, inbuffer, inlength);
-			len += inlength;
-
-			ctx->out->ops->push(ctx->out->ctx, len, beat);
-			ctx->in->ops->pop(ctx->in->ctx, inlength);
+			run = _mux_run(ctx, ctx->estreams[i].pt, in);
+		}
+		if (run == 0)
+		{
+			sched_yield();
+			usleep(LATENCE_MS * 1000);
+			run = 1;
 		}
 	}
 	return (void *)(intptr_t)result;
@@ -143,48 +195,73 @@ static void *mux_thread(void *arg)
 
 static int mux_run(mux_ctx_t *ctx, jitter_t *sink_jitter)
 {
-	int size = sink_jitter->ctx->size - sizeof(rtpheader_t) - sizeof(uint32_t);
-	jitter_t *jitter = jitter_init(JITTER_TYPE_SG, jitter_name, 6, size);
-	jitter->ctx->frequence = 0;
-	jitter->ctx->thredhold = 3;
-#if defined(MUX_RTP_MP3)
-	jitter->format = MPEG2_3_MP3;
-#elif defined(MUX_RTP_PCM)
-	jitter->format = PCM_16bits_LE_mono;
-#else
-	jitter->format = SINK_BITSSTREAM;
-#endif
-	ctx->in = jitter;
-
 	ctx->out = sink_jitter;
 	pthread_create(&ctx->thread, NULL, mux_thread, ctx);
 	return 0;
 }
 
-static int mux_attach(mux_ctx_t *ctx, const char *mime)
+static unsigned int mux_attach(mux_ctx_t *ctx, const char *mime)
 {
-	ctx->mime = mime;
-	if (mime == mime_audiomp3)
-		ctx->header.b.pt = 14;
-	if (mime == mime_audiopcm)
-		ctx->header.b.pt = 11;
-	if (mime == mime_audioalac)
-		ctx->header.b.pt = 46;
+	if (ctx->out == NULL)
+		return (unsigned int)-1;
+	int i;
+	for (i = 0; i < MAX_ESTREAM; i++)
+	{
+		if (ctx->estreams[i].pt == 0)
+			break;
+		if (!strcmp(ctx->estreams[i].mime, mime))
+			break;
+	}
+	if ( i < MAX_ESTREAM)
+	{
+		int size = ctx->out->ctx->size - sizeof(rtpheader_t) - sizeof(uint32_t);
+		unsigned char pt;
+		jitter_t *jitter = jitter_init(JITTER_TYPE_SG, jitter_name, 6, size);
+		jitter->ctx->frequence = 0;
+		jitter->ctx->thredhold = 3;
+		if (mime == mime_audiomp3)
+		{
+			pt = 14;
+			jitter->format = MPEG2_3_MP3;
+		}
+		else if (mime == mime_audiopcm)
+		{
+			pt = 11;
+			jitter->format = PCM_16bits_LE_mono;
+		}
+		else if (mime == mime_audioflac)
+		{
+			pt = 46;
+			jitter->format = FLAC;
+		}
+		else
+		{
+			pt = 99;
+			jitter->format = SINK_BITSSTREAM;
+		}
+		ctx->estreams[i].in = jitter;
+		if (ctx->estreams[i].pt == 0)
+			ctx->estreams[i].pt = pt;
+		ctx->estreams[i].mime = mime;
+		warn("sink: rtp attach %s %d", mime, ctx->estreams[i].pt);
+	}
 	return 0;
 }
 
-static const char *mux_mime(mux_ctx_t *ctx, int index)
+static const char *mux_mime(mux_ctx_t *ctx, unsigned int index)
 {
-	if (index > 0)
-		return NULL;
-	return ctx->mime;
+	if (index < MAX_ESTREAM)
+
+		return ctx->estreams[index].mime;
+	return NULL;
 }
 
 static void mux_destroy(mux_ctx_t *ctx)
 {
 	if (ctx->thread)
 		pthread_join(ctx->thread, NULL);
-	jitter_destroy(ctx->in);
+	for (int i = 0; i < MAX_ESTREAM && ctx->estreams[i].pt != 0; i++)
+		jitter_destroy(ctx->estreams[i].in);
 	free(ctx);
 }
 

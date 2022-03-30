@@ -56,16 +56,28 @@ putv_SOURCES-$(DECODER_MAD)+=decoder_mad.c
 putv_LIBRARY-$(DECODER_MAD)+=mad
 putv_SOURCES-$(DECODER_FLAC)+=decoder_flac.c
 putv_LIBRARY-$(DECODER_FLAC)+=flac
+putv_SOURCES-$(DECODER_FAAD2)+=decoder_faad2.c
+putv_LIBRARY-$(DECODER_FAAD2)+=faad2
 endif
 putv_LIBS-$(DECODER_MODULES)+=dl
-putv_SOURCES-$(ENCODER_PASSTHROUGH)+=encoder_passthrough.c
-putv_CFLAGS-$(ENCODER_PASSTHROUGH)+=-DENCODER=encoder_passthrough
+putv_CFLAGS-$(DECODER_DUMP)+=-DDECODER_DUMP
+putv_SOURCES+=encoder_common.c
 putv_SOURCES-$(ENCODER_LAME)+=encoder_lame.c
-putv_CFLAGS-$(ENCODER_LAME)+=-DENCODER=encoder_lame
 putv_LIBS-$(ENCODER_LAME)+=mp3lame
+ifeq ($(ENCODER_FLAC),y)
+  ENCODER:=encoder_lame
+endif
 putv_SOURCES-$(ENCODER_FLAC)+=encoder_flac.c
-putv_CFLAGS-$(ENCODER_FLAC)+=-DENCODER=encoder_flac
 putv_LIBRARY-$(ENCODER_FLAC)+=flac
+ifeq ($(ENCODER_FLAC),y)
+  ENCODER:=encoder_flac
+endif
+putv_SOURCES-$(ENCODER_PASSTHROUGH)+=encoder_passthrough.c
+ifeq ($(ENCODER_PASSTHROUGH),y)
+  ENCODER:=encoder_passthrough
+endif
+putv_CFLAGS+=-DENCODER=$(ENCODER)
+putv_CFLAGS-$(ENCODER_DUMP)+=-DENCODER_DUMP
 putv_SOURCES-$(MUX)+=mux_common.c
 putv_SOURCES-$(MUX)+=mux_passthrough.c
 putv_SOURCES-$(MUX_RTP)+=mux_rtp.c
@@ -79,6 +91,7 @@ putv_SOURCES-$(SINK_UNIX)+=sink_unix.c
 putv_SOURCES-$(SINK_UNIX)+=unix_server.c
 putv_SOURCES-$(SINK_PULSE)+=sink_pulse.c
 putv_LIBRARY-$(SINK_PULSE)+=libpulse-simple
+putv_CFLAGS-$(SINK_DUMP)+=-DSINK_DUMP
 putv_SOURCES-$(CMDLINE)+=cmds_line.c
 putv_SOURCES-$(CMDINPUT)+=cmds_input.c
 putv_SOURCES-$(JSONRPC)+=cmds_json.c

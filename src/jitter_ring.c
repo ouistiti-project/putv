@@ -339,6 +339,8 @@ static unsigned char *jitter_peer(jitter_ctx_t *jitter, void **beat)
 static void jitter_pop(jitter_ctx_t *jitter, size_t len)
 {
 	jitter_private_t *private = (jitter_private_t *)jitter->private;
+	if (len + 1 == 0)
+		len = private->level;
 	jitter_dbg(jitter, "pop start %p len %ld end %p, state %d",
 							private->out, len, private->out + len,
 							private->state);

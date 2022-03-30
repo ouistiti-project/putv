@@ -10,6 +10,7 @@ extern const char const *mime_octetstream;
 extern const char const *mime_audiomp3;
 extern const char const *mime_audioflac;
 extern const char const *mime_audioalac;
+extern const char const *mime_audioaac;
 extern const char const *mime_audiopcm;
 extern const char const *mime_directory;
 

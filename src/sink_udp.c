@@ -47,6 +47,7 @@
 
 #include "player.h"
 #include "mux.h"
+#include "encoder.h"
 #include "jitter.h"
 #include "unix_server.h"
 typedef struct sink_s sink_t;
@@ -68,6 +69,7 @@ struct sink_ctx_s
 #ifdef MUX
 	mux_t *mux;
 #endif
+	const encoder_t *encoder;
 #ifdef UDP_DUMP
 	int dumpfd;
 #endif
@@ -93,6 +95,7 @@ static const char *jitter_name = "udp socket";
 static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 {
 	int ret = 0;
+	const encoder_t *encoder = encoder_lame;
 
 	char *protocol = NULL;
 	char *host = NULL;
@@ -121,7 +124,7 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 
 	if (search != NULL)
 	{
-		char *nif;
+		const char *nif;
 		nif = strstr(search, "if=");
 		if (nif != NULL)
 		{
@@ -141,6 +144,11 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 					if_addr = ((struct sockaddr_in *)ifa_main->ifa_addr)->sin_addr.s_addr;
 				}
 			}
+		}
+		const char *mime = strstr(search, "mime=");
+		if (mime != NULL)
+		{
+			encoder = encoder_check(mime + 5);
 		}
 	}
 
@@ -250,6 +258,7 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 
 		ctx->player = player;
 		ctx->sock = sock;
+		ctx->encoder = encoder;
 		memcpy(&ctx->saddr, &saddr, sizeof(saddr));
 		int i = 0;
 		if (asprintf(&ctx->sink_txt[i++], "h=%s", host) < 0)
@@ -271,7 +280,7 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *url)
 		jitter->format = format;
 		ctx->in = jitter;
 #ifdef MUX
-		ctx->mux = mux_build(player, protocol);
+		ctx->mux = mux_build(player, protocol, search);
 #endif
 #ifdef UDP_DUMP
 		ctx->dumpfd = open("udp_dump.stream", O_RDWR | O_CREAT, 0644);
@@ -287,7 +296,7 @@ static sink_ctx_t *sink_init_rtp(player_ctx_t *player, const char *url)
 	return sink_init(player, url);
 }
 
-static int sink_attach(sink_ctx_t *ctx, const char *mime)
+static unsigned int sink_attach(sink_ctx_t *ctx, const char *mime)
 {
 #ifdef MUX
 	return ctx->mux->ops->attach(ctx->mux->ctx, mime);
@@ -296,13 +305,18 @@ static int sink_attach(sink_ctx_t *ctx, const char *mime)
 #endif
 }
 
-static jitter_t *sink_jitter(sink_ctx_t *ctx, int index)
+static jitter_t *sink_jitter(sink_ctx_t *ctx, unsigned int index)
 {
 #ifdef MUX
 	return ctx->mux->ops->jitter(ctx->mux->ctx, index);
 #else
 	return ctx->in;
 #endif
+}
+
+static const encoder_t *sink_encoder(sink_ctx_t *ctx)
+{
+	return ctx->encoder;
 }
 
 static void *sink_thread(void *arg)
@@ -468,6 +482,7 @@ const sink_ops_t *sink_udp = &(sink_ops_t)
 	.init = sink_init,
 	.jitter = sink_jitter,
 	.attach = sink_attach,
+	.encoder = sink_encoder,
 	.run = sink_run,
 	.service = sink_service,
 	.destroy = sink_destroy,
@@ -480,6 +495,7 @@ const sink_ops_t *sink_rtp = &(sink_ops_t)
 	.init = sink_init_rtp,
 	.jitter = sink_jitter,
 	.attach = sink_attach,
+	.encoder = sink_encoder,
 	.run = sink_run,
 	.service = sink_service,
 	.destroy = sink_destroy,

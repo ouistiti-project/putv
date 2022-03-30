@@ -254,7 +254,9 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 	else
 	{
 		if (len < jitter->size)
-			warn("jitter: scatter not full");
+		{
+			jitter_dbg(jitter, "scatter not full (%lu)", len);
+		}
 		pthread_mutex_lock(&private->mutex);
 		private->in->len = len;
 		private->in->beat = beat;
@@ -276,7 +278,7 @@ static void jitter_push(jitter_ctx_t *jitter, size_t len, void *beat)
 			{
 				heartbeat_t *heartbeat = jitter->heartbeat;
 				heartbeat->ops->wait(heartbeat->ctx, private->out->beat);
-				jitter_dbg("jitter %s boom", jitter->name);
+				jitter_dbg(jitter, "boom");
 				private->out->beat = NULL;
 			}
 #endif
@@ -445,6 +447,13 @@ static void jitter_pop(jitter_ctx_t *jitter, size_t len)
 		return;
 	}
 
+	/**
+	 * len = -1 equivalent as buffer full
+	 * len is unused except for debug and in this case
+	 * len = -1 equivalent len = MAX_SIZE_T
+	 * if ((len + 1) == 0)
+	 *	len = private->out->len;
+	 */
 	if (private->out->len > len)
 	{
 		dbg("buffer %s pop not empty %ld/%ld", jitter->name, len, private->out->len);

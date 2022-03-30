@@ -56,6 +56,7 @@ struct decoder_ctx_s
 	uint32_t nsamples;
 	uint32_t position;
 	uint32_t duration;
+	rescale_t rescale;
 };
 #define DECODER_CTX
 #include "decoder.h"
@@ -148,63 +149,34 @@ output_cb(const FLAC__StreamDecoder *decoder,
 	/* pcm->samplerate contains the sampling frequency */
 
 	audio.samplerate = FLAC__stream_decoder_get_sample_rate(decoder);
-	if (ctx->out->ctx->frequence == 0)
-	{
-		decoder_dbg("decoder flac: change samplerate to %u", audio.samplerate);
-		ctx->out->ctx->frequence = audio.samplerate;
-	}
-	else if (ctx->out->ctx->frequence != audio.samplerate)
-	{
-		err("decoder: samplerate %d not supported", ctx->out->ctx->frequence);
-	}
-
 	audio.nchannels = FLAC__stream_decoder_get_channels(decoder);
 	audio.nsamples = frame->header.blocksize;
 	audio.bitspersample = FLAC__stream_decoder_get_bits_per_sample(decoder);
 	audio.regain = 0;
+	audio.mode = 0;
 	int i;
 	for (i = 0; i < audio.nchannels && i < MAXCHANNELS; i++)
 		audio.samples[i] = (sample_t *)buffer[i];
 	decoder_dbg("decoder: audio frame %d Hz, %d channels, %d samples size %d bits", audio.samplerate, audio.nchannels, audio.nsamples, audio.bitspersample);
 
-	unsigned int nsamples;
 	if (audio.nchannels == 1)
 		audio.samples[1] = audio.samples[0];
 
+	ctx->nsamples += audio.nsamples;
+	if (ctx->nsamples == ctx->samplerate)
+	{
+		ctx->position++;
+		ctx->nsamples = 0;
+	}
 	while (audio.nsamples > 0)
 	{
-		if (ctx->outbuffer == NULL)
+		if (filter_filloutput(ctx->filter, &audio, ctx->out) < 0)
 		{
-			ctx->outbuffer = ctx->out->ops->pull(ctx->out->ctx);
 			/**
-			 * the pipe is broken. close the src and the decoder
+			 * flush the src jitter to break the stream
 			 */
-			if (ctx->outbuffer == NULL)
-			{
-				/**
-				 * flush the src jitter to break the stream
-				 */
-				ctx->in->ops->flush(ctx->in->ctx);
-				return FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
-			}
-		}
-
-		int len =
-			ctx->filter->ops->run(ctx->filter->ctx, &audio,
-				ctx->outbuffer + ctx->outbufferlen,
-				ctx->out->ctx->size - ctx->outbufferlen);
-		if (ctx->nsamples == ctx->samplerate)
-		{
-			ctx->position++;
-			ctx->nsamples = 0;
-		}
-
-		ctx->outbufferlen += len;
-		if (ctx->outbufferlen >= ctx->out->ctx->size)
-		{
-			ctx->out->ops->push(ctx->out->ctx, ctx->out->ctx->size, NULL);
-			ctx->outbuffer = NULL;
-			ctx->outbufferlen = 0;
+			ctx->in->ops->flush(ctx->in->ctx);
+			return FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
 		}
 	}
 
@@ -295,8 +267,12 @@ static int _decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 	 * Initialization of the filter here.
 	 * Because we need the jitter out.
 	 */
-	if (ctx->filter)
-		ret = ctx->filter->ops->set(ctx->filter->ctx, FILTER_FORMAT, jitter->format, FILTER_SAMPLERATE, jitter->ctx->frequence, 0);
+	if (ctx->filter != NULL)
+	{
+		rescale_init(&ctx->rescale, 0, jitter->format);
+		ctx->filter->ops->set(ctx->filter->ctx, FILTER_SAMPLED, rescale_cb, &ctx->rescale, 0);
+		ret = ctx->filter->ops->set(ctx->filter->ctx, FILTER_FORMAT, jitter->format, FILTER_SAMPLERATE, jitter_samplerate(jitter), 0);
+	}
 	if (ret == 0)
 		pthread_create(&ctx->thread, NULL, _decoder_thread, ctx);
 	return ret;

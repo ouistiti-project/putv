@@ -35,13 +35,15 @@
 #include <errno.h>
 
 #include "player.h"
+#include "encoder.h"
 typedef struct sink_s sink_t;
 typedef struct sink_ctx_s sink_ctx_t;
 struct sink_ctx_s
 {
 	int fd;
-	player_ctx_t *ctx;
+	player_ctx_t *player;
 	jitter_t *in;
+	const encoder_t *encoder;
 };
 #define SINK_CTX
 #include "sink.h"
@@ -72,7 +74,7 @@ static int sink_write(sink_ctx_t *ctx, unsigned char *buff, int len)
 	return ret;
 }
 
-static sink_ctx_t *sink_init(player_ctx_t *ctx, const char *path)
+static sink_ctx_t *sink_init(player_ctx_t *player, const char *path)
 {
 	int fd;
 	if (!strncmp(path, "file://", 7))
@@ -84,16 +86,19 @@ static sink_ctx_t *sink_init(player_ctx_t *ctx, const char *path)
 
 	if (fd >= 0)
 	{
-		sink_ctx_t *sink = calloc(1, sizeof(*sink));
-		sink->fd = fd;
-		sink->ctx = ctx;
+		sink_ctx_t *ctx = calloc(1, sizeof(*ctx));
+		ctx->fd = fd;
+		ctx->player = player;
+		ctx->encoder = encoder_check(path);
 
 		jitter_t *jitter = jitter_init(JITTER_TYPE_RING, jitter_name, 1, BUFFERSIZE);
 		dbg("sink: add consumer to %s", jitter->ctx->name);
 		jitter->ctx->consume = (consume_t)sink_write;
-		jitter->ctx->consumer = (void *)sink;
-		sink->in = jitter;
-		return sink;
+		jitter->ctx->consumer = (void *)ctx;
+		jitter->format = SINK_BITSSTREAM;
+		ctx->in = jitter;
+
+		return ctx;
 	}
 	err("sink file error: %s", strerror(errno));
 	return NULL;
@@ -104,14 +109,21 @@ static int sink_run(sink_ctx_t *sink)
 	return 0;
 }
 
-static jitter_t *sink_jitter(sink_ctx_t *sink, int index)
+static jitter_t *sink_jitter(sink_ctx_t *ctx, unsigned int index)
 {
-	return sink->in;
+	if (index == 0)
+		return ctx->in;
+	return NULL;
 }
 
-static int sink_attach(sink_ctx_t *ctx, const char *mime)
+static unsigned int sink_attach(sink_ctx_t *ctx, const char *mime)
 {
 	return 0;
+}
+
+static const encoder_t *sink_encoder(sink_ctx_t *ctx)
+{
+	return ctx->encoder;
 }
 
 static void sink_destroy(sink_ctx_t *sink)
@@ -128,6 +140,7 @@ const sink_ops_t *sink_file = &(sink_ops_t)
 	.init = sink_init,
 	.jitter = sink_jitter,
 	.attach = sink_attach,
+	.encoder = sink_encoder,
 	.run = sink_run,
 	.destroy = sink_destroy,
 };

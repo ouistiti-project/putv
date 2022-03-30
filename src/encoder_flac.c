@@ -62,6 +62,7 @@ struct encoder_ctx_s
 	unsigned char *outbuffer;
 	heartbeat_t heartbeat;
 	beat_bitrate_t beat;
+	size_t maxsize;
 };
 #define ENCODER_CTX
 #include "encoder.h"
@@ -84,6 +85,7 @@ struct encoder_ctx_s
 #define DEFAULT_SAMPLERATE 44100
 #endif
 
+#define SAMPLES_FRAME 300
 #define NB_BUFFERS 6
 #define LATENCY 200 //ms
 #define MAX_SAMPLES (44100 * 60 * 2)
@@ -97,7 +99,10 @@ _encoder_writecb(const FLAC__StreamEncoder *encoder,
 {
 	encoder_ctx_t *ctx = (encoder_ctx_t *)client_data;
 
-	dbg("encoder: stream frame %u of %u samples", current_frame, samples);
+	encoder_dbg("encoder: stream frame %u of %u samples", current_frame, samples);
+#ifdef DEBUG
+	if (ctx->maxsize < bytes) ctx->maxsize = bytes;
+#endif
 	int check = 1;
 #ifdef ENCODER_DUMP
 	if (ctx->dumpfd > 0)
@@ -153,7 +158,7 @@ static int encoder_flac_init(encoder_ctx_t *ctx)
 	FLAC__stream_encoder_set_bits_per_sample(ctx->encoder, 24);
 	FLAC__stream_encoder_set_channels(ctx->encoder, ctx->nchannels);
 	FLAC__stream_encoder_set_compression_level(ctx->encoder, 2);
-	FLAC__stream_encoder_set_blocksize(ctx->encoder, 1000);
+	FLAC__stream_encoder_set_blocksize(ctx->encoder, SAMPLES_FRAME);
 //	FLAC__stream_encoder_set_blocksize(ctx->encoder, 0);
 	FLAC__stream_encoder_set_total_samples_estimate(ctx->encoder, MAX_SAMPLES);
 
@@ -173,7 +178,8 @@ static encoder_ctx_t *encoder_init(player_ctx_t *player)
 	ctx->nchannels = 2;
 	ctx->samplerate = DEFAULT_SAMPLERATE;
 	ctx->samplesize = sizeof(uint32_t);
-	ctx->samplesframe = LATENCY * DEFAULT_SAMPLERATE / 1000;
+	ctx->samplesframe = SAMPLES_FRAME;
+	//ctx->samplesframe = LATENCY * DEFAULT_SAMPLERATE / 1000;
 
 	ctx->encoder = FLAC__stream_encoder_new();
 
@@ -340,6 +346,7 @@ static void encoder_destroy(encoder_ctx_t *ctx)
 	if (ctx->dumpfd > 0)
 		close(ctx->dumpfd);
 #endif
+	dbg("encoder: max buffer %lu", ctx->maxsize);
 	if (ctx->thread)
 		pthread_join(ctx->thread, NULL);
 	FLAC__stream_encoder_finish(ctx->encoder);
@@ -360,11 +367,3 @@ const encoder_t *encoder_flac = &(encoder_t)
 	.mime = encoder_mime,
 	.destroy = encoder_destroy,
 };
-
-#ifndef ENCODER_GET
-#define ENCODER_GET
-const encoder_t *encoder_get(encoder_ctx_t *ctx)
-{
-	return ctx->ops;
-}
-#endif

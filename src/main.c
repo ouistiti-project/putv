@@ -103,8 +103,9 @@ static int run_player(player_ctx_t *player, sink_t *sink)
 	jitter_t *encoder_jitter = NULL;
 	jitter_t *sink_jitter;
 
-	encoder = ENCODER;
+	encoder = sink->ops->encoder(sink->ctx);
 	encoder_ctx = encoder->init(player);
+	// retreive an index of jitter for this kind of encoder
 	int index = sink->ops->attach(sink->ctx, encoder->mime(encoder_ctx));
 	sink_jitter = sink->ops->jitter(sink->ctx, index);
 	encoder->run(encoder_ctx, sink_jitter);
@@ -141,7 +142,7 @@ void help(const char *name)
 	fprintf(stderr, "\t pcm?mono=right\tmono stream with right channel\n");
 	fprintf(stderr, "\t pcm?mono=mixed\tmono stream with left+right channels\n");
 	fprintf(stderr, "\t pcm?stats\tprint statistics about the stream\n");
-	
+
 }
 
 #define DAEMONIZE 0x01

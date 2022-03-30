@@ -1,8 +1,8 @@
 /*****************************************************************************
- * decoder_mad.c
+ * decoder_faad2.c
  * this file is part of https://github.com/ouistiti-project/putv
  *****************************************************************************
- * Copyright (C) 2016-2017
+ * Copyright (C) 2022-2024
  *
  * Authors: Marc Chalain <marc.chalain@gmail.com>
  *
@@ -31,8 +31,9 @@
 #include <pthread.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <fcntl.h>
 
-#include <mad.h>
+#include <neaacdec.h>
 #ifdef USE_ID3TAG
 #include <id3tag.h>
 #endif
@@ -47,7 +48,7 @@ typedef struct decoder_ctx_s decoder_ctx_t;
 struct decoder_ctx_s
 {
 	const decoder_ops_t *ops;
-	struct mad_decoder decoder;
+	NeAACDecHandle decoder;
 	pthread_t thread;
 
 	jitter_t *in;
@@ -62,10 +63,14 @@ struct decoder_ctx_s
 	player_ctx_t *player;
 
 	heartbeat_t heartbeat;
-	beat_samples_t beat;
-	mad_timer_t position;
 	unsigned int nloops;
+	int bitspersample;
+
+#ifdef DECODER_DUMP
+	int dumpfd;
+#endif
 };
+
 #define DECODER_CTX
 #include "decoder.h"
 #include "media.h"
@@ -86,92 +91,37 @@ struct decoder_ctx_s
 #define DECODER_HEARTBEAT
 #endif
 
-/**
- * FRACBITS value comes from mad decoder
- */
-#define FRACBITS		28
 #define JITTER_TYPE JITTER_TYPE_RING
+#define MAX_CHANNELS 6
 
 static jitter_t *_decoder_jitter(decoder_ctx_t *ctx, jitte_t jitte);
-
-static
-enum mad_flow input(void *data,
-		    struct mad_stream *stream)
-{
-	decoder_ctx_t *ctx = (decoder_ctx_t *)data;
-	if (ctx->in == NULL)
-	{
-		err("decoder mad: input stream error");
-		return MAD_FLOW_BREAK;
-	}
-	size_t len = ctx->in->ctx->size;
-
-	if (stream->next_frame)
-		len = stream->next_frame - ctx->inbuffer;
-	ctx->in->ops->pop(ctx->in->ctx, len);
-
-	ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx, NULL);
-
-	len = ctx->in->ops->length(ctx->in->ctx);
-	if (ctx->inbuffer == NULL)
-	{
-		return MAD_FLOW_STOP;
-	}
-	//input is called for each frame when there is
-	// not enought data to decode the "next frame"
-	if (stream->next_frame)
-		stream->next_frame = ctx->inbuffer;
-
-	decoder_dbg("decoder mad: data len %ld", len);
-	mad_stream_buffer(stream, ctx->inbuffer, len);
-
-	return MAD_FLOW_CONTINUE;
-}
 
 #ifdef DEBUG
 static clockid_t clockid = CLOCK_REALTIME;
 static struct timespec start = {0, 0};
 #endif
 
-static
-enum mad_flow output(void *data,
-		     struct mad_header const *header,
-		     struct mad_pcm *pcm)
+static uint32_t uint32(char *buff)
 {
-	decoder_ctx_t *ctx = (decoder_ctx_t *)data;
+	return (buff[0] << 21) | (buff[1] << 14) |
+		(buff[2] <<  7) | (buff[3] <<  0);
+}
+
+static int _faad_output(decoder_ctx_t *ctx, NeAACDecFrameInfo *frameInfo, void *samples)
+{
 	filter_audio_t audio;
-
-	/* pcm->samplerate contains the sampling frequency */
-
-#ifdef DEBUG
-	if (start.tv_nsec == 0)
-	{
-		clock_gettime(clockid, &start);
-	}
-#endif
-#ifdef DEBUG
-	unsigned long duration = (header->duration.fraction);
-	duration /= (MAD_TIMER_RESOLUTION / 100000);
-	decoder_dbg("duration 1 %lu.%02lums", duration / 100, duration % 100);
-	duration = pcm->length * 1000;
-	duration /= (pcm->samplerate / 100);
-	decoder_dbg("duration 2 %lu.%02lums", duration / 100, duration % 100);
-#endif
-
-	audio.samplerate = pcm->samplerate;
-	audio.nchannels = pcm->channels;
-	audio.nsamples = pcm->length;
-	audio.bitspersample = FRACBITS;
-	audio.mode = 0;
-	int i;
-	for (i = 0; i < audio.nchannels && i < MAXCHANNELS; i++)
-	{
-		audio.samples[i] = pcm->samples[i];
-	}
-	decoder_dbg("decoder mad: audio frame %d Hz, %d channels, %d samples", audio.samplerate, audio.nchannels, audio.nsamples);
-
-	if (audio.nchannels == 1)
-		audio.samples[1] = audio.samples[0];
+	audio.samplerate = frameInfo->samplerate;
+	audio.bitspersample = ctx->bitspersample;
+	audio.regain = 0;
+	/**
+	 * faad return interleaved pcm.
+	 * The filter needs to manage it as a monochannel stream
+	 */
+	audio.nchannels = frameInfo->channels;
+	audio.nsamples = frameInfo->samples / frameInfo->channels;
+	audio.samples[0] = samples;
+	audio.mode = AUDIO_MODE_INTERLEAVED;
+	decoder_dbg("decoder faad: info %d channels, %lu fps, %lu samples, %d bits", frameInfo->channels, frameInfo->samplerate, frameInfo->samples, audio.bitspersample);
 
 	while (audio.nsamples > 0)
 	{
@@ -181,73 +131,95 @@ enum mad_flow output(void *data,
 			 * flush the src jitter to break the stream
 			 */
 			ctx->in->ops->flush(ctx->in->ctx);
-			return MAD_FLOW_STOP;
+			return -1;
 		}
 	}
-
-	return MAD_FLOW_CONTINUE;
+	return 0;
 }
 
-static
-enum mad_flow error(void *data,
-		    struct mad_stream *stream,
-		    struct mad_frame *frame)
+static int _faad_parsetags(char *buffer, size_t len)
 {
-	if (MAD_RECOVERABLE(stream->error))
+	size_t offset = 0;
+	uint32_t size;
+	size = uint32(buffer + offset);
+	offset += 4;
+	return 0;
+}
+
+static int _faad_loop(decoder_ctx_t *ctx)
+{
+	int ret;
+	size_t len = ctx->in->ctx->size;
+
+	ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx, NULL);
+	len = 0;
+	if (!memcmp(ctx->inbuffer, "ID3", 3))
 	{
-#ifdef USE_ID3TAG
-		if (stream->error == MAD_ERROR_LOSTSYNC)
+		len = uint32(ctx->inbuffer + 6);
+		len += 10;
+	}
+	ctx->in->ops->pop(ctx->in->ctx, len);
+
+	ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx, NULL);
+	len = ctx->in->ops->length(ctx->in->ctx);
+	{
+		len = _faad_parsetags(ctx->inbuffer, len);
+	}
+	ctx->in->ops->pop(ctx->in->ctx, len);
+
+	ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx, NULL);
+	len = ctx->in->ops->length(ctx->in->ctx);
+	unsigned long samplerate;
+	unsigned char channels;
+	len = NeAACDecInit(ctx->decoder, ctx->inbuffer,
+		len, &samplerate, &channels);
+	if ((len + 1) == 0)
+	{
+		err("decoder faad: Initialisation error");
+		return -1;
+	}
+	decoder_dbg("decoder faad: samplerate %lu fps, channels %d", samplerate, channels);
+	ctx->in->ops->pop(ctx->in->ctx, len);
+
+	do
+	{
+		ctx->inbuffer = ctx->in->ops->peer(ctx->in->ctx, NULL);
+		if (ctx->inbuffer == NULL)
 		{
-			signed long tagsize;
-			tagsize = id3_tag_query(stream->this_frame,
-					stream->bufend - stream->this_frame);
-			if (tagsize > 0)
-			{
-#ifdef PROCESS_ID3
-				struct id3_tag *tag;
-
-				tag = get_id3(stream, tagsize, decoder);
-				if (tag) {
-					//process_id3(tag, player);
-					id3_tag_delete(tag);
-				}
-#else
-				mad_stream_skip(stream, tagsize);
-#endif
-			}
+			decoder_dbg("decoder faad: end of file");
+			ret = -1;
+			break;
 		}
-		else
+		len = ctx->in->ops->length(ctx->in->ctx);
+
+		NeAACDecFrameInfo frameInfo;
+		void *samples = NeAACDecDecode(ctx->decoder, &frameInfo, ctx->inbuffer, len);
+		decoder_dbg("decoder faad: decode %ld samples", frameInfo.samples);
+		if (frameInfo.error > 0)
+		{
+			err("decoder faad: error %s", NeAACDecGetErrorMessage(frameInfo.error));
+			ret = -1;
+			break;
+		}
+#ifdef DECODER_DUMP
+		write(ctx->dumpfd, samples, frameInfo.samples * 4);
 #endif
-			decoder_dbg("decoder mad: error 0x%04x (%s) at byte offset %p",
-				stream->error, mad_stream_errorstr(stream),
-				stream->this_frame );
-		return MAD_FLOW_CONTINUE;
-	}
-	else
-	{
-		err("decoder mad: error 0x%04x (%s) at byte offset %p",
-			stream->error, mad_stream_errorstr(stream),
-			stream->this_frame );
-		return MAD_FLOW_BREAK;
-	}
-}
-enum mad_flow header(void *data, struct mad_header const *header)
-{
-	decoder_ctx_t *ctx = (decoder_ctx_t *)data;
-	decoder_dbg("decoder mad: audio header mpeg1layer%d, flag 0x%x", header->layer, header->flags);
-	decoder_dbg("decoder mad: bitrate %d , samplerate %d", header->bitrate, header->samplerate);
-	mad_timer_add(&ctx->position, header->duration);
-	return MAD_FLOW_CONTINUE;
-}
+		if (frameInfo.header_type == 2)
+			ret = _faad_output(ctx, &frameInfo, samples);
+		else
+		{
+			dbg("frame type %d", frameInfo.header_type);
+		}
+		ctx->in->ops->pop(ctx->in->ctx, frameInfo.bytesconsumed);
+	} while(ret == 0);
 
-/// MAD_BUFFER_MDLEN is too small on ARM device
-#define BUFFERSIZE 2881
-//#define BUFFERSIZE MAD_BUFFER_MDLEN
-
+	return ret;
+}
+#define BUFFERSIZE FAAD_MIN_STREAMSIZE*MAX_CHANNELS
 /// NBBUFFER must be at least 3 otherwise the decoder block on the end of the source
 #define NBUFFER 4
 
-static const char *jitter_name = "mad decoder";
+static const char *jitter_name = "faad decoder";
 
 static decoder_ctx_t *_decoder_init(player_ctx_t *player)
 {
@@ -255,9 +227,7 @@ static decoder_ctx_t *_decoder_init(player_ctx_t *player)
 	ctx->ops = decoder_mad;
 	ctx->player = player;
 
-	mad_decoder_init(&ctx->decoder, ctx,
-			input, header /* header */, 0 /* filter */, output,
-			error, 0 /* message */);
+	ctx->decoder = NeAACDecOpen();
 	return ctx;
 }
 
@@ -291,7 +261,7 @@ static jitter_t *_decoder_jitter(decoder_ctx_t *ctx, jitte_t jitte)
 		int factor = jitte;
 		int nbbuffer = NBUFFER << factor;
 		jitter_t *jitter = jitter_init(JITTER_TYPE, jitter_name, nbbuffer, BUFFERSIZE);
-		jitter->format = MPEG2_3_MP3;
+		jitter->format = MPEG4_AAC;
 		jitter->ctx->thredhold = nbbuffer / 2;
 
 		ctx->in = jitter;
@@ -299,7 +269,7 @@ static jitter_t *_decoder_jitter(decoder_ctx_t *ctx, jitte_t jitte)
 	return ctx->in;
 }
 
-static void *mad_thread(void *arg)
+static void *_decoder_thread(void *arg)
 {
 	int result = 0;
 	decoder_ctx_t *ctx = (decoder_ctx_t *)arg;
@@ -308,9 +278,16 @@ static void *mad_thread(void *arg)
 	ctx->heartbeat.ops->start(ctx->heartbeat.ctx);
 #endif
 	dbg("decoder: start running");
-	result = mad_decoder_run(&ctx->decoder, MAD_DECODER_MODE_SYNC);
+#ifdef DECODER_DUMP
+	ctx->dumpfd = open("./faad2_dump.wav", O_RDWR | O_CREAT, 0644);
+#endif
 #ifdef DEBUG
 	clockid_t clockid = CLOCK_REALTIME;
+	static struct timespec start;
+	clock_gettime(clockid, &start);
+#endif
+	result = _faad_loop(ctx);
+#ifdef DEBUG
 	static struct timespec now;
 	clock_gettime(clockid, &now);
 	now.tv_sec -= start.tv_sec;
@@ -323,7 +300,7 @@ static void *mad_thread(void *arg)
 		now.tv_nsec -= 1000000000 - start.tv_nsec;
 		now.tv_sec -= 1;
 	}
-	dbg("decoder: end %lu.%09lu", now.tv_sec, now.tv_nsec);
+	dbg("decoder: during %lu.%09lu", now.tv_sec, now.tv_nsec);
 #endif
 	/**
 	 * push the last buffer to the encoder, otherwise the next
@@ -335,6 +312,9 @@ static void *mad_thread(void *arg)
 	}
 	dbg("decoder: stop running");
 	player_state(ctx->player, STATE_CHANGE);
+#ifdef DECODER_DUMP
+	close(ctx->dumpfd);
+#endif
 
 	return (void *)(intptr_t)result;
 }
@@ -345,13 +325,33 @@ static int _decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 	ctx->out = jitter;
 	if (ctx->filter)
 	{
-		if (jitter->format > JITTER_24BITS4_INTERLEAVED)
-			rescale_init(&ctx->rescale, 24, 0);
-		else
-			rescale_init(&ctx->rescale, 0, jitter->format);
+		rescale_init(&ctx->rescale, 0, jitter->format);
 		ctx->filter->ops->set(ctx->filter->ctx, FILTER_SAMPLED, rescale_cb, &ctx->rescale, 0);
 		ret = ctx->filter->ops->set(ctx->filter->ctx, FILTER_FORMAT, jitter->format, FILTER_SAMPLERATE, jitter_samplerate(jitter), 0);
 	}
+	NeAACDecConfigurationPtr conf = NeAACDecGetCurrentConfiguration(ctx->decoder);
+	switch (jitter->format)
+	{
+	case PCM_8bits_mono:
+	case PCM_16bits_LE_mono:
+	case PCM_16bits_LE_stereo:
+		conf->outputFormat = FAAD_FMT_16BIT;
+		ctx->bitspersample = 16;
+	break;
+	case PCM_24bits3_LE_stereo:
+		conf->outputFormat = FAAD_FMT_24BIT;
+		ctx->bitspersample = 24;
+	break;
+	case PCM_24bits4_LE_stereo:
+	case PCM_32bits_LE_stereo:
+		conf->outputFormat = FAAD_FMT_32BIT;
+		ctx->bitspersample = 32;
+	break;
+	}
+	conf->defObjectType = 2;
+	conf->defSampleRate = jitter_samplerate(jitter);
+	NeAACDecSetConfiguration(ctx->decoder, conf);
+
 #ifdef DECODER_HEARTBEAT
 	if (heartbeat_samples)
 	{
@@ -368,32 +368,23 @@ static int _decoder_run(decoder_ctx_t *ctx, jitter_t *jitter)
 	}
 #endif
 	if (ret == 0)
-		pthread_create(&ctx->thread, NULL, mad_thread, ctx);
+		pthread_create(&ctx->thread, NULL, _decoder_thread, ctx);
 	return ret;
 }
 
 static int _decoder_check(const char *path)
 {
 	char *ext = strrchr(path, '.');
-	if (ext)
-		return !strcmp(ext, ".mp3");
+	if (ext && !strcmp(ext, ".aac"))
+		return 1;
+	if (ext && !strcmp(ext, ".m4a"))
+		return 1;
 	return 0;
 }
 
 static const char *_decoder_mime(decoder_ctx_t *ctx)
 {
-	return mime_audiomp3;
-}
-
-static uint32_t _decoder_position(decoder_ctx_t *ctx)
-{
-	uint32_t position = mad_timer_count(ctx->position, 0);
-	return position;
-}
-
-static uint32_t _decoder_duration(decoder_ctx_t *ctx)
-{
-	return 0;
+	return mime_audioaac;
 }
 
 static void _decoder_destroy(decoder_ctx_t *ctx)
@@ -403,7 +394,7 @@ static void _decoder_destroy(decoder_ctx_t *ctx)
 	if (ctx->thread > 0)
 		pthread_join(ctx->thread, NULL);
 	/* release the decoder */
-	mad_decoder_finish(&ctx->decoder);
+	NeAACDecClose(ctx->decoder);
 #ifdef DECODER_HEARTBEAT
 	ctx->heartbeat.ops->destroy(ctx->heartbeat.ctx);
 #endif
@@ -416,22 +407,20 @@ static void _decoder_destroy(decoder_ctx_t *ctx)
 	free(ctx);
 }
 
-const decoder_ops_t _decoder_mad =
+const decoder_ops_t _decoder_faad2 =
 {
-	.name = "mad",
+	.name = "faad2",
 	.check = _decoder_check,
 	.init = _decoder_init,
 	.prepare = _decoder_prepare,
 	.jitter = _decoder_jitter,
 	.run = _decoder_run,
-	.position = _decoder_position,
-	.duration = _decoder_duration,
 	.destroy = _decoder_destroy,
 	.mime = _decoder_mime,
 };
 
-const decoder_ops_t *decoder_mad = &_decoder_mad;
+const decoder_ops_t *decoder_faad2 = &_decoder_faad2;
 
 #ifdef DECODER_MODULES
-extern const decoder_ops_t decoder_ops __attribute__ ((weak, alias ("_decoder_mad")));
+extern const decoder_ops_t decoder_ops __attribute__ ((weak, alias ("_decoder_faad2")));
 #endif

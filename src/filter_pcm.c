@@ -29,6 +29,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 #include "media.h"
 
@@ -62,6 +64,9 @@ struct filter_ctx_s
 	unsigned char shift;
 	unsigned char nchannels;
 	unsigned char channel;
+#ifdef FILTER_DUMP
+	int dumpfd;
+#endif
 };
 #define FILTER_CTX
 #include "filter.h"
@@ -74,6 +79,8 @@ struct filter_ctx_s
 #define dbg(...)
 #endif
 
+#define filter_dbg(...)
+
 static sample_t filter_get(filter_ctx_t *ctx, filter_audio_t *audio, int channel, unsigned int index);
 
 static int filter_set(filter_ctx_t *ctx,...);
@@ -83,11 +90,13 @@ static void filter_destroy(filter_ctx_t *ctx);
 static filter_ctx_t *filter_init(jitter_format_t format, int samplerate)
 {
 	filter_ctx_t *ctx = calloc(1, sizeof(*ctx));
-	ctx->get = filter_get;
 
 	if (samplerate == 0)
 		samplerate = 44100;
 	filter_set(ctx, FILTER_FORMAT, format, FILTER_SAMPLERATE, samplerate, 0);
+#ifdef FILTER_DUMP
+	ctx->dumpfd = open("./filter_dump.wav", O_RDWR | O_CREAT, 0644);
+#endif
 	return ctx;
 }
 
@@ -184,6 +193,9 @@ static void filter_destroy(filter_ctx_t *ctx)
 		free(sampleditem);
 		sampleditem = ctx->sampled;
 	}
+#ifdef FILTER_DUMP
+	close(ctx->dumpfd);
+#endif
 	free(ctx);
 }
 
@@ -204,25 +216,40 @@ int sampled_change(filter_ctx_t *ctx, sample_t sample, int bitspersample, int sa
 		{
 			out[i] = 0;
 			j++;
+			continue;
 		}
-		else if ((i * 8) > (ctx->shift))
+		if ((i * 8) > (ctx->shift))
+		{
 			out[i] = 0;
-		else
-			out[i] = sample >> ((i - j) * 8);
+			continue;
+		}
+		out[i] = sample >> ((i - j) * 8);
 	}
 	return ctx->samplesize;
 }
 
 static sample_t filter_get(filter_ctx_t *ctx, filter_audio_t *audio, int channel, unsigned int index)
 {
-	return audio->samples[(channel % audio->nchannels)][index];
+	sample_t *channelsample = audio->samples[(channel % audio->nchannels)];
+	return channelsample[index];
 }
 
-static int filter_run(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *buffer, size_t size, sample_get_t get)
+static sample_t filter_getinterleaved(filter_ctx_t *ctx, filter_audio_t *audio, int channel, unsigned int index)
+{
+	sample_t *channelsample = audio->samples[0];
+	index *= audio->nchannels;
+	index += channel;
+	return channelsample[index];
+}
+
+static int filter_run(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *buffer, size_t size)
 {
 	int j;
 	int i;
 	int bufferlen = 0;
+	sample_get_t get = filter_get;
+	if (audio->mode == AUDIO_MODE_INTERLEAVED)
+		get = filter_getinterleaved;
 	for (i = 0; i < audio->nsamples; i++)
 	{
 		sample_t sample;
@@ -232,6 +259,9 @@ static int filter_run(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *b
 				goto filter_exit;
 
 			sample = get(ctx, audio, j, i);
+#ifdef FILTER_DUMP
+			write(ctx->dumpfd, &sample, ctx->samplesize);
+#endif
 			int len = sampled_change(ctx, sample, audio->bitspersample,
 					audio->samplerate, j, buffer + bufferlen);
 			bufferlen += len;
@@ -240,13 +270,15 @@ static int filter_run(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *b
 filter_exit:
 	audio->nsamples -= i;
 	for (j = 0; j < audio->nchannels; j++)
+	{
+		if (audio->mode == AUDIO_MODE_INTERLEAVED)
+		{
+			audio->samples[0] += i;
+			continue;
+		}
 		audio->samples[j] += i;
+	}
 	return bufferlen;
-}
-
-static int filter_interleave(filter_ctx_t *ctx, filter_audio_t *audio, unsigned char *buffer, size_t size)
-{
-	return filter_run(ctx, audio, buffer, size, ctx->get);
 }
 
 const filter_ops_t *filter_pcm = &(filter_ops_t)
@@ -254,7 +286,7 @@ const filter_ops_t *filter_pcm = &(filter_ops_t)
 	.name = "pcm",
 	.init = filter_init,
 	.set = filter_set,
-	.run = filter_interleave,
+	.run = filter_run,
 	.destroy = filter_destroy,
 };
 
@@ -337,10 +369,76 @@ filter_t *filter_build(const char *name, jitter_t *jitter, const char *info)
 
 sample_t filter_minvalue(int bitspersample)
 {
-	return (~(((sample_t)0x1) << (bitspersample - 1)));
+	sample_t min = (~(((sample_t)0x1) << (bitspersample - 1))) + 1;
+	return min;
 }
 
 sample_t filter_maxvalue(int bitspersample)
 {
-	return -(~(((sample_t)0x1) << (bitspersample - 1))) - 1;
+	sample_t max = -(~(((sample_t)0x1) << (bitspersample - 1))) - 2;
+	return max;
 }
+
+int filter_filloutput(filter_t *filter, filter_audio_t *audio, jitter_t *out)
+{
+	static char *outbuffer = NULL;
+	static int outbufferlen = 0;
+#ifdef DECODER_HEARTBEAT
+	static beat_samples_t beat;
+#endif
+	int pcm_length = audio->nsamples;
+
+	if (jitter_samplerate(out) == 0)
+	{
+		filter_dbg("filter: change samplerate to %u", audio->samplerate);
+		out->ctx->frequence = audio->samplerate;
+	}
+	else if (jitter_samplerate(out) != audio->samplerate)
+	{
+		err("filter: samplerate %d not supported", jitter_samplerate(out));
+	}
+
+	if (outbuffer == NULL)
+	{
+		outbuffer = out->ops->pull(out->ctx);
+		/**
+		 * the pipe is broken. close the src and the decoder
+		 */
+		if (outbuffer == NULL)
+		{
+			return -1;
+		}
+	}
+
+	outbufferlen += filter->ops->run(filter->ctx, audio,
+			outbuffer + outbufferlen, out->ctx->size - outbufferlen);
+
+	if (outbufferlen >= out->ctx->size)
+	{
+		if (outbufferlen > out->ctx->size)
+			err("decoder: out %d %ld", outbufferlen, out->ctx->size);
+#ifdef DECODER_HEARTBEAT
+		beat.nsamples += pcm_length - audio->nsamples;
+		beat.nloops++;
+		if (beat.nloops == out->ctx->count + 1)
+		{
+			decoder_dbg("decoder: heart boom %d", beat.nsamples);
+			out->ops->push(out->ctx, out->ctx->size, &beat);
+			beat.nsamples = 0;
+			beat.nloops = 0;
+		}
+		else
+#endif
+			out->ops->push(out->ctx, out->ctx->size, NULL);
+		outbuffer = NULL;
+		outbufferlen = 0;
+	}
+#ifdef DECODER_HEARTBEAT
+	else
+	{
+		beat->nsamples += pcm_length;
+	}
+#endif
+	return outbufferlen;
+}
+

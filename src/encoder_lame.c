@@ -80,6 +80,13 @@ struct encoder_ctx_s
 #endif
 
 #define NB_BUFFERS 6
+#define DEFAULT_NCHANNELS 2
+
+#if DEFAULT_NCHANNELS == 1
+#define LAME_NCHANNELS JOINT_STEREO
+#else
+#define LAME_NCHANNELS STEREO
+#endif
 
 static const char *jitter_name = "lame encoder";
 void error_report(const char *format, va_list ap)
@@ -87,18 +94,21 @@ void error_report(const char *format, va_list ap)
 	fprintf(stderr, format, ap);
 }
 
-static int encoder_lame_init(encoder_ctx_t *ctx)
+static int encoder_lame_init(encoder_ctx_t *ctx, int samplerate, int samplesize, int nchannels)
 {
 	if (ctx->encoder)
 		lame_close(ctx->encoder);
 	ctx->encoder = lame_init();
 
-	lame_set_in_samplerate(ctx->encoder, ctx->samplerate);
-	lame_set_num_channels(ctx->encoder, ctx->nchannels);
+	lame_set_in_samplerate(ctx->encoder, samplerate);
+	ctx->samplerate = samplerate;
+	lame_set_num_channels(ctx->encoder, nchannels);
+	ctx->nchannels = nchannels;
+	ctx->samplesize = samplesize;
 	// this value change the complexity and the time of compression
 	// nothing else
 	lame_set_quality(ctx->encoder, 5);
-	lame_set_mode(ctx->encoder, STEREO);
+	lame_set_mode(ctx->encoder, LAME_NCHANNELS);
 	//lame_set_mode(encoder->encoder, JOINT_STEREO);
 	lame_set_errorf(ctx->encoder, error_report);
 
@@ -134,11 +144,7 @@ static encoder_ctx_t *encoder_init(player_ctx_t *player)
 	ctx->ops = encoder_lame;
 	ctx->player = player;
 
-	ctx->nchannels = 2;
-	ctx->samplerate = DEFAULT_SAMPLERATE;
-	ctx->samplesize = sizeof(signed short);
-
-	encoder_lame_init(ctx);
+	encoder_lame_init(ctx, DEFAULT_SAMPLERATE, sizeof(signed short), 2);
 #ifdef ENCODER_DUMP
 	ctx->dumpfd = open("lame_dump.mp3", O_RDWR | O_CREAT, 0644);
 #endif
@@ -210,8 +216,8 @@ static void *lame_thread(void *arg)
 			warn("encoder lame: frame too small %d %ld", inlength, ctx->in->ctx->size);
 		if (ctx->in->ctx->frequence != ctx->samplerate)
 		{
-			ctx->samplerate = ctx->in->ctx->frequence;
-			encoder_lame_init(ctx);
+			warn("set lame samplerate %u",ctx->in->ctx->frequence);
+			encoder_lame_init(ctx, ctx->in->ctx->frequence, ctx->samplesize, ctx->nchannels);
 		}
 		if (ctx->outbuffer == NULL)
 		{
@@ -319,11 +325,3 @@ const encoder_t *encoder_lame = &(encoder_t)
 	.mime = encoder_mime,
 	.destroy = encoder_destroy,
 };
-
-#ifndef ENCODER_GET
-#define ENCODER_GET
-const encoder_t *encoder_get(encoder_ctx_t *ctx)
-{
-	return ctx->ops;
-}
-#endif

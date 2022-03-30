@@ -33,8 +33,9 @@
 #include <stdlib.h>
 #include <pulse/simple.h>
 #include <pulse/error.h>
- 
+
 #include "player.h"
+#include "encoder.h"
 #include "jitter.h"
 typedef struct sink_s sink_t;
 typedef struct sink_ctx_s sink_ctx_t;
@@ -198,17 +199,21 @@ static sink_ctx_t *sink_init(player_ctx_t *player, const char *arg)
 	}
 
 	jitter_t *jitter = jitter_init(JITTER_TYPE_SG, jitter_name, NB_BUFFER, size);
-	jitter->ctx->frequence = DEFAULT_SAMPLERATE;
 	jitter->ctx->thredhold = NB_BUFFER/2;
 	jitter->format = ctx->format;
+	ctx->in = jitter;
+	ctx->in->ctx->frequence = DEFAULT_SAMPLERATE;
+
 	ctx->player = player;
 
 	return ctx;
 }
 
-static jitter_t *sink_jitter(sink_ctx_t *ctx, int index)
+static jitter_t *sink_jitter(sink_ctx_t *ctx, unsigned int index)
 {
-	return ctx->in;
+	if (index == 0)
+		return ctx->in;
+	return NULL;
 }
 
 static void *sink_thread(void *arg)
@@ -242,9 +247,14 @@ static void *sink_thread(void *arg)
 	return NULL;
 }
 
-static int sink_attach(sink_ctx_t *ctx, const char *mime)
+static unsigned int sink_attach(sink_ctx_t *ctx, const char *mime)
 {
 	return 0;
+}
+
+static const encoder_t *sink_encoder(sink_ctx_t *ctx)
+{
+	return encoder_passthrought;
 }
 
 static int sink_run(sink_ctx_t *ctx)
@@ -308,6 +318,7 @@ const sink_ops_t *sink_pulse = &(sink_ops_t)
 	.init = sink_init,
 	.jitter = sink_jitter,
 	.attach = sink_attach,
+	.encoder = sink_encoder,
 	.run = sink_run,
 	.destroy = sink_destroy,
 };

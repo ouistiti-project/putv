@@ -14,6 +14,8 @@ typedef   signed long sample_t;
 #endif
 
 #define MAXCHANNELS 8
+#define AUDIO_MODE_INTERLEAVED 0x01
+
 typedef struct filter_audio_s filter_audio_t;
 struct filter_audio_s
 {
@@ -23,6 +25,7 @@ struct filter_audio_s
 	char bitspersample;
 	char nchannels;
 	char regain;
+	char mode;
 };
 
 /**
@@ -31,10 +34,10 @@ struct filter_audio_s
 typedef struct rescale_s rescale_t;
 struct rescale_s
 {;
-	int inbits;
+	int outbits;
 	sample_t one;
 };
-rescale_t *rescale_init(rescale_t *input, int inbits, jitter_format_t informat);
+rescale_t *rescale_init(rescale_t *input, int outbits, jitter_format_t outformat);
 sample_t rescale_cb(void *arg, sample_t sample, int bitspersample, int samplerate, int channel);
 
 /**
@@ -127,6 +130,7 @@ struct filter_s
 };
 
 filter_t *filter_build(const char *name, jitter_t *jitter, const char *info);
+int filter_filloutput(filter_t *filter, filter_audio_t *audio, jitter_t *out);
 
 sample_t filter_minvalue(int bitspersample);
 sample_t filter_maxvalue(int bitspersample);

@@ -3,6 +3,7 @@
 
 typedef struct player_ctx_s player_ctx_t;
 typedef struct jitter_s jitter_t;
+typedef struct encoder_s encoder_t;
 
 #ifndef SINK_CTX
 typedef void sink_ctx_t;
@@ -13,11 +14,12 @@ struct sink_ops_s
 	const char *name;
 	const char *default_;
 	sink_ctx_t *(*init)(player_ctx_t *, const char *soundcard);
-	int (*attach)(sink_ctx_t *, const char *mime);
-	jitter_t *(*jitter)(sink_ctx_t *, int index);
+	unsigned int (*attach)(sink_ctx_t *, const char *mime);
+	jitter_t *(*jitter)(sink_ctx_t *, unsigned int index);
 	int (*run)(sink_ctx_t *);
 	void (*destroy)(sink_ctx_t *);
 	const char *(*service)(sink_ctx_t *, int *port, const char **txt[]);
+	const encoder_t *(*encoder)(sink_ctx_t *);
 
 	/**
 	 * control API

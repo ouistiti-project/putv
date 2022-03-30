@@ -65,7 +65,7 @@ static mux_ctx_t *mux_init(player_ctx_t *player, const char *unused)
 	return ctx;
 }
 
-static jitter_t *mux_jitter(mux_ctx_t *ctx, int index)
+static jitter_t *mux_jitter(mux_ctx_t *ctx, unsigned int index)
 {
 	if (index > 0)
 		return NULL;
@@ -79,13 +79,13 @@ static int mux_run(mux_ctx_t *ctx, jitter_t *sink_jitter)
 	return 0;
 }
 
-static int mux_attach(mux_ctx_t *ctx, const char *mime)
+static unsigned int mux_attach(mux_ctx_t *ctx, const char *mime)
 {
 	ctx->mime = mime;
 	return 0;
 }
 
-static const char *mux_mime(mux_ctx_t *ctx, int index)
+static const char *mux_mime(mux_ctx_t *ctx, unsigned int index)
 {
 	if (index > 0)
 		return NULL;

@@ -33,6 +33,7 @@
 #include <tinyalsa/asoundlib.h>
 
 #include "player.h"
+#include "encoder.h"
 #include "jitter.h"
 typedef struct sink_s sink_t;
 typedef struct sink_ctx_s sink_ctx_t;
@@ -60,7 +61,6 @@ static const char *jitter_name = "tinyalsa";
 static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 {
 	int ret;
-	jitter_format_t format = SINK_ALSA_FORMAT;
 	sink_ctx_t *ctx = calloc(1, sizeof(*ctx));
 	ctx->ops = sink_tinyalsa;
 	ctx->player = player;
@@ -74,6 +74,20 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 		.period_count = 4,
 		.format = PCM_FORMAT_S16_LE,
 	};
+#if SINK_ALSA_FORMAT == PCM_8bits_mono
+	config.format = PCM_FORMAT_S8;
+	config.channels = 1;
+#elif SINK_ALSA_FORMAT == PCM_16bits_LE_mono
+	config.format = PCM_FORMAT_S16_LE;
+	config.channels = 1;
+#elif SINK_ALSA_FORMAT == PCM_16bits_LE_stereo
+	config.format = PCM_FORMAT_S16_LE;
+#elif SINK_ALSA_FORMAT == PCM_24bits3_LE_stereo
+	config.format = PCM_FORMAT_S24_LE;
+#elif SINK_ALSA_FORMAT == PCM_32bits_LE_stereo
+	config.format = PCM_FORMAT_S32_LE;
+#else
+	jitter_format_t format = SINK_ALSA_FORMAT;
 	switch (format)
 	{
 		case PCM_32bits_LE_stereo:
@@ -90,11 +104,12 @@ static sink_ctx_t *alsa_init(player_ctx_t *player, const char *soundcard)
 			config.channels = 1;
 		break;
 	}
+#endif
 	ctx->playback_handle = pcm_open(0, 0, PCM_OUT, &config);
 
 	jitter_t *jitter = jitter_init(JITTER_TYPE_SG, jitter_name, 10, size);
 	ctx->in = jitter;
-	jitter->format = format;
+	jitter->format = SINK_ALSA_FORMAT;
 
 	return ctx;
 error:
@@ -103,14 +118,21 @@ error:
 	return NULL;
 }
 
-static int sink_attach(sink_ctx_t *ctx, const char *mime)
+static unsigned int sink_attach(sink_ctx_t *ctx, const char *mime)
 {
 	return 0;
 }
 
-static jitter_t *alsa_jitter(sink_ctx_t *ctx, int index)
+static jitter_t *alsa_jitter(sink_ctx_t *ctx, unsigned int index)
 {
-	return ctx->in;
+	if (index == 0)
+		return ctx->in;
+	return NULL;
+}
+
+static const encoder_t *sink_encoder(sink_ctx_t *ctx)
+{
+	return encoder_passthrough;
 }
 
 static void *alsa_thread(void *arg)
@@ -155,6 +177,7 @@ const sink_ops_t *sink_tinyalsa = &(sink_ops_t)
 	.init = alsa_init,
 	.jitter = alsa_jitter,
 	.attach = sink_attach,
+	.encoder = sink_encoder,
 	.run = alsa_run,
 	.destroy = alsa_destroy,
 };

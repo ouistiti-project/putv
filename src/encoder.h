@@ -4,6 +4,7 @@
 typedef struct player_ctx_s player_ctx_t;
 typedef struct jitter_s jitter_t;
 typedef struct sink_s sink_t;
+typedef enum jitter_format_e jitter_format_t;
 
 #ifndef ENCODER_CTX
 typedef void encoder_ctx_t;
@@ -15,10 +16,12 @@ struct encoder_s
 	jitter_t *(*jitter)(encoder_ctx_t *encoder);
 	int (*run)(encoder_ctx_t *, jitter_t *);
 	const char *(*mime)(encoder_ctx_t *);
+	int (*samplerate)(encoder_ctx_t *);
+	jitter_format_t (*format)(encoder_ctx_t *);
 	void (*destroy)(encoder_ctx_t *);
 };
 
-const encoder_t *encoder_get(encoder_ctx_t *ctx);
+const encoder_t *encoder_check(const char *path);
 
 extern const encoder_t *encoder_passthrough;
 extern const encoder_t *encoder_lame;

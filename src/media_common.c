@@ -67,6 +67,7 @@ const char const *mime_octetstream = "octet/stream";
 const char const *mime_audiomp3 = "audio/mp3";
 const char const *mime_audioflac = "audio/flac";
 const char const *mime_audioalac = "audio/alac";
+const char const *mime_audioaac = "audio/aac";
 const char const *mime_audiopcm = "audio/pcm";
 const char const mime_imagejpg[] = "image/jpg";
 const char const mime_imagepng[] = "image/png";
@@ -176,7 +177,7 @@ char *utils_parseurl(const char *url, char **protocol, char **host, char **port,
 	strcpy(turl, url);
 
 	char *str_protocol = turl;
-	char *str_host = strstr(turl, "://");
+	char *str_host = strchr(turl, ':');
 	if (str_host == NULL)
 	{
 		if (protocol)
@@ -188,7 +189,9 @@ char *utils_parseurl(const char *url, char **protocol, char **host, char **port,
 		return turl;
 	}
 	*str_host = '\0';
-	str_host += 3;
+	str_host += 1;
+	if (!strncmp(str_host, "//", 2))
+		str_host += 2;
 	char *str_port = strchr(str_host, ':');
 	char *str_path = strchr(str_host, '/');
 	char *str_search = strchr(str_host, '?');
@@ -244,17 +247,32 @@ char *utils_parseurl(const char *url, char **protocol, char **host, char **port,
 
 const char *utils_mime2mime(const char *mime)
 {
-	const char *mime2 = NULL;
+	int length;
 	if (mime != NULL)
 	{
-		if (!strcmp(mime, mime_audiomp3))
-			mime2 = mime_audiomp3;
-		if (!strcmp(mime, mime_audioflac))
-			mime2 = mime_audioflac;
-		if (!strcmp(mime, mime_audiopcm))
-			mime2 = mime_audiopcm;
+		length = strlen(mime_audiomp3);
+		if (!strncmp(mime, mime_audiomp3, length))
+			return mime_audiomp3;
+		length = strlen(mime_audioflac);
+		if (!strncmp(mime, mime_audioflac, length))
+			return mime_audioflac;
+		length = strlen(mime_audioalac);
+		if (!strncmp(mime, mime_audioalac, length))
+			return mime_audioalac;
+		length = strlen(mime_audiopcm);
+		if (!strncmp(mime, mime_audiopcm, length))
+			return mime_audiopcm;
+		length = strlen(mime_audioaac);
+		if (!strncmp(mime, mime_audioaac, length))
+			return mime_audioaac;
+		length = strlen(mime_imagejpg);
+		if (!strncmp(mime, mime_imagejpg, length))
+			return mime_imagejpg;
+		length = strlen(mime_imagepng);
+		if (!strncmp(mime, mime_imagepng, length))
+			return mime_imagepng;
 	}
-	return mime2;
+	return mime_octetstream;
 }
 
 const char *utils_format2mime(jitter_format_t format)

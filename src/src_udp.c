@@ -241,11 +241,12 @@ static src_ctx_t *_src_init(player_ctx_t *player, const char *url, const char *m
 			mime += 5;
 		}
 	}
+	mime = utils_mime2mime(mime);
 
 	if (protocol == NULL)
 		return NULL;
 
-	demux_t *demux = demux_build(player, protocol, mime);
+	demux_t *demux = demux_build(player, url, mime);
 	if (demux == NULL)
 		return NULL;
 
@@ -267,7 +268,7 @@ static src_ctx_t *_src_init(player_ctx_t *player, const char *url, const char *m
 #ifdef DEMUX_PASSTHROUGH
 	ctx->demux = demux;
 #endif
-	ctx->mime = utils_mime2mime(mime);
+	ctx->mime = mime;
 #ifdef UDP_DUMP
 	ctx->dumpfd = open("udp_dump.stream", O_RDWR | O_CREAT, 0644);
 #endif

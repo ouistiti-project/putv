@@ -105,67 +105,88 @@ static int method_quit(ctx_t *ctx, const char *arg);
 static int method_help(ctx_t *ctx, const char *arg);
 
 struct cmd_s {
+	const char shortkey;
 	const char *name;
 	method_t method;
 };
 static const struct cmd_s cmds[] = {{
+		.shortkey = 0,
 		.name = "append",
 		.method = method_append,
 	},{
+		.shortkey = 0,
 		.name = "update",
 		.method = method_update,
 	},{
+		.shortkey = 0,
 		.name = "remove",
 		.method = method_remove,
 	},{
+		.shortkey = 0,
 		.name = "list",
 		.method = method_list,
 	},{
+		.shortkey = 0,
 		.name = "filter",
 		.method = method_filter,
 	},{
+		.shortkey = 0,
 		.name = "media",
 		.method = method_media,
 	},{
+		.shortkey = 0,
 		.name = "export",
 		.method = method_export,
 	},{
+		.shortkey = 0,
 		.name = "import",
 		.method = method_import,
 	},{
+		.shortkey = 0,
 		.name = "search",
 		.method = method_search,
 	},{
+		.shortkey = 0,
 		.name = "info",
 		.method = method_info,
 	},{
+		.shortkey = 'p',
 		.name = "play",
 		.method = method_play,
 	},{
+		.shortkey = 0,
 		.name = "pause",
 		.method = method_pause,
 	},{
+		.shortkey = 0,
 		.name = "stop",
 		.method = method_stop,
 	},{
+		.shortkey = 'n',
 		.name = "next",
 		.method = method_next,
 	},{
+		.shortkey = 0,
 		.name = "volume",
 		.method = method_volume,
 	},{
+		.shortkey = 0,
 		.name = "repeat",
 		.method = method_repeat,
 	},{
+		.shortkey = 0,
 		.name = "shuffle",
 		.method = method_shuffle,
 	},{
+		.shortkey = 0,
 		.name = "quit",
 		.method = method_quit,
 	},{
+		.shortkey = 'h',
 		.name = "help",
 		.method = method_help,
 	}, {
+		.shortkey = 0,
 		.name = NULL,
 		.method = NULL,
 	}
@@ -534,21 +555,46 @@ int run_client(void *arg)
 		fprintf (stdout, "> ");
 		fflush(stdout);
 		ret = select(maxfd + 1, &rfds, NULL, NULL, ptimeout);
+		char buffer[1024];
 		if (ret > 0 && FD_ISSET(fd, &rfds))
 		{
 			int length;
+			int start;
 			ret = ioctl(fd, FIONREAD, &length);
-			char *buffer = malloc(length + 1);
+			if (length > sizeof(buffer))
+			{
+				err("string too long");
+				continue;
+			}
 			ret = read(fd, buffer, length);
 			if (ret <= 0)
 			{
 				ctx->run = 0;
 				continue;
 			}
-			int i;
 			method_t method = NULL;
+			for (int i = 0; cmds[i].name != NULL; i++)
+			{
+				start = strlen(cmds[i].name);
+				if (!strncmp(buffer, cmds[i].name, start))
+				{
+					method = cmds[i].method;
+					break;
+				}
+			}
+			for (int i = 0; cmds[i].name != NULL; i++)
+			{
+				if ( cmds[i].shortkey == 0)
+					continue;
+				if (buffer[0] == cmds[i].shortkey && buffer[1] == '\n')
+				{
+					method = cmds[i].method;
+					start = 1;
+					break;
+				}
+			}
 			const char *arg = NULL;
-			for (i = 0; i < length; i++)
+			for (int i  = start; i < length; i++)
 			{
 				if (buffer[i] == ' ' || buffer[i] == '\t')
 					continue;
@@ -558,16 +604,6 @@ int run_client(void *arg)
 				{
 					arg = buffer + i;
 					break;
-				}
-				for (int j = 0; cmds[j].name != NULL; j++)
-				{
-					int length = strlen(cmds[j].name);
-					if (!strncmp(buffer + i, cmds[j].name, length))
-					{
-						method = cmds[j].method;
-						i += length;
-						break;
-					}
 				}
 			}
 			if (method)

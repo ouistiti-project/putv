@@ -340,7 +340,8 @@ static filter_t *_filter_build_pcm(const char *query, jitter_t *jitter, const ch
 	if (query && strstr(query, "mono=mixed") != NULL)
 	{
 		mixed_t *mixed = NULL;
-		if (jitter->format & JITTER_AUDIO_INTERLEAVED)
+#define JITTER_AUDIO_STEREO (JITTER_AUDIO | JITTER_AUDIO_INTERLEAVED)
+		if ((jitter->format & JITTER_AUDIO_STEREO) == JITTER_AUDIO_STEREO)
 			mixed = mixed_init(&filter->mixed, 2);
 		else
 			mixed = mixed_init(&filter->mixed, 1);

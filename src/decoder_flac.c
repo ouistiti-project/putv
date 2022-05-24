@@ -105,9 +105,9 @@ static jitter_t *_decoder_jitter(decoder_ctx_t *ctx, jitte_t jitte)
 		int factor = jitte;
 		int nbbuffer = NBUFFER << factor;
 		jitter_t *jitter = jitter_init(JITTER_TYPE_RING, jitter_name, nbbuffer, BUFFERSIZE);
-		ctx->in = jitter;
 		jitter->ctx->thredhold = nbbuffer / 2;
 		jitter->format = FLAC;
+		ctx->in = jitter;
 	}
 	return ctx->in;
 }
@@ -172,6 +172,7 @@ output_cb(const FLAC__StreamDecoder *decoder,
 	{
 		if (filter_filloutput(ctx->filter, &audio, ctx->out) < 0)
 		{
+			dbg("decoder: end of flac stream");
 			/**
 			 * flush the src jitter to break the stream
 			 */
@@ -252,10 +253,16 @@ static int _decoder_prepare(decoder_ctx_t *ctx, filter_t *filter, const char *in
 		metadata_cb,
 		error_cb,
 		ctx);
+#ifdef DECODER_FLAC_PROCESS_METADATA
+	/**
+	 * the metadata are available with a file not with a network stream
+	 * The search of metadata on a network stream will be never completed
+	 */
 	if (ret == FLAC__STREAM_DECODER_INIT_STATUS_OK)
 	{
 		ret != FLAC__stream_decoder_process_until_end_of_metadata(ctx->decoder);
 	}
+#endif
 	return ret;
 }
 

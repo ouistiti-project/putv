@@ -27,6 +27,7 @@
  *****************************************************************************/
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <string.h>
 #include <time.h>
 #include <pthread.h>
@@ -36,11 +37,12 @@
 typedef struct heartbeat_ctx_s heartbeat_ctx_t;
 struct heartbeat_ctx_s
 {
+	struct timespec clock;
+	pthread_mutex_t mutex;
+	uint64_t nsamples;
 	unsigned int samplerate;
 	unsigned int samplesize;
 	unsigned int nchannels;
-	struct timespec clock;
-	pthread_mutex_t mutex;
 };
 #define HEARTBEAT_CTX
 #include "heartbeat.h"
@@ -97,8 +99,10 @@ static void heartbeat_destroy(heartbeat_ctx_t *ctx)
 
 static void heartbeat_start(heartbeat_ctx_t *ctx)
 {
+	dbg("heartbeat: start");
 	pthread_mutex_lock(&ctx->mutex);
 	clock_gettime(clockid, &ctx->clock);
+	ctx->nsamples = 0;
 	pthread_mutex_unlock(&ctx->mutex);
 }
 
@@ -111,29 +115,34 @@ static int heartbeat_wait(heartbeat_ctx_t *ctx, void *arg)
 	if (ctx->clock.tv_sec == 0 && ctx->clock.tv_nsec == 0)
 		return -1;
 
+	if (beat->nsamples == 0)
+		return 0;
 	pthread_mutex_lock(&ctx->mutex);
+	ctx->nsamples = beat->nsamples;
+//	if (ctx->nsamples < ctx->samplerate / 200) // 10 ms * nbchannels
+//	{
+//		pthread_mutex_unlock(&ctx->mutex);
+//		return 0;
+//	}
 
-#if 0
-	unsigned long usec = beat->nsamples * HEARTBEAT_COEF_1000;
+	unsigned long usec = ctx->nsamples * HEARTBEAT_COEF_1000;
 	int divider = ctx->samplerate / 100;
 	usec /= divider;
 	usec *= 10;
+#if 1
 	ctx->clock.tv_nsec += (usec % 1000000) * 1000;
 	ctx->clock.tv_sec += usec / 1000000;
-	if (ctx->clock.tv_nsec > 1000000000)
-	{
-		ctx->clock.tv_nsec -= 1000000000;
-		ctx->clock.tv_sec += 1;
-	}
 #else
-	ctx->clock.tv_nsec += (beat->nsamples * HEARTBEAT_COEF_1000 / ctx->samplerate) * 1000000;
-	ctx->clock.tv_sec += (beat->nsamples / ctx->samplerate);
+	ctx->clock.tv_nsec +=
+		(ctx->nsamples * HEARTBEAT_COEF_1000 / ctx->samplerate) * 1000000;
+
+	ctx->clock.tv_sec += (ctx->nsamples / ctx->samplerate);
+#endif
 	if (ctx->clock.tv_nsec > 1000000000)
 	{
 		ctx->clock.tv_nsec -= 1000000000;
 		ctx->clock.tv_sec += 1;
 	}
-#endif
 	int flags = TIMER_ABSTIME;
 	while (clock_nanosleep(clockid, flags, &ctx->clock, NULL) != 0)
 	{
@@ -152,6 +161,7 @@ static int heartbeat_wait(heartbeat_ctx_t *ctx, void *arg)
 	clock_gettime(clockid, &now);
 	heartbeat_dbg("heartbeat: boom %lu.%09lu %ld.%06ld", now.tv_sec, now.tv_nsec, usec / 1000000, usec % 1000000);
 #endif
+	ctx->nsamples = 0;
 	beat->nsamples = 0;
 
 	pthread_mutex_unlock(&ctx->mutex);

@@ -175,8 +175,6 @@ static int method_list(json_t *json_params, json_t **result, void *userdata)
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 	media_t *media = player_media(ctx->player);
 	int count = media->ops->count(media->ctx);
-	int nbitems = MAX_ITEMS;
-	nbitems = (count < nbitems)? count:nbitems;
 	cmds_dbg("cmds: list");
 
 	if (media->ops->list == NULL)
@@ -192,10 +190,13 @@ static int method_list(json_t *json_params, json_t **result, void *userdata)
 	if (maxitems_js)
 	{
 		int maxitems = json_integer_value(maxitems_js);
-		entry.max = (maxitems < nbitems)?maxitems:nbitems;
+		if (maxitems > -1)
+			entry.max = (maxitems < count)?maxitems:count;
+		else
+			entry.max = count;
 	}
 	else
-		entry.max = nbitems;
+		entry.max = MAX_ITEMS;
 
 	json_t *first = json_object_get(json_params, "first");
 	if (first)

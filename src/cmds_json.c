@@ -1322,8 +1322,8 @@ static int jsonrpc_sendevent(cmds_ctx_t *ctx, thread_info_t *info, const char *e
 		char *message = json_dumps(notification, JSONRPC_DEBUG_FORMAT);
 		int length = strlen(message);
 		int sock = info->sock;
-		cmds_dbg("cmds: send notification %s", message);
-		ret = send(sock, message, length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
+		cmds_dbg("cmds: send notification %d %*s", length, length, message);
+		ret = send(sock, message, length, MSG_DONTWAIT | MSG_NOSIGNAL);
 		dbg("cmds: send notification %d", ret);
 		fsync(sock);
 		free(message);
@@ -1350,8 +1350,8 @@ static int _jsonrpc_sendresponse(thread_info_t *info, json_t *request)
 	{
 		char *buff = json_dumps(response, JSONRPC_DEBUG_FORMAT );
 		int length = strlen(buff);
-		cmds_dbg("cmds: send response %ld %s", length, buff);
-		ret = send(sock, buff, length + 1, MSG_DONTWAIT | MSG_NOSIGNAL);
+		cmds_dbg("cmds: send response %d %*s", length, length, buff);
+		ret = send(sock, buff, length, MSG_DONTWAIT | MSG_NOSIGNAL);
 		dbg("cmds: send response %d", ret);
 		fsync(sock);
 		free(buff);
@@ -1397,6 +1397,7 @@ static void *_cmds_json_pthreadsend(void *arg)
 	pthread_cond_broadcast(&ctx->cond);
 	while (ctx->run)
 	{
+		int wait = 0;
 		pthread_mutex_lock(&ctx->mutex);
 		while (ctx->requests == NULL && ctx->eventsmask == 0)
 		{
@@ -1412,7 +1413,9 @@ static void *_cmds_json_pthreadsend(void *arg)
 			/** run only request not disabled by a previous request **/
 			if (request->info != NULL)
 			{
+				if (wait) sched_yield();
 				ret = _jsonrpc_sendresponse(request->info, request->request);
+				wait = 1;
 			}
 			if (ret < 0)
 			{
@@ -1454,7 +1457,9 @@ static void *_cmds_json_pthreadsend(void *arg)
 				while (info)
 				{
 					thread_info_t *next = info->next;
+					if (wait) sched_yield();
 					int ret = jsonrpc_sendevent(ctx, info, "onchange");
+					wait = 1;
 					if (ret < 0)
 					{
 						pthread_mutex_lock(&ctx->mutex);

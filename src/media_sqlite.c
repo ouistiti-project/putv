@@ -30,6 +30,7 @@
 #include <pthread.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 
@@ -81,13 +82,14 @@ struct media_ctx_s
 #endif
 
 #ifdef DEBUG
-#define SQLITE3_CHECK(ret, value, sql) \
+#define SQLITE3_CHECK(db, ret, value, sql) \
 		if (ret != SQLITE_OK) {\
 			err("%s(%d) => %d %s", __FUNCTION__, __LINE__, ret, sql); \
+			err("\t%s", sqlite3_errmsg(db)); \
 			return value; \
 		}
 #else
-#define SQLITE3_CHECK(...)
+#define SQLITE3_CHECK(db, ...)
 #endif
 
 static int media_count(media_ctx_t *ctx);
@@ -156,10 +158,10 @@ static int _media_find(media_ctx_t *ctx, const char *path)
 	sqlite3_stmt *statement;
 	const char sql[] = "SELECT id FROM media WHERE url=@PATH";
 	int ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
-	SQLITE3_CHECK(ret, -1, sql);
+	SQLITE3_CHECK(db, ret, -1, sql);
 
 	ret = sqlite3_bind_text(statement, sqlite3_bind_parameter_index(statement, "@PATH"), path, -1, SQLITE_STATIC);
-	SQLITE3_CHECK(ret, -1, sql);
+	SQLITE3_CHECK(db, ret, -1, sql);
 
 	int id = _execute(statement);
 	sqlite3_finalize(statement);
@@ -219,18 +221,22 @@ static int wordtable_insert(media_ctx_t *ctx, const char *table, const char *wor
 
 	sqlite3_stmt *statement;
 	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
-	SQLITE3_CHECK(ret, -1, query);
+	SQLITE3_CHECK(db, ret, -1, query);
 
 	int index;
 	index = sqlite3_bind_parameter_index(statement, "@WORD");
 	ret = sqlite3_bind_text(statement, index, word, -1, SQLITE_STATIC);
-	SQLITE3_CHECK(ret, -1, query);
+	SQLITE3_CHECK(db, ret, -1, query);
 
 	media_dbgsql(statement, __LINE__);
 	ret = sqlite3_step(statement);
 	int id = -1;
 	if (ret == SQLITE_DONE)
 		id = sqlite3_last_insert_rowid(db);
+	else
+	{
+		err("media:insert error %s", sqlite3_errmsg(db));
+	}
 	sqlite3_finalize(statement);
 	return id;
 }
@@ -246,12 +252,12 @@ static int wordtable_find(media_ctx_t *ctx, const char *table, const char *word)
 
 	sqlite3_stmt *statement;
 	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
-	SQLITE3_CHECK(ret, -1, query);
+	SQLITE3_CHECK(db, ret, -1, query);
 
 	int index;
 	index = sqlite3_bind_parameter_index(statement, "@WORD");
 	ret = sqlite3_bind_text(statement, index, word, -1, SQLITE_STATIC);
-	SQLITE3_CHECK(ret, -1, query);
+	SQLITE3_CHECK(db, ret, -1, query);
 
 	media_dbgsql(statement, __LINE__);
 	ret = sqlite3_step(statement);
@@ -279,14 +285,14 @@ static int opus_insert_info(media_ctx_t *ctx, const char *table, int wordid)
 
 	sqlite3_stmt *st_select;
 	ret = sqlite3_prepare_v2(db, sql, -1, &st_select, NULL);
-	SQLITE3_CHECK(ret, -1, sql);
+	SQLITE3_CHECK(db, ret, -1, sql);
 
 	int index;
 	index = sqlite3_bind_parameter_index(st_select, "@WORDID");
 
 	int id = -1;
 	ret = sqlite3_bind_int(st_select, index, wordid);
-	SQLITE3_CHECK(ret, -1, sql);
+	SQLITE3_CHECK(db, ret, -1, sql);
 
 	media_dbgsql(st_select, __LINE__);
 	ret = sqlite3_step(st_select);
@@ -296,10 +302,10 @@ static int opus_insert_info(media_ctx_t *ctx, const char *table, int wordid)
 
 		sqlite3_stmt *st_insert;
 		ret = sqlite3_prepare_v2(db, sql, -1, &st_insert, NULL);
-		SQLITE3_CHECK(ret, -1, sql);
+		SQLITE3_CHECK(db, ret, -1, sql);
 
 		ret = sqlite3_bind_int(st_insert, index, wordid);
-		SQLITE3_CHECK(ret, -1, sql);
+		SQLITE3_CHECK(db, ret, -1, sql);
 
 		media_dbgsql(st_insert, __LINE__);
 		ret = sqlite3_step(st_insert);
@@ -330,15 +336,15 @@ static int album_insertfield(media_ctx_t *ctx, int albumid, char *field, int fie
 
 	sqlite3_stmt *statement;
 	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
-	SQLITE3_CHECK(ret, -1, sql);
+	SQLITE3_CHECK(db, ret, -1, sql);
 
 	int index;
 	index = sqlite3_bind_parameter_index(statement, "@ALBUMID");
 	ret = sqlite3_bind_int(statement, index, albumid);
-	SQLITE3_CHECK(ret, -1, sql);
+	SQLITE3_CHECK(db, ret, -1, sql);
 	index = sqlite3_bind_parameter_index(statement, "@ID");
 	ret = sqlite3_bind_int(statement, index, fieldid);
-	SQLITE3_CHECK(ret, -1, sql);
+	SQLITE3_CHECK(db, ret, -1, sql);
 
 	media_dbgsql(statement, __LINE__);
 	ret = sqlite3_step(statement);
@@ -389,7 +395,8 @@ static int opus_populateinfo(media_ctx_t *ctx, json_t *jinfo, int *ptitleid, int
 
 	media_parse_info(jinfo, &title, &artist, album, &genre, &cover, pcomment, plikes);
 
-	media_dbg("%s , %s , %s", title?title:"", album?album:"", artist?artist:"");
+	media_dbg("%s , %s , %s", title?title:"", *album?*album:"", artist?artist:"");
+	dbg("%s , %s , %s", title?title:"", *album?*album:"", artist?artist:"");
 	if (title != NULL)
 	{
 		*ptitleid = wordtable_find(ctx, "word", title);
@@ -441,13 +448,13 @@ char *opus_getcover(media_ctx_t *ctx, int coverid)
 	const char *sql = "select name from cover where id=@ID";
 	sqlite3_stmt *st_select;
 	ret = sqlite3_prepare_v2(db, sql, -1, &st_select, NULL);
-	SQLITE3_CHECK(ret, NULL, sql);
+	SQLITE3_CHECK(db, ret, NULL, sql);
 
 	int index;
 
 	index = sqlite3_bind_parameter_index(st_select, "@ID");
 	ret = sqlite3_bind_int(st_select, index, coverid);
-	SQLITE3_CHECK(ret, NULL, sql);
+	SQLITE3_CHECK(db, ret, NULL, sql);
 
 	media_dbgsql(st_select, __LINE__);
 	ret = sqlite3_step(st_select);
@@ -474,14 +481,14 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 	sqlite3_stmt *st_select;
 	int ret;
 	ret = sqlite3_prepare_v2(db, sql, -1, &st_select, NULL);
-	SQLITE3_CHECK(ret, NULL, sql);
+	SQLITE3_CHECK(db, ret, NULL, sql);
 
 	int index;
 	json_t *json_info = json_object();
 
 	index = sqlite3_bind_parameter_index(st_select, "@ID");
 	ret = sqlite3_bind_int(st_select, index, opusid);
-	SQLITE3_CHECK(ret, NULL, sql);
+	SQLITE3_CHECK(db, ret, NULL, sql);
 
 	media_dbgsql(st_select, __LINE__);
 	ret = sqlite3_step(st_select);
@@ -496,13 +503,13 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 			const char sql[] = "SELECT name FROM word WHERE id=@ID";
 			sqlite3_stmt *st_select;
 			ret = sqlite3_prepare_v2(db, sql, -1, &st_select, NULL);
-			SQLITE3_CHECK(ret, NULL, sql);
+			SQLITE3_CHECK(db, ret, NULL, sql);
 
 			int index;
 
 			index = sqlite3_bind_parameter_index(st_select, "@ID");
 			ret = sqlite3_bind_int(st_select, index, wordid);
-			SQLITE3_CHECK(ret, NULL, sql);
+			SQLITE3_CHECK(db, ret, NULL, sql);
 
 			media_dbgsql(st_select, __LINE__);
 			ret = sqlite3_step(st_select);
@@ -526,13 +533,13 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 			const char sql[] = "SELECT name FROM word INNER JOIN artist ON word.id=artist.wordid WHERE artist.id=@ID";
 			sqlite3_stmt *st_select;
 			ret = sqlite3_prepare_v2(db, sql, -1, &st_select, NULL);
-			SQLITE3_CHECK(ret, NULL, sql);
+			SQLITE3_CHECK(db, ret, NULL, sql);
 
 			int index;
 
 			index = sqlite3_bind_parameter_index(st_select, "@ID");
 			ret = sqlite3_bind_int(st_select, index, wordid);
-			SQLITE3_CHECK(ret, NULL, sql);
+			SQLITE3_CHECK(db, ret, NULL, sql);
 
 			media_dbgsql(st_select, __LINE__);
 			ret = sqlite3_step(st_select);
@@ -557,13 +564,13 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 			const char sql[] = "SELECT word.name, album.coverid FROM word INNER JOIN album ON word.id=album.wordid WHERE album.id=@ID";
 			sqlite3_stmt *st_select;
 			ret = sqlite3_prepare_v2(db, sql, -1, &st_select, NULL);
-			SQLITE3_CHECK(ret, NULL, sql);
+			SQLITE3_CHECK(db, ret, NULL, sql);
 
 			int index;
 
 			index = sqlite3_bind_parameter_index(st_select, "@ID");
 			ret = sqlite3_bind_int(st_select, index, wordid);
-			SQLITE3_CHECK(ret, NULL, sql);
+			SQLITE3_CHECK(db, ret, NULL, sql);
 
 			media_dbgsql(st_select, __LINE__);
 			ret = sqlite3_step(st_select);
@@ -592,13 +599,13 @@ static json_t *opus_getjson(media_ctx_t *ctx, int opusid, int coverid)
 			const char sql[] = "SELECT name FROM word INNER JOIN genre ON word.id=genre.wordid WHERE genre.id=@ID";
 			sqlite3_stmt *st_select;
 			ret = sqlite3_prepare_v2(db, sql, -1, &st_select, NULL);
-			SQLITE3_CHECK(ret, NULL, sql);
+			SQLITE3_CHECK(db, ret, NULL, sql);
 
 			int index;
 
 			index = sqlite3_bind_parameter_index(st_select, "@ID");
 			ret = sqlite3_bind_int(st_select, index, wordid);
-			SQLITE3_CHECK(ret, NULL, sql);
+			SQLITE3_CHECK(db, ret, NULL, sql);
 
 			media_dbgsql(st_select, __LINE__);
 			ret = sqlite3_step(st_select);
@@ -663,15 +670,15 @@ static int opus_updatefield(media_ctx_t *ctx, int opusid, const char *field, int
 	sqlite3 *db = ctx->db;
 	sqlite3_stmt *statement;
 	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
-	SQLITE3_CHECK(ret, -1, sql);
+	SQLITE3_CHECK(db, ret, -1, sql);
 
 	int index;
 	index = sqlite3_bind_parameter_index(statement, "@OPUSID");
 	ret = sqlite3_bind_int(statement, index, opusid);
-	SQLITE3_CHECK(ret, -1, sql);
+	SQLITE3_CHECK(db, ret, -1, sql);
 	index = sqlite3_bind_parameter_index(statement, "@FIELDID");
 	ret = sqlite3_bind_int(statement, index, fieldid);
-	SQLITE3_CHECK(ret, -1, sql);
+	SQLITE3_CHECK(db, ret, -1, sql);
 	media_dbgsql(statement, __LINE__);
 	ret = sqlite3_step(statement);
 	sqlite3_finalize(statement);
@@ -692,7 +699,10 @@ static int opus_insert(media_ctx_t *ctx, json_t *jinfo, int *palbumid,
 	opus_populateinfo(ctx, jinfo, &titleid, &artistid, &album, &genreid, &coverid, &comment, plikes);
 
 	if (titleid == -1)
+	{
+		err("media: title must be present");
 		return -1;
+	}
 	if (album != NULL)
 		*palbumid = album_insert(ctx, album, artistid, coverid, genreid);
 
@@ -703,16 +713,16 @@ static int opus_insert(media_ctx_t *ctx, json_t *jinfo, int *palbumid,
 	const char select[] = "SELECT id FROM opus WHERE titleid=@TITLEID AND artistid=@ARTISTID";
 	sqlite3_stmt *st_select;
 	ret = sqlite3_prepare_v2(db, select, -1, &st_select, NULL);
-	SQLITE3_CHECK(ret, -1, select);
+	SQLITE3_CHECK(db, ret, -1, select);
 
 	int index;
 
 	index = sqlite3_bind_parameter_index(st_select, "@TITLEID");
 	ret = sqlite3_bind_int(st_select, index, titleid);
-	SQLITE3_CHECK(ret, -1, select);
+	SQLITE3_CHECK(db, ret, -1, select);
 	index = sqlite3_bind_parameter_index(st_select, "@ARTISTID");
 	ret = sqlite3_bind_int(st_select, index, artistid);
-	SQLITE3_CHECK(ret, -1, select);
+	SQLITE3_CHECK(db, ret, -1, select);
 	media_dbgsql(st_select, __LINE__);
 	ret = sqlite3_step(st_select);
 	if (ret != SQLITE_ROW)
@@ -721,28 +731,28 @@ static int opus_insert(media_ctx_t *ctx, json_t *jinfo, int *palbumid,
 					"VALUES (@TITLEID,@ARTISTID,@ALBUMID,@GENREID,@COVERID, @COMMENT)";
 		sqlite3_stmt *st_insert;
 		ret = sqlite3_prepare_v2(db, sql, -1, &st_insert, NULL);
-		SQLITE3_CHECK(ret, -1, sql);
+		SQLITE3_CHECK(db, ret, -1, sql);
 
 		int index;
 
 		index = sqlite3_bind_parameter_index(st_insert, "@TITLEID");
 		ret = sqlite3_bind_int(st_insert, index, titleid);
-		SQLITE3_CHECK(ret, -1, sql);
+		SQLITE3_CHECK(db, ret, -1, sql);
 		index = sqlite3_bind_parameter_index(st_insert, "@ARTISTID");
 		ret = sqlite3_bind_int(st_insert, index, artistid);
-		SQLITE3_CHECK(ret, -1, sql);
+		SQLITE3_CHECK(db, ret, -1, sql);
 		index = sqlite3_bind_parameter_index(st_insert, "@ALBUMID");
 		ret = sqlite3_bind_int(st_insert, index, *palbumid);
-		SQLITE3_CHECK(ret, -1, sql);
+		SQLITE3_CHECK(db, ret, -1, sql);
 		index = sqlite3_bind_parameter_index(st_insert, "@GENREID");
 		ret = sqlite3_bind_int(st_insert, index, genreid);
-		SQLITE3_CHECK(ret, -1, sql);
+		SQLITE3_CHECK(db, ret, -1, sql);
 		index = sqlite3_bind_parameter_index(st_insert, "@COVERID");
 		ret = sqlite3_bind_int(st_insert, index, coverid);
-		SQLITE3_CHECK(ret, -1, sql);
+		SQLITE3_CHECK(db, ret, -1, sql);
 		index = sqlite3_bind_parameter_index(st_insert, "@COMMENT");
 		ret = sqlite3_bind_text(st_insert, index, comment, -1, SQLITE_STATIC);
-		SQLITE3_CHECK(ret, -1, sql);
+		SQLITE3_CHECK(db, ret, -1, sql);
 		media_dbgsql(st_insert, __LINE__);
 		ret = sqlite3_step(st_insert);
 		if (ret != SQLITE_DONE)
@@ -783,15 +793,15 @@ static int _media_updateopusid(media_ctx_t *ctx, int id, int opusid)
 	const char sql[] = "UPDATE media SET opusid=@OPUSID WHERE id = @ID;";
 
 	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
-	SQLITE3_CHECK(ret, -1, sql);
+	SQLITE3_CHECK(db, ret, -1, sql);
 
 	index = sqlite3_bind_parameter_index(statement, "@OPUSID");
 	ret = sqlite3_bind_int(statement, index, opusid);
-	SQLITE3_CHECK(ret, -1, sql);
+	SQLITE3_CHECK(db, ret, -1, sql);
 
 	index = sqlite3_bind_parameter_index(statement, "@ID");
 	ret = sqlite3_bind_int(statement, index, id);
-	SQLITE3_CHECK(ret, -1, sql);
+	SQLITE3_CHECK(db, ret, -1, sql);
 
 	media_dbgsql(statement, __LINE__);
 	ret = sqlite3_step(statement);
@@ -826,25 +836,25 @@ static int _media_updateinfo(media_ctx_t *ctx, int id, const char *info, int lik
 	if (sql == NULL)
 		return -1;
 	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
-	SQLITE3_CHECK(ret, -1, sql);
+	SQLITE3_CHECK(db, ret, -1, sql);
 
 	index = sqlite3_bind_parameter_index(statement, "@INFO");
 	if (index != -1)
 	{
 		ret = sqlite3_bind_text(statement, index, info, -1, SQLITE_STATIC);
-		SQLITE3_CHECK(ret, -1, sql);
+		SQLITE3_CHECK(db, ret, -1, sql);
 	}
 
 	index = sqlite3_bind_parameter_index(statement, "@LIKES");
 	if (index != -1)
 	{
 		ret = sqlite3_bind_int(statement, index, likes);
-		SQLITE3_CHECK(ret, -1, sql);
+		SQLITE3_CHECK(db, ret, -1, sql);
 	}
 
 	index = sqlite3_bind_parameter_index(statement, "@ID");
 	ret = sqlite3_bind_int(statement, index, id);
-	SQLITE3_CHECK(ret, -1, sql);
+	SQLITE3_CHECK(db, ret, -1, sql);
 
 	media_dbgsql(statement, __LINE__);
 	ret = sqlite3_step(statement);
@@ -863,6 +873,7 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 	int ret = 0;
 	sqlite3 *db = ctx->db;
 
+	dbg("media: inserting media into DB");
 	int mimeid = 0;
 	if (mime == NULL)
 		mime = utils_getmime(path);
@@ -889,7 +900,7 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 	json_decref(jinfo);
 	if (opusid == -1)
 	{
-		err("opusid error");
+		err("media: opusid error");
 		return -1;
 	}
 	if (path == NULL)
@@ -914,37 +925,37 @@ static int media_insert(media_ctx_t *ctx, const char *path, const char *info, co
 		const char sql[] = "INSERT INTO media (url, mimeid, opusid, albumid, info, likes) VALUES(@PATH , @MIMEID, @OPUSID, @ALBUMID, @INFO, @LIKES);";
 
 		ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
-		SQLITE3_CHECK(ret, -1, sql);
+		SQLITE3_CHECK(db, ret, -1, sql);
 
 		int index;
 		index = sqlite3_bind_parameter_index(statement, "@PATH");
 		ret = sqlite3_bind_text(statement, index, tpath, -1, SQLITE_STATIC);
-		SQLITE3_CHECK(ret, -1, sql);
+		SQLITE3_CHECK(db, ret, -1, sql);
 
 		index = sqlite3_bind_parameter_index(statement, "@INFO");
 		if (info != NULL && index > 0)
 			ret = sqlite3_bind_text(statement, index, info, -1, SQLITE_STATIC);
 		else
 			ret = sqlite3_bind_null(statement, index);
-		SQLITE3_CHECK(ret, -1, sql);
+		SQLITE3_CHECK(db, ret, -1, sql);
 		index = sqlite3_bind_parameter_index(statement, "@OPUSID");
 		ret = sqlite3_bind_int(statement, index, opusid);
-		SQLITE3_CHECK(ret, -1, sql);
+		SQLITE3_CHECK(db, ret, -1, sql);
 
 		index = sqlite3_bind_parameter_index(statement, "@ALBUMID");
 		ret = sqlite3_bind_int(statement, index, albumid);
-		SQLITE3_CHECK(ret, -1, sql);
+		SQLITE3_CHECK(db, ret, -1, sql);
 
 		index = sqlite3_bind_parameter_index(statement, "@MIMEID");
 		ret = sqlite3_bind_int(statement, index, mimeid);
-		SQLITE3_CHECK(ret, -1, sql);
+		SQLITE3_CHECK(db, ret, -1, sql);
 
 		index = sqlite3_bind_parameter_index(statement, "@LIKES");
 		if (likes > 0 )
 			ret = sqlite3_bind_int(statement, index, likes);
 		else
 			ret = sqlite3_bind_int(statement, index, 1);
-		SQLITE3_CHECK(ret, -1, sql);
+		SQLITE3_CHECK(db, ret, -1, sql);
 
 		media_dbgsql(statement, __LINE__);
 		ret = sqlite3_step(statement);
@@ -989,13 +1000,13 @@ static int media_modify(media_ctx_t *ctx, int opusid, const char *info)
 		const char sql[] = "SELECT id, titleid, artistid, genreid, coverid, albumid FROM opus WHERE id=@ID";
 		sqlite3_stmt *statememt;
 		ret = sqlite3_prepare_v2(db, sql, -1, &statememt, NULL);
-		SQLITE3_CHECK(ret, -1, sql);
+		SQLITE3_CHECK(db, ret, -1, sql);
 
 		int index;
 
 		index = sqlite3_bind_parameter_index(statememt, "@ID");
 		ret = sqlite3_bind_int(statememt, index, opusid);
-		SQLITE3_CHECK(ret, -1, sql);
+		SQLITE3_CHECK(db, ret, -1, sql);
 
 		json_t *jinfo = NULL;
 		ret = sqlite3_step(statememt);
@@ -1047,13 +1058,13 @@ static int media_modify(media_ctx_t *ctx, int opusid, const char *info)
 			const char sql[] = "SELECT id FROM media WHERE opusid=@ID";
 			sqlite3_stmt *statememt;
 			ret = sqlite3_prepare_v2(db, sql, -1, &statememt, NULL);
-			SQLITE3_CHECK(ret, -1, sql);
+			SQLITE3_CHECK(db, ret, -1, sql);
 
 			int index;
 
 			index = sqlite3_bind_parameter_index(statememt, "@ID");
 			ret = sqlite3_bind_int(statememt, index, opusid);
-			SQLITE3_CHECK(ret, -1, sql);
+			SQLITE3_CHECK(db, ret, -1, sql);
 
 			json_t *jinfo = NULL;
 			ret = sqlite3_step(statememt);
@@ -1174,20 +1185,22 @@ static int _media_execute(media_ctx_t *ctx, sqlite3_stmt *statement, media_parse
 
 static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *data)
 {
-	int count;
-	int ret;
+	int ret = 0;
+	sqlite3 *db = ctx->db;
 	sqlite3_stmt *statement;
 	if (id == -1)
 		return 0;
+
+	int count;
 	const char sql[] = "SELECT url, mimes.name, opusid, album.coverid, \"info\" FROM media " \
 			"INNER JOIN album ON album.id=media.albumid, mimes ON media.mimeid=mimes.id " \
 			"WHERE opusid=@ID";
-	ret = sqlite3_prepare_v2(ctx->db, sql, -1, &statement, NULL);
-	SQLITE3_CHECK(ret, -1, sql);
+	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
+	SQLITE3_CHECK(db, ret, -1, sql);
 
 	int index = sqlite3_bind_parameter_index(statement, "@ID");
 	ret = sqlite3_bind_int(statement, index, id);
-	SQLITE3_CHECK(ret, -1, sql);
+	SQLITE3_CHECK(db, ret, -1, sql);
 
 	media_dbgsql(statement, __LINE__);
 	count = _media_execute(ctx, statement, cb, data);
@@ -1208,11 +1221,11 @@ static int media_list(media_ctx_t *ctx, media_parse_t cb, void *data)
 			"mimes ON media.mimeid=mimes.id " \
 			"WHERE playlist.listid=@LISTID;";
 	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
-	SQLITE3_CHECK(ret, -1, sql);
+	SQLITE3_CHECK(db, ret, -1, sql);
 
 	index = sqlite3_bind_parameter_index(statement, "@LISTID");
 	ret = sqlite3_bind_int(statement, index, ctx->listid);
-	SQLITE3_CHECK(ret, 1, sql);
+	SQLITE3_CHECK(db, ret, 1, sql);
 
 	media_dbgsql(statement, __LINE__);
 	count = _media_execute(ctx, statement, cb, data);
@@ -1245,20 +1258,20 @@ static int media_next(media_ctx_t *ctx)
 	{
 		sql = "SELECT id, likes FROM playlist WHERE listid=@LISTID AND likes > 0 LIMIT 1";
 	}
-	ret = sqlite3_prepare_v2(ctx->dbplaylist, sql, -1, &statement, NULL);
-	SQLITE3_CHECK(ret, -1, sql);
+	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
+	SQLITE3_CHECK(db, ret, -1, sql);
 
 	int index;
 	index = sqlite3_bind_parameter_index(statement, "@ID");
 	if (index > 0)
 	{
 		ret = sqlite3_bind_int(statement, index, ctx->mediaid);
-		SQLITE3_CHECK(ret, -1, sql);
+		SQLITE3_CHECK(db, ret, -1, sql);
 	}
 
 	index = sqlite3_bind_parameter_index(statement, "@LISTID");
 	ret = sqlite3_bind_int(statement, index, ctx->listid);
-	SQLITE3_CHECK(ret, -1, sql);
+	SQLITE3_CHECK(db, ret, -1, sql);
 
 	int likes;
 	media_dbgsql(statement, __LINE__);
@@ -1299,17 +1312,17 @@ static int _media_remove(media_ctx_t *ctx, int id)
 	const char sql[] = "DELETE FROM media WHERE opusid=@ID";
 
 	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
-	SQLITE3_CHECK(ret, -1, sql);
+	SQLITE3_CHECK(db, ret, -1, sql);
 
 	int index = sqlite3_bind_parameter_index(statement, "@ID");
 	ret = sqlite3_bind_int(statement, index, id);
-	SQLITE3_CHECK(ret, -1, sql);
+	SQLITE3_CHECK(db, ret, -1, sql);
 
 	index = sqlite3_bind_parameter_index(statement, "@LISTID");
 	if (index > 0)
 	{
 		ret = sqlite3_bind_int(statement, index, ctx->listid);
-		SQLITE3_CHECK(ret, -1, sql);
+		SQLITE3_CHECK(db, ret, -1, sql);
 	}
 
 	media_dbgsql(statement, __LINE__);
@@ -1390,18 +1403,18 @@ static int playlist_create(media_ctx_t *ctx, char *playlist, int fill)
 		const char sql[] = "INSERT INTO listname (wordid) VALUES (@ID);";
 		sqlite3_stmt *statement;
 		ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
-		SQLITE3_CHECK(ret, 1, sql);
+		SQLITE3_CHECK(db, ret, 1, sql);
 
 		int index;
 		index = sqlite3_bind_parameter_index(statement, "@ID");
 		ret = sqlite3_bind_int(statement, index, listid);
-		SQLITE3_CHECK(ret, 1, sql);
+		SQLITE3_CHECK(db, ret, 1, sql);
 
 		media_dbgsql(statement, __LINE__);
 		ret = sqlite3_step(statement);
 		if (ret != SQLITE_DONE)
 		{
-			SQLITE3_CHECK(ret, 1, sql);
+			SQLITE3_CHECK(db, ret, 1, sql);
 		}
 		else
 		{
@@ -1427,13 +1440,13 @@ static int playlist_find(media_ctx_t *ctx, char *playlist)
 	const char sql[] = "SELECT listname.id FROM listname INNER JOIN word ON word.id=listname.wordid WHERE word.name=@NAME";
 	sqlite3_stmt *statement;
 	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
-	SQLITE3_CHECK(ret, 1, sql);
+	SQLITE3_CHECK(db, ret, 1, sql);
 
 	int index;
 
 	index = sqlite3_bind_parameter_index(statement, "@NAME");
 	ret = sqlite3_bind_text(statement, index, playlist, -1 , SQLITE_STATIC);
-	SQLITE3_CHECK(ret, 1, sql);
+	SQLITE3_CHECK(db, ret, 1, sql);
 
 	media_dbgsql(statement, __LINE__);
 	ret = sqlite3_step(statement);
@@ -1454,14 +1467,14 @@ static int playlist_count(media_ctx_t *ctx, int listid)
 	sqlite3_stmt *statement;
 	const char sql[] = "SELECT COUNT(*) FROM playlist WHERE listid=@LISTID";
 	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
-	SQLITE3_CHECK(ret, -1, sql);
+	SQLITE3_CHECK(db, ret, -1, sql);
 
 	int index;
 	index = sqlite3_bind_parameter_index(statement, "@LISTID");
 	if (index > 0)
 	{
 		ret = sqlite3_bind_int(statement, index, listid);
-		SQLITE3_CHECK(ret, -1, sql);
+		SQLITE3_CHECK(db, ret, -1, sql);
 	}
 
 	media_dbgsql(statement, __LINE__);
@@ -1484,16 +1497,16 @@ static int playlist_has(media_ctx_t *ctx, int listid, int id)
 	sqlite3_stmt *statement;
 	const char sql[] = "SELECT COUNT(*) FROM playlist WHERE id=@ID AND listid=@LISTID;";
 	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
-	SQLITE3_CHECK(ret, 1, sql);
+	SQLITE3_CHECK(db, ret, 1, sql);
 
 	int index;
 	index = sqlite3_bind_parameter_index(statement, "@ID");
 	ret = sqlite3_bind_int(statement, index, id);
-	SQLITE3_CHECK(ret, 1, sql);
+	SQLITE3_CHECK(db, ret, 1, sql);
 
 	index = sqlite3_bind_parameter_index(statement, "@LISTID");
 	ret = sqlite3_bind_int(statement, index, listid);
-	SQLITE3_CHECK(ret, 1, sql);
+	SQLITE3_CHECK(db, ret, 1, sql);
 
 	media_dbgsql(statement, __LINE__);
 	ret = sqlite3_step(statement);
@@ -1514,26 +1527,26 @@ static int playlist_append(media_ctx_t *ctx, int listid, int id, int likes)
 	sqlite3_stmt *statement;
 	const char sql[] = "INSERT INTO playlist (id, listid, likes) VALUES (@ID, @LISTID, @LIKES);";
 	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
-	SQLITE3_CHECK(ret, 1, sql);
+	SQLITE3_CHECK(db, ret, 1, sql);
 
 	int index;
 	index = sqlite3_bind_parameter_index(statement, "@LISTID");
 	ret = sqlite3_bind_int(statement, index, listid);
-	SQLITE3_CHECK(ret, 1, sql);
+	SQLITE3_CHECK(db, ret, 1, sql);
 
 	index = sqlite3_bind_parameter_index(statement, "@ID");
 	ret = sqlite3_bind_int(statement, index, id);
-	SQLITE3_CHECK(ret, 1, sql);
+	SQLITE3_CHECK(db, ret, 1, sql);
 
 	index = sqlite3_bind_parameter_index(statement, "@LIKES");
 	ret = sqlite3_bind_int(statement, index, likes);
-	SQLITE3_CHECK(ret, 1, sql);
+	SQLITE3_CHECK(db, ret, 1, sql);
 
 	media_dbgsql(statement, __LINE__);
 	ret = sqlite3_step(statement);
 	if (ret != SQLITE_DONE)
 	{
-		SQLITE3_CHECK(ret, 1, sql);
+		SQLITE3_CHECK(db, ret, 1, sql);
 	}
 	else
 		ret = 0;
@@ -1549,26 +1562,26 @@ static int playlist_likes(media_ctx_t *ctx, int listid, int id, int likes)
 	sqlite3_stmt *statement;
 	const char sql[] = "UPDATE playlist SET likes=@LIKES WHERE id=@ID AND listid=@LISTID;";
 	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
-	SQLITE3_CHECK(ret, 1, sql);
+	SQLITE3_CHECK(db, ret, 1, sql);
 
 	int index;
 	index = sqlite3_bind_parameter_index(statement, "@LISTID");
 	ret = sqlite3_bind_int(statement, index, listid);
-	SQLITE3_CHECK(ret, 1, sql);
+	SQLITE3_CHECK(db, ret, 1, sql);
 
 	index = sqlite3_bind_parameter_index(statement, "@ID");
 	ret = sqlite3_bind_int(statement, index, id);
-	SQLITE3_CHECK(ret, 1, sql);
+	SQLITE3_CHECK(db, ret, 1, sql);
 
 	index = sqlite3_bind_parameter_index(statement, "@LIKES");
 	ret = sqlite3_bind_int(statement, index, likes);
-	SQLITE3_CHECK(ret, 1, sql);
+	SQLITE3_CHECK(db, ret, 1, sql);
 
 	media_dbgsql(statement, __LINE__);
 	ret = sqlite3_step(statement);
 	if (ret != SQLITE_DONE)
 	{
-		SQLITE3_CHECK(ret, 1, sql);
+		SQLITE3_CHECK(db, ret, 1, sql);
 	}
 	else
 		ret = 0;
@@ -1583,18 +1596,18 @@ static int playlist_remove(media_ctx_t *ctx, int listid, int id)
 	sqlite3_stmt *statement;
 	const char sql[] = "DELETE FROM playlist WHERE id=@ID and listid=@LISTID";
 	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
-	SQLITE3_CHECK(ret, -1, sql);
+	SQLITE3_CHECK(db, ret, -1, sql);
 
 	int index;
 	index = sqlite3_bind_parameter_index(statement, "@ID");
 	ret = sqlite3_bind_int(statement, index, id);
-	SQLITE3_CHECK(ret, -1, sql);
+	SQLITE3_CHECK(db, ret, -1, sql);
 
 	index = sqlite3_bind_parameter_index(statement, "@LISTID");
 	if (index > 0)
 	{
 		ret = sqlite3_bind_int(statement, index, ctx->listid);
-		SQLITE3_CHECK(ret, -1, sql);
+		SQLITE3_CHECK(db, ret, -1, sql);
 	}
 
 	media_dbgsql(statement, __LINE__);
@@ -1612,11 +1625,11 @@ static int playlist_destroy(media_ctx_t *ctx, int listid)
 	/** free the current filter **/
 	const char sql[] = "DELETE FROM playlist WHERE listid=@LISTID;";
 	ret = sqlite3_prepare_v2(db, sql, -1, &statement, NULL);
-	SQLITE3_CHECK(ret, -1, sql);
+	SQLITE3_CHECK(db, ret, -1, sql);
 
 	index = sqlite3_bind_parameter_index(statement, "@LISTID");
 	ret = sqlite3_bind_int(statement, index, listid);
-	SQLITE3_CHECK(ret, 1, sql);
+	SQLITE3_CHECK(db, ret, 1, sql);
 
 	ret = sqlite3_step(statement);
 	sqlite3_finalize(statement);
@@ -1672,13 +1685,13 @@ static int _media_filter(media_ctx_t *ctx, int table, const char *word)
 			");",
 	};
 	ret = sqlite3_prepare_v2(db, sql[table], -1, &statement, NULL);
-	SQLITE3_CHECK(ret, -1, sql[table]);
+	SQLITE3_CHECK(db, ret, -1, sql[table]);
 
 	index = sqlite3_bind_parameter_index(statement, "@NAME");
 	if (index > 0)
 	{
 		ret = sqlite3_bind_text(statement, index, word, -1 , SQLITE_STATIC);
-		SQLITE3_CHECK(ret, 1, sql[table]);
+		SQLITE3_CHECK(db, ret, 1, sql[table]);
 	}
 	ret = sqlite3_step(statement);
 
@@ -1769,7 +1782,7 @@ static int _media_opendb(media_ctx_t *ctx, const char *url)
 			ret = sqlite3_open_v2(ctx->path, &ctx->db, SQLITE_OPEN_READWRITE, NULL);
 		else
 			ret = SQLITE_ERROR;
-		if (ret == SQLITE_ERROR)
+		if (ret != SQLITE_OK)
 		{
 			err("Open database in read only");
 			ret = sqlite3_open_v2(ctx->path, &ctx->db, SQLITE_OPEN_READONLY, NULL);
@@ -1912,6 +1925,7 @@ static int _media_initdb(sqlite3 *db, const char *query[])
 		if (ret != SQLITE_OK)
 		{
 			err("media: prepare error %d query[%d]", ret, i);
+			err("\t%s", sqlite3_errmsg(db));
 			dbg("media: query %s", query[i]);
 			break;
 		}

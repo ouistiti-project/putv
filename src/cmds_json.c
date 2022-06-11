@@ -422,71 +422,107 @@ static int method_remove(json_t *json_params, json_t **result, void *userdata)
 	return ret;
 }
 
-static int method_append(json_t *json_params, json_t **result, void *userdata)
+typedef int (*append_cb_t)(media_ctx_t *ctx, const char *path, const char *info, const char *mime);
+static int method_appendsource(media_t *media, json_t * path, json_t * info, json_t * mime)
 {
-	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
-	media_t *media = player_media(ctx->player);
-	int (*append_cb)(media_ctx_t *ctx, const char *path, const char *info, const char *mime);
-	cmds_dbg("cmds: append");
-
+	append_cb_t append_cb = NULL;
 	if (media->ops->append != NULL)
 		append_cb = media->ops->append;
 	else if (media->ops->insert != NULL)
 		append_cb = media->ops->insert;
 	else
 	{
-		*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
-		return -1;
+		return -2;
 	}
 
+	const char *str = NULL;
+	char *infostr = NULL;
+	const char *mimestr = NULL;
+	str = json_string_value(path);
+	mimestr = json_string_value(mime);
+	cmds_dbg("cmds: append %s", str);
+	if (info == NULL)
+	{
+		infostr = strdup("");
+	}
+	else if (json_is_string(info))
+	{
+		infostr = strdup(json_string_value(info));
+	}
+	else if (json_is_object(info))
+	{
+		infostr = json_dumps(info, 0);
+	}
+	int ret = append_cb(media->ctx, str, infostr, mimestr);
+	free(infostr);
+	return ret;
+}
+
+static int method_append(json_t *json_params, json_t **result, void *userdata)
+{
+	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
+	media_t *media = player_media(ctx->player);
+	cmds_dbg("cmds: append");
+
 	int ret = -1;
-	if (json_is_array(json_params)) {
+	if (json_is_array(json_params))
+	{
 		size_t i;
 		json_t *value;
 		json_array_foreach(json_params, i, value)
 		{
 			if (json_is_string(value))
 			{
-				const char *str = json_string_value(value);
+				const char *str = NULL;
+				str = json_string_value(value);
 				cmds_dbg("cmds: append %s", str);
-				ret = append_cb(media->ctx, str, "", NULL);
+				ret = method_appendsource(media, value, NULL, NULL);
 			}
 			else if (json_is_object(value))
 			{
 				json_t * info = json_object_get(value, "info");
 				json_t * sources = json_object_get(value, "sources");
-				json_t * source = NULL;
+				json_t * source = json_object_get(source, "url");
 				size_t j;
-				json_array_foreach(sources, j, source)
+				if (json_is_array(sources))
 				{
-					json_t * path = json_object_get(source, "url");
-					json_t * mime = json_object_get(value, "mime");\
-					if (json_is_string(info))
+					json_array_foreach(sources, j, source)
 					{
-						ret = append_cb(media->ctx,
-								json_string_value(path),
-								json_string_value(info),
-								json_string_value(mime));
-					}
-					else if (json_is_object(info))
-					{
-						ret = append_cb(media->ctx,
-								json_string_value(path),
-								json_dumps(info, 0),
-								json_string_value(mime));
+						json_t * path = json_object_get(source, "url");
+						json_t * mime = json_object_get(value, "mime");
+						ret = method_appendsource(media, path, info, mime);
+						if (ret < 0)
+							break;
 					}
 				}
+				else if (json_is_string(source))
+				{
+					ret = method_appendsource(media, source, info, NULL);
+				}
 			}
+			else
+			{
+				err("cmds: json badly formatted");
+			}
+			if (ret == -2)
+			{
+				*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
+				return -1;
+			}
+
 			if (ret == -1)
+			{
+				char *valuestr = json_dumps(value, 0);
+				err("cmds: %s could not be inserted into the playlist", valuestr);
+				free(valuestr);
 				*result = jsonrpc_error_object(-12345,
 					"append error",
 					json_string("media could not be inserted into the playlist"));
-			else
-			{
-				*result = json_pack("{s:s,s:s,s:i}", "status", "DONE", "message", "media append", "id", ret);
-				ret = 0;
+				return -1;
 			}
 		}
+		*result = json_pack("{s:s,s:s,s:i}", "status", "DONE", "message", "media append", "id", ret);
+		ret = 0;
 	}
 	else
 		*result = jsonrpc_error_object_predefined(JSONRPC_INVALID_PARAMS, json_string("player state error"));
@@ -599,7 +635,6 @@ static int method_next(json_t *json_params, json_t **result, void *userdata)
 static int method_setnext(json_t *json_params, json_t **result, void *userdata)
 {
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
-	media_t *media = player_media(ctx->player);
 	int ret = -1;
 	int id = 0;
 

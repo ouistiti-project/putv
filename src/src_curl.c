@@ -55,6 +55,7 @@ struct src_ctx_s
 	{
 		SRC_STOP,
 		SRC_RUN,
+		SRC_END,
 	} state;
 	CURL *curl;
 	const char *mime;
@@ -89,14 +90,9 @@ static uint write_cb(char *in, uint size, uint nmemb, src_ctx_t *ctx)
 	size_t writelen = 0;
 	size_t len = ctx->out->ctx->size;
 
-	pthread_mutex_lock(&ctx->mutex);
-	while (ctx->state == SRC_STOP)
-	{
-		pthread_cond_wait(&ctx->cond, &ctx->mutex);
-	}
-	pthread_mutex_unlock(&ctx->mutex);
-
 	nmemb *= size;
+	if (ctx->state == SRC_STOP)
+		return nmemb;
 	while (nmemb > 0)
 	{
 		ctx->outbuffer = ctx->out->ops->pull(ctx->out->ctx);
@@ -124,6 +120,16 @@ static uint write_cb(char *in, uint size, uint nmemb, src_ctx_t *ctx)
 	return writelen;
 }
 
+static int xferinfo(void *arg,
+		curl_off_t dltotal, curl_off_t dlnow,
+		curl_off_t ultotal, curl_off_t ulnow)
+{
+	src_ctx_t *ctx = (src_ctx_t *)arg;
+	if (ctx->state == SRC_END)
+		return 1;
+	return 0;
+}
+
 static src_ctx_t *_src_init(player_ctx_t *player, const char * arg, const char *mime)
 {
 	src_ctx_t *ctx;
@@ -140,7 +146,9 @@ static src_ctx_t *_src_init(player_ctx_t *player, const char * arg, const char *
 		pthread_cond_init(&ctx->cond, NULL);
 
 		curl_easy_setopt(curl, CURLOPT_URL, arg);
-		curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
+		curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, xferinfo);
+		curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &ctx);
+		curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
 		curl_easy_setopt(curl, CURLOPT_VERBOSE, SRC_CURL_VERBOSE);
 		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, ctx);
@@ -284,6 +292,10 @@ static void _src_destroy(src_ctx_t *ctx)
 	}
 	if (ctx->thread)
 	{
+		pthread_mutex_lock(&ctx->mutex);
+		ctx->state = SRC_END;
+		pthread_cond_broadcast(&ctx->cond);
+		pthread_mutex_unlock(&ctx->mutex);
 		pthread_join(ctx->thread, NULL);
 	}
 	if (ctx->estream != NULL)

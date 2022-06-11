@@ -91,6 +91,8 @@ struct media_dirlist_s
 #define PROTOCOLNAME "file://"
 #define PROTOCOLNAME_LENGTH 7
 
+#define MAX_LEVEL 10
+
 #define err(format, ...) fprintf(stderr, "\x1B[31m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #define warn(format, ...) fprintf(stderr, "\x1B[35m"format"\x1B[0m\n",  ##__VA_ARGS__)
 #ifdef DEBUG
@@ -164,7 +166,7 @@ static int _find_mediaid(void *arg, media_ctx_t *ctx, int mediaid, const char *p
 		_run_cb(mdata, mediaid, path, mime);
 		ret = 0;
 	}
-	else if (mdata->id == -1 && mdata->cb != NULL)
+	else if (mdata->id == -1)
 	{
 		_run_cb(mdata, mediaid, path, mime);
 	}
@@ -226,16 +228,19 @@ static int _find(media_ctx_t *ctx, int level, media_dirlist_t **pit, int *pmedia
 				struct stat filestat;
 				if (fstatat(fddir, it->items[it->index]->d_name, &filestat, 0) != 0)
 				{
-					dbg("media link error");
+					dbg("media: link error %s", it->items[it->index]->d_name);
+					close(fddir);
 					break;
 				}
+				close(fddir);
 				if (!S_ISDIR(filestat.st_mode))
 					break;
-				close(fddir);
 			}
 			// continue as directory
 			case DT_DIR:
 			{
+				if (level > MAX_LEVEL)
+					break;
 				media_dirlist_t *new = calloc(1, sizeof(*new));
 
 				if (new)

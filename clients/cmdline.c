@@ -545,7 +545,7 @@ static int method_help(ctx_t *ctx, const char *arg)
 	fprintf(stdout, " info   : display an opus from the media\n");
 	fprintf(stdout, "        <opus id>\n");
 	fprintf(stdout, " append : add an opus into the media\n");
-	fprintf(stdout, "        <json media> {\"url\":\"https://example.com/stream.mp3\",\"info\":{\"title\": \"test\",\"artist\":\"John Doe\",\"album\":\"white\"}}\n");
+	fprintf(stdout, "        <json media> {\"sources\":[{\"url\":\"https://example.com/stream.mp3\"}],\"info\":{\"title\": \"test\",\"artist\":\"John Doe\",\"album\":\"white\"}}\n");
 	fprintf(stdout, " import : import opus from a json file into the media\n");
 	fprintf(stdout, "        <file path>\n");
 	fprintf(stdout, " export : export the opus from the media into a json file\n");

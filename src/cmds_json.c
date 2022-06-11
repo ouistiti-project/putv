@@ -867,6 +867,8 @@ static int method_options(json_t *json_params, json_t **result, void *userdata)
 	cmds_ctx_t *ctx = (cmds_ctx_t *)userdata;
 	int ret = -1;
 	media_t *media = player_media(ctx->player);
+	int loopstate = -1;
+	int randomstate = -1;
 
 	if (json_is_object(json_params))
 	{
@@ -879,13 +881,8 @@ static int method_options(json_t *json_params, json_t **result, void *userdata)
 			state = json_boolean_value(value);
 			if (media->ops->loop)
 			{
-				media->ops->loop(media->ctx, state);
+				loopstate = media->ops->loop(media->ctx, state);
 				ret = 0;
-			}
-			else
-			{
-				*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
-				return -1;
 			}
 
 		}
@@ -895,29 +892,31 @@ static int method_options(json_t *json_params, json_t **result, void *userdata)
 			state = json_boolean_value(value);
 			if (media->ops->random)
 			{
-				state = media->ops->random(media->ctx, state);
+				randomstate = media->ops->random(media->ctx, state);
 				ret = 0;
-				if (state == OPTION_DISABLE && media->ops->find != NULL)
+				if (randomstate == OPTION_DISABLE && media->ops->find != NULL)
 				{
 					int id = player_mediaid(ctx->player);
 					id += 1;
-					ret = media->ops->find(media->ctx, id, player_play, ctx->player);
-					ret -= 1;
+					ret = player_play(ctx->player, id);
 				}
 			}
-			else
-			{
-				*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
-				return -1;
-			}
 		}
-		*result = json_object();
-		state = media->ops->loop(media->ctx, OPTION_REQUEST);
-		value = json_boolean(state);
-		json_object_set(*result, "loop", value);
-		state = media->ops->random(media->ctx, OPTION_REQUEST);
-		value = json_boolean(state);
-		json_object_set(*result, "random", value);
+		if (ret == 0)
+		{
+			*result = json_object();
+			state = media->ops->loop(media->ctx, OPTION_REQUEST);
+			value = json_boolean(state);
+			json_object_set(*result, "loop", value);
+			state = media->ops->random(media->ctx, OPTION_REQUEST);
+			value = json_boolean(state);
+			json_object_set(*result, "random", value);
+		}
+		else
+		{
+			*result = jsonrpc_error_object(JSONRPC_INVALID_REQUEST, "Method not available", json_null());
+			return -1;
+		}
 	}
 	return 0;
 }

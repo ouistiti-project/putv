@@ -282,18 +282,21 @@ static int _find(media_ctx_t *ctx, int level, media_dirlist_t **pit, int *pmedia
 			{
 				char *path = malloc(7 + strlen(it->path) + 1 + strlen(it->items[it->index]->d_name) + 1);
 				if (path)
-				{
 					sprintf(path, "file://%s/%s", it->path, it->items[it->index]->d_name);
-					const char *mime = utils_getmime(path);
-					ret = -1;
-					if (strcmp(mime, mime_octetstream) != 0)
-					{
-						ret = cb(arg, ctx, *pmediaid, path, mime);
-					}
-					free(path);
-					if (ret > 0)
-						(*pmediaid)++;
+
+				const char *mime = utils_getmime(it->items[it->index]->d_name);
+				ret = -1;
+				if (strcmp(mime, mime_octetstream) != 0)
+				{
+					ret = cb(arg, ctx, *pmediaid, path, mime);
 				}
+				if (ret > 0)
+					(*pmediaid)++;
+				if (*pmediaid > ctx->count)
+					ctx->count = *pmediaid + 1;
+
+				if (path)
+					free(path);
 			}
 			break;
 			default:
@@ -329,14 +332,6 @@ static int media_find(media_ctx_t *ctx, int id, media_parse_t cb, void *arg)
 	media_dirlist_t *dir = NULL;
 	_find_mediaid_t mdata = {id, cb, arg};
 	ret = _find(ctx, 0, &dir, &mediaid, _find_mediaid, &mdata);
-	if (!(ctx->options & OPTION_RANDOM))
-	{
-		pthread_mutex_lock(&ctx->mutex);
-		_free_medialist(ctx->current, 0);
-		ctx->current = dir;
-		pthread_mutex_unlock(&ctx->mutex);
-		ctx->mediaid = mediaid;
-	}
 	return ret? 0:1;
 }
 
@@ -365,18 +360,16 @@ static int media_play(media_ctx_t *ctx, media_parse_t cb, void *arg)
 static int media_next(media_ctx_t *ctx)
 {
 	int ret;
+	int mediaid = 0;
 
-	pthread_mutex_lock(&ctx->mutex);
 	if (ctx->options & OPTION_RANDOM)
 	{
-		ctx->mediaid = (random() % (ctx->count - 1));
-		_find_mediaid_t data = {ctx->mediaid, NULL, NULL};
-		ret = _find(ctx, 0, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
-		if (ctx->mediaid > ctx->count)
-			ctx->mediaid = 0;
-		if (ctx->mediaid == 0)
-			ctx->mediaid = ctx->count;
-		ctx->mediaid--;
+		mediaid = (random() % (ctx->count - 1));
+		_find_mediaid_t data = {mediaid, NULL, NULL};
+		ret = _find(ctx, 0, &ctx->current, &mediaid, _find_mediaid, &data);
+		if (mediaid == 0)
+			mediaid = ctx->count;
+		mediaid--;
 	}
 	else
 	{
@@ -386,14 +379,15 @@ static int media_next(media_ctx_t *ctx)
 			id = -1;
 		else
 			id = ctx->mediaid;
+
 		_find_mediaid_t data = {id + 1, NULL, NULL};
-		ret = _find(ctx, 0, &ctx->current, &ctx->mediaid, _find_mediaid, &data);
+		ret = _find(ctx, 0, &ctx->current, &mediaid, _find_mediaid, &data);
 	}
+	pthread_mutex_lock(&ctx->mutex);
+	ctx->mediaid = mediaid;
 	pthread_mutex_unlock(&ctx->mutex);
 	if (ctx->firstmediaid == -1)
 		ctx->firstmediaid = ctx->mediaid;
-	if (ctx->count < ctx->mediaid)
-		ctx->count = ctx->mediaid;
 	if (ret != 0)
 	{
 		if (ctx->current)
@@ -401,10 +395,9 @@ static int media_next(media_ctx_t *ctx)
 			ctx->current = _free_medialist(ctx->current, 0);
 		}
 		ctx->current = NULL;
-		if (ctx->count > ctx->mediaid)
+		if (ctx->count > ctx->mediaid + 1)
 		{
 			ctx->mediaid = ctx->mediaid + 1;
-			media_next(ctx);
 		}
 		else if (ctx->options & OPTION_LOOP)
 		{

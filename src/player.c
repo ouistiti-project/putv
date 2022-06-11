@@ -329,9 +329,15 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 	return -1;
 }
 
-int player_play(void* arg, int id, const char *url, const char *info, const char *mime)
+int player_play(player_ctx_t *ctx, int id)
 {
-	return _player_play(arg, id, url, info, mime);
+	int ret = -1;
+	if (ctx->media->ops->find != NULL)
+	{
+		ret = ctx->media->ops->find(ctx->media->ctx, id, _player_play, ctx);
+		ret -= 1;
+	}
+	return ret;
 }
 
 int player_subscribe(player_ctx_t *ctx, estream_t type, jitter_t *encoder_jitter)

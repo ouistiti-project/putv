@@ -643,11 +643,7 @@ static int method_setnext(json_t *json_params, json_t **result, void *userdata)
 		id = json_integer_value(json_object_get(json_params, "id"));
 	}
 	cmds_dbg("cmds: setnext id %d", id);
-	if (media->ops->find != NULL)
-	{
-		ret = media->ops->find(media->ctx, id, player_play, ctx->player);
-		ret -= 1;
-	}
+	ret = player_play(ctx->player, id);
 	if (ret == 0)
 	{
 		*result = json_pack("{si}", "next", id);
@@ -770,14 +766,7 @@ static int method_change(json_t *json_params, json_t **result, void *userdata)
 		{
 			const char *str = json_string_value(value);
 			media_t *media = player_media(ctx->player);
-			if (media != NULL && media->ops->insert != NULL)
-			{
-				ret = media->ops->insert(media->ctx, str, "", NULL);
-			}
-			if (ret == -1)
-			{
-				ret = player_change(ctx->player, str, random, loop, now);
-			}
+			ret = player_change(ctx->player, str, random, loop, now);
 			if (ret >= 0)
 			{
 				player_state(ctx->player, STATE_STOP);

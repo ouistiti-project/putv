@@ -2051,7 +2051,11 @@ static media_ctx_t *media_init(player_ctx_t *player, const char *url, ...)
 static void media_destroy(media_ctx_t *ctx)
 {
 	if (ctx->db)
-		sqlite3_close_v2(ctx->db);
+	{
+		int ret = sqlite3_close_v2(ctx->db);
+		if (ret != SQLITE_OK)
+			err("media: DB close error %s", sqlite3_errstr(ret));
+	}
 	free(ctx->path);
 	free(ctx);
 }

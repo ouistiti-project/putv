@@ -16,3 +16,4 @@ esac
 
 CINPUT_DEVICE="/dev/input/event0"
 CINPUT_JSON="/home/ouiradio.json"
+FILTER=pcm?mono=mixed

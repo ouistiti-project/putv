@@ -20,7 +20,7 @@ PUTV_DEPENDENCIES += tinysvcmdns
 endif
 
 PUTV_DATADIR=/srv/www-putv
-PUTV_MAKE_OPTS= \
+PUTV_CONFIGURE_OPTS= \
 	prefix=/usr \
 	datadir=$(PUTV_DATADIR) \
 	sysconfdir=/etc/ouistiti
@@ -28,59 +28,65 @@ PUTV_MAKE_OPTS= \
 #PUTV_MAKE_OPTS+=V=1
 #PUTV_MAKE_OPTS+=DEBUG=y
 
-PUTV?=ouiradio
-BR2_PACKAGE_PUTV_DEFCONFIG?=$(PUTV:%=%_)defconfig
-PUTV_KCONFIG_DEFCONFIG=$(call qstrip,$(BR2_PACKAGE_PUTV_DEFCONFIG))
-PUTV:=$(PUTV_KCONFIG_DEFCONFIG:%_defconfig=%)
-PUTV_KCONFIG_OPTS = $(PUTV_MAKE_OPTS)
-
-ifeq ($(BR2_PACKAGE_TINYSVCMDNS),y)
-PUTV_TINYSVCMDNS_OPTS=$(call KCONFIG_ENABLE_OPT,TINYSVCMDNS,$(@D)/.config)
-else
-PUTV_TINYSVCMDNS_OPTS=$(call KCONFIG_DISABLE_OPT,TINYSVCMDNS,$(@D)/.config)
-endif
+PUTV_CONFIGURE_OPTS+=TINYSVCMDNS=$(BR2_PACKAGE_TINYSVCMDNS)
+PUTV_CONFIGURE_OPTS+=UPNPRENDERER=$(BR2_PACKAGE_PUTV_UPNPRENDERER)
+PUTV_CONFIGURE_OPTS+=DISPLAY_DIRECTFB=$(BR2_PACKAGE_DIRECTFB)
+PUTV_CONFIGURE_OPTS+=DISPLAY_EPAPER=$(BR2_PACKAGE_WAVESHARE_EPAPER)
+PUTV_CONFIGURE_OPTS+=JSONRPC=$(BR2_PACKAGE_JANSSON)
+PUTV_CONFIGURE_OPTS+=DECODER_FAAD2=$(BR2_PACKAGE_FAAD2)
+PUTV_CONFIGURE_OPTS+=DECODER_LAME=$(BR2_PACKAGE_LAME)
+PUTV_CONFIGURE_OPTS+=DECODER_FLAC=$(BR2_PACKAGE_FLAC)
+PUTV_CONFIGURE_OPTS+=ENCODER_FLAC=$(BR2_PACKAGE_FLAC)
+PUTV_CONFIGURE_OPTS+=ENCODER_MAD=$(BR2_PACKAGE_MAD)
+PUTV_CONFIGURE_OPTS+=SRC_CURL=$(BR2_PACKAGE_LIBCURL)
+PUTV_CONFIGURE_OPTS+=SRC_ALSA=$(BR2_PACKAGE_ALSA_LIB)
+PUTV_CONFIGURE_OPTS+=SINK_ALSA=$(BR2_PACKAGE_ALSA_LIB)
+PUTV_CONFIGURE_OPTS+=SINK_TINYALSA=$(BR2_PACKAGE_TINYALSA)
 
 ifeq ($(BR2_PACKAGE_PUTV_UPNPRENDERER),y)
 PUTV_DEPENDENCIES += gmrender-resurrect2
-PUTV_GMRENDER_OPTS=$(call KCONFIG_ENABLE_OPT,UPNPRENDERER,$(@D)/.config)
 endif
 
 ifeq ($(BR2_PACKAGE_DIRECTFB),yy)
 PUTV_DEPENDENCIES += directfb
-PUTV_DIRECTFB_OPTS=$(call KCONFIG_ENABLE_OPT,DISPLAY_DIRECTFB,$(@D)/.config)
 endif
 
-BR2_PACKAGE_WAVESHARE_EPAPER=n
 ifeq ($(BR2_PACKAGE_WAVESHARE_EPAPER),y)
 PUTV_DEPENDENCIES += waveshare-epaper
-PUTV_EPAPER_OPTS=$(call KCONFIG_ENABLE_OPT,DISPLAY_EPAPER,$(@D)/.config)
 endif
 
-PUTV_JSONRPC_OPTS=$(call KCONFIG_ENABLE_OPT,JSONRPC,$(@D)/.config)
-
-define PUTV_KCONFIG_FIXUP_CMDS
-	$(PUTV_JSONRPC_OPTS)
-	$(PUTV_DIRECTFB_OPTS)
-	$(PUTV_EPAPER_OPTS)
-	$(PUTV_GMRENDER_OPTS)
-	$(PUTV_TINYSVCMDNS_OPTS)
+define PUTV_CONFIGURE_CMDS
+	$(TARGET_MAKE_ENV) $(MAKE1) -C $(@D) $(TARGET_CONFIGURE_OPTS) $(PUTV_CONFIGURE_OPTS) defconfig
 endef
 
 define PUTV_BUILD_CMDS
-	$(TARGET_MAKE_ENV) $(MAKE1) $(TARGET_CONFIGURE_OPTS) -C $(@D) $(PUTV_MAKE_OPTS)
+	$(TARGET_MAKE_ENV) $(MAKE1) -C $(@D) $(TARGET_CONFIGURE_OPTS) $(PUTV_MAKE_OPTS)
 endef
 
 define PUTV_INSTALL_TARGET_CMDS
-	$(TARGET_MAKE_ENV) $(MAKE1) $(TARGET_CONFIGURE_OPTS) -C $(@D) $(PUTV_MAKE_OPTS) DESTDIR=$(TARGET_DIR) install
+	$(TARGET_MAKE_ENV) $(MAKE1) -C $(@D) $(TARGET_CONFIGURE_OPTS) $(PUTV_MAKE_OPTS) DESTDIR=$(TARGET_DIR) install
 	$(INSTALL) -D -m 644 $(PUTV_PKGDIR)/ouiradio.json \
 		$(TARGET_DIR)/home/ouiradio.json
-	rm $(TARGET_DIR)$(PUTV_DATADIR)/htdocs/apps/ouiradio.json
+	rm -f $(TARGET_DIR)$(PUTV_DATADIR)/htdocs/apps/ouiradio.json
+	mkdir -p $(TARGET_DIR)$(PUTV_DATADIR)/htdocs/apps/
 	ln -sf /home/ouiradio.json $(TARGET_DIR)$(PUTV_DATADIR)/htdocs/apps/ouiradio.json
 	$(INSTALL) -D -m 644 $(PUTV_PKGDIR)/radio.db \
 		$(TARGET_DIR)/home/radio.db
-	sed "s/\%PUTV\%/$(PUTV)/g" $(PUTV_PKGDIR)/putv.in > /tmp/putv
-	$(INSTALL) -D -m 644 /tmp/putv \
+	$(INSTALL) -D -m 644 $(PUTV_PKGDIR)/putv.in $(@D)/putv.conf
+	sed -i "s/DAEMON=.*//g" $(@D)/putv.conf
+	if [ -n "$(PUTV)" ]; then echo "DAEMON=$(PUTV)" >> $(@D)/putv.conf; fi
+	sed -i "s/WEBSOCKET_DIR=.*//g" $(@D)/putv.conf
+	echo "WEBSOCKETDIR=$(PUTV_DATADIR)/websocket" >>  $(@D)/putv.conf
+	$(INSTALL) -D -m 644 $(@D)/putv.conf \
 		$(TARGET_DIR)/etc/default/putv
+	$(INSTALL) -D -m 755 $(PUTV_PKGDIR)/putv.sh \
+		$(TARGET_DIR)/etc/init.d/putv.sh
+	$(INSTALL) -D -m 755 $(PUTV_PKGDIR)/putv_client.sh \
+		$(TARGET_DIR)/etc/init.d/putv_client.sh
+	if [ "$(BR2_PACKAGE_PUTV_UPNPRENDERER)" == "y" ]; then \
+		$(INSTALL) -D -m 755 $(PUTV_PKGDIR)/gmrender.sh \
+			$(TARGET_DIR)/etc/init.d/gmrender.sh; \
+	fi
 endef
 
 define PUTV_INSTALL_INIT_SYSV_GPIOD_CMDS
@@ -92,13 +98,12 @@ PUTV_POST_INSTALL_TARGET_HOOKS+=PUTV_INSTALL_INIT_SYSV_GPIOD_CMDS
 endif
 
 define PUTV_INSTALL_INIT_SYSV
-	$(INSTALL) -D -m 755 $(PUTV_PKGDIR)/putv.sh \
-		$(TARGET_DIR)/etc/init.d/S30putv
-	$(INSTALL) -D -m 755 $(PUTV_PKGDIR)/putv_client.sh \
-		$(TARGET_DIR)/etc/init.d/S31putv_client
+	ln -sf putv.sh $(TARGET_DIR)/etc/init.d/S30putv
+	ln -sf putv_client.sh $(TARGET_DIR)/etc/init.d/S31putv_client
 
-	$(INSTALL) -D -m 755 $(PUTV_PKGDIR)/gmrender.sh \
-		$(TARGET_DIR)/etc/init.d/S80gmrender
+	if [ "$(BR2_PACKAGE_PUTV_UPNPRENDERER)" == "y" ]; then \
+		ln -sf gmrender.sh $(TARGET_DIR)/etc/init.d/S80gmrender; \
+	fi
 endef
 
-$(eval $(kconfig-package))
+$(eval $(generic-package))

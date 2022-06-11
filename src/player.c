@@ -83,7 +83,6 @@ player_ctx_t *player_init(const char *filtername)
 	pthread_cond_init(&ctx->cond_int, NULL);
 	ctx->state = STATE_STOP;
 	ctx->filtername = filtername;
-	player_eventlistener(ctx, _player_autonext, ctx, "player");
 	return ctx;
 }
 
@@ -299,7 +298,7 @@ static int _player_play(void* arg, int id, const char *url, const char *info, co
 	src = src_build(ctx, url, mime, id, info);
 	if (src != NULL)
 	{
-		if (ctx->nextsrc != NULL)
+		if (ctx->nextsrc != NULL && ctx->nextsrc != src)
 		{
 			src_destroy(ctx->nextsrc);
 			ctx->nextsrc = NULL;
@@ -350,60 +349,7 @@ int player_subscribe(player_ctx_t *ctx, estream_t type, jitter_t *encoder_jitter
 	return 0;
 }
 
-static void _player_autonext(void *arg, event_t event, void *eventarg)
-{
-	player_ctx_t *ctx = (player_ctx_t *)arg;
-	if (event != PLAYER_EVENT_CHANGE)
-		return;
-	event_player_state_t *data = (event_player_state_t *)eventarg;
-
-	if (data->state != STATE_PLAY)
-		return;
-	/**
-	 * first check if a new media is requested
-	 */
-	if (ctx->media != ctx->nextmedia)
-	{
-		pthread_mutex_lock(&ctx->mutex);
-		if (ctx->media)
-		{
-			ctx->media->ops->destroy(ctx->media->ctx);
-			free(ctx->media);
-		}
-		ctx->media = ctx->nextmedia;
-		pthread_mutex_unlock(&ctx->mutex);
-	}
-
-	if (ctx->media == NULL)
-	{
-		err("media not available");
-		player_state(ctx, STATE_STOP);
-		return;
-	}
-
-	if (ctx->media->ops->next)
-	{
-		ctx->media->ops->next(ctx->media->ctx);
-	}
-	else if (ctx->media->ops->end)
-		ctx->media->ops->end(ctx->media->ctx);
-
-	/**
-	 * media will call _player_play
-	 * and this one will set ctx->nextsrc
-	 */
-	ctx->media->ops->play(ctx->media->ctx, _player_play, ctx);
-
-	/**
-	 * there isn't any stream in the player
-	 * the new one is on nextsrc, then player pass on CHANGE
-	 * to switch nextsrc to src
-	 */
-	if (ctx->src == NULL)
-		player_state(ctx, STATE_CHANGE);
-}
-
-static int _player_stateengine(player_ctx_t *ctx, int state)
+static int _player_stateengine(player_ctx_t *ctx, int state, int pause)
 {
 	int i;
 	switch (state)
@@ -423,10 +369,35 @@ static int _player_stateengine(player_ctx_t *ctx, int state)
 				ctx->nextsrc = NULL;
 			}
 
-			ctx->media->ops->end(ctx->media->ctx);
+			if (ctx->media->ops->end)
+				ctx->media->ops->end(ctx->media->ctx);
+			else
+				ctx->media->ops->find(ctx->media->ctx, -1, NULL, NULL);
 			for (i = 0; i < ctx->noutstreams; i++)
 				ctx->outstream[i]->ops->reset(ctx->outstream[i]->ctx);
 			dbg("player: stop");
+		break;
+		case STATE_PLAY:
+			dbg("player: playing");
+			if (pause)
+				break;
+			/// prepare nextsrc
+			if (ctx->media->ops->next)
+				ctx->media->ops->next(ctx->media->ctx);
+			else if (ctx->media->ops->end)
+				ctx->media->ops->end(ctx->media->ctx);
+			/**
+			 * media will call _player_play
+			 * and this one will set ctx->nextsrc
+			 */
+			ctx->media->ops->play(ctx->media->ctx, _player_play, ctx);
+			/**
+			 * there isn't any stream in the player
+			 * the new one is on nextsrc, then player pass on CHANGE
+			 * to switch nextsrc to src
+			 */
+			if (ctx->src == NULL)
+				state = STATE_CHANGE | pause;
 		break;
 		case STATE_CHANGE:
 			if (ctx->src != NULL)
@@ -438,7 +409,7 @@ static int _player_stateengine(player_ctx_t *ctx, int state)
 			ctx->src = ctx->nextsrc;
 			ctx->nextsrc = NULL;
 			for (i = 0; i < ctx->noutstreams; i++)
-				ctx->outstream[i]->ops->pause(ctx->outstream[i]->ctx, 0);
+				ctx->outstream[i]->ops->pause(ctx->outstream[i]->ctx, pause);
 
 			if (ctx->src != NULL)
 			{
@@ -448,7 +419,7 @@ static int _player_stateengine(player_ctx_t *ctx, int state)
 				 * to set a producer if it's needed
 				 */
 				ctx->src->ops->run(ctx->src->ctx);
-				state = STATE_PLAY;
+				state = STATE_PLAY | pause;
 			}
 			else
 			{
@@ -468,22 +439,38 @@ int player_run(player_ctx_t *ctx)
 	warn("player: running");
 	while (last_state != STATE_ERROR)
 	{
+		if (ctx->media != ctx->nextmedia)
+		{
+			pthread_mutex_lock(&ctx->mutex);
+			if (ctx->media)
+			{
+				ctx->media->ops->destroy(ctx->media->ctx);
+				free(ctx->media);
+			}
+			ctx->media = ctx->nextmedia;
+			pthread_mutex_unlock(&ctx->mutex);
+		}
+
+		if (ctx->media == NULL)
+		{
+			err("media not available");
+			player_state(ctx, STATE_STOP);
+		}
 		pthread_mutex_lock(&ctx->mutex);
 		while (last_state == (ctx->state & ~STATE_PAUSE_MASK))
 		{
 			pthread_cond_wait(&ctx->cond_int, &ctx->mutex);
 			if (last_state == (ctx->state & ~STATE_PAUSE_MASK))
 				pthread_cond_broadcast(&ctx->cond);
-			int i;
-			for (i = 0; i < ctx->noutstreams; i++)
+			for (int i = 0; i < ctx->noutstreams; i++)
 				ctx->outstream[i]->ops->pause(ctx->outstream[i]->ctx, (ctx->state & STATE_PAUSE_MASK));
 		}
 
+		last_state = ctx->state & ~STATE_PAUSE_MASK;
 		pthread_mutex_unlock(&ctx->mutex);
 
-		ctx->state = _player_stateengine(ctx, ctx->state & ~STATE_PAUSE_MASK);
-
-		last_state = ctx->state & ~STATE_PAUSE_MASK;
+		int new_state;
+		new_state = _player_stateengine(ctx, ctx->state & ~STATE_PAUSE_MASK, ctx->state & STATE_PAUSE_MASK);
 
 		/******************
 		 * event manager  *
@@ -494,8 +481,12 @@ int player_run(player_ctx_t *ctx)
 		};
 		player_sendevent(ctx, PLAYER_EVENT_CHANGE, &event);
 
-		if (last_state != (ctx->state & ~STATE_PAUSE_MASK))
+		if (last_state != (new_state & ~STATE_PAUSE_MASK))
+		{
+			ctx->state = new_state;
 			pthread_cond_broadcast(&ctx->cond);
+		}
+
 	}
 	return 0;
 }

@@ -9,14 +9,10 @@ config BR2_PACKAGE_PUTV
 	select BR2_PACKAGE_ALSA_LIB
 	select BR2_PACKAGE_LAME
 	select BR2_PACKAGE_FLAC
+	select BR2_PACKAGE_FAAD2
 	select BR2_PACKAGE_LIBCURL
 	help
 	  https://github.com/ouistiti-project
-
-config BR2_PACKAGE_PUTV_DEFCONFIG
-	string "defconfig"
-	depends on BR2_PACKAGE_PUTV
-	default "ouiradio_defconfig"
 
 config BR2_PACKAGE_PUTV_WEBIF_HTTPS
 	bool "install web interface on HTTPS"

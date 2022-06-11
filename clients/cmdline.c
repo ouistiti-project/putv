@@ -414,7 +414,8 @@ static int method_filter(ctx_t *ctx, const char *arg)
 struct export_list_s
 {
 	ctx_t *ctx;
-	char *filepath;
+	FILE *outfile;
+	signed long nbitems;
 };
 
 static int export_file(void *arg, json_t *list)
@@ -423,18 +424,58 @@ static int export_file(void *arg, json_t *list)
 	struct export_list_s *data = (struct export_list_s *) arg;
 	ctx_t *ctx = data->ctx;
 
-	ret = json_dump_file(json_object_get(list, "playlist"), data->filepath, JSON_INDENT(2));
-	free(data->filepath);
+	if (data->nbitems == -1)
+	{
+		data->nbitems = json_integer_value(json_object_get(list, "count"));
+	}
+	json_t *playlist = json_object_get(list, "playlist");
+	int nbitems = json_integer_value(json_object_get(list, "nbitems"));
+	//warn("list size %ld %d", json_array_size(playlist), nbitems);
+	if (nbitems == 0)
+	{
+		data->nbitems = 0;
+		return 0;
+	}
+	int index;
+	json_t *item;
+	json_array_foreach(playlist, index, item)
+	{
+		ret = json_dumpf(item, data->outfile, JSON_INDENT(2));
+		if (nbitems > index + 1)
+			fprintf(data->outfile, ",");
+	}
+	fflush(data->outfile);
+	data->nbitems -= nbitems;
 	return ret;
 }
 
+#define PLAYLIST_CHUNK 20
 static int method_export(ctx_t *ctx, const char *arg)
 {
 	int ret = -1;
 	static struct export_list_s data;
 	data.ctx = ctx;
-	data.filepath = strdup(arg);
-	ret = media_list(ctx->client, export_file, &data, 0, -1);
+	data.outfile = fopen(arg, "w");
+	if (data.outfile == NULL)
+	{
+		fprintf(stdout, "error on file %s\n", strerror(errno));
+		return -1;
+	}
+	fprintf(data.outfile, "[");
+	data.nbitems = -1;
+	client_async(ctx->client, 0);
+	int index = 0;
+	do
+	{
+		ret = media_list(ctx->client, export_file, &data, index, PLAYLIST_CHUNK);
+		if (ret < 0)
+			break;
+		index += PLAYLIST_CHUNK;
+	}
+	while (data.nbitems > 0);
+	fprintf(data.outfile, "]");
+	fclose(data.outfile);
+	client_async(ctx->client, 1);
 	return ret;
 }
 
@@ -504,7 +545,7 @@ static int method_help(ctx_t *ctx, const char *arg)
 	fprintf(stdout, " info   : display an opus from the media\n");
 	fprintf(stdout, "        <opus id>\n");
 	fprintf(stdout, " append : add an opus into the media\n");
-	fprintf(stdout, "        <json media> {\"url\":\"https://example.com/stream.mp3\",\"info\":{\"title\": \"test\",\"artist\":\"John Doe\",\"album\":\"white\"}}\n");
+	fprintf(stdout, "        <json media> {\"sources\":[{\"url\":\"https://example.com/stream.mp3\"}],\"info\":{\"title\": \"test\",\"artist\":\"John Doe\",\"album\":\"white\"}}\n");
 	fprintf(stdout, " import : import opus from a json file into the media\n");
 	fprintf(stdout, "        <file path>\n");
 	fprintf(stdout, " export : export the opus from the media into a json file\n");

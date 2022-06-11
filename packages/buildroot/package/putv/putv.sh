@@ -10,7 +10,7 @@ MEDIA="file:///media"
 WEBSOCKETDIR="/var/run/websocket"
 USER="www-data"
 LOGFILE="/var/log/$DAEMON.log"
-FILTER="pcm_stereo"
+FILTER="pcm?stereo"
 OUTPUT=""
 
 OPTIONS=""
@@ -43,7 +43,7 @@ start() {
 	fi
 	OPTIONS="${OPTIONS} -D"
 
-	if [ -e /var/run/gpiod.pid ] && [ -z "$GPIO" ]; then
+	if [ -e /etc/gpiod/rules.d/putv.conf ] && [ -z "$GPIO" ]; then
 		exit 0
 	fi
 	printf 'Starting %s: ' "$DAEMON"

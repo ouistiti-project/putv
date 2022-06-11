@@ -204,8 +204,8 @@ int sampled_change(filter_ctx_t *ctx, sample_t sample, int bitspersample, int sa
 	sampled_ctx_t *sampleditem = ctx->sampled;
 	while (sampleditem != NULL)
 	{
-		int length = ((ctx->shift) > bitspersample)?bitspersample:ctx->shift;
-		sample = sampleditem->cb(sampleditem->arg, sample, length, samplerate, channel);
+//		int length = ((ctx->shift) > bitspersample)?bitspersample:ctx->shift;
+		sample = sampleditem->cb(sampleditem->arg, sample, bitspersample, samplerate, channel);
 		sampleditem = sampleditem->next;
 	}
 
@@ -340,10 +340,11 @@ static filter_t *_filter_build_pcm(const char *query, jitter_t *jitter, const ch
 	if (query && strstr(query, "mono=mixed") != NULL)
 	{
 		mixed_t *mixed = NULL;
-		if (jitter->format < (JITTER_AUDIO + 2))
-			mixed = mixed_init(&filter->mixed, 1);
-		else if (jitter->format < (JITTER_AUDIO + 7))
+#define JITTER_AUDIO_STEREO (JITTER_AUDIO | JITTER_AUDIO_INTERLEAVED)
+		if ((jitter->format & JITTER_AUDIO_STEREO) == JITTER_AUDIO_STEREO)
 			mixed = mixed_init(&filter->mixed, 2);
+		else
+			mixed = mixed_init(&filter->mixed, 1);
 		filter->ops->set(filter->ctx, FILTER_SAMPLED, mixed_cb, mixed);
 	}
 #endif

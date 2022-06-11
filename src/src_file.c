@@ -67,6 +67,8 @@ struct src_ctx_s
 
 #define src_dbg(...)
 
+static int _src_attach(src_ctx_t *ctx, long index, decoder_t *decoder);
+
 static int _src_read(src_ctx_t *ctx, unsigned char *buff, int len)
 {
 	int ret = 0;
@@ -168,6 +170,8 @@ static int _src_prepare(src_ctx_t *ctx, const char *info)
 static int _src_run(src_ctx_t *ctx)
 {
 	dbg("src: run");
+	if (_src_attach(ctx, ctx->pid, ctx->estream) < 0)
+		return -1;
 	const src_t src = { .ops = src_file, .ctx = ctx};
 	event_decode_es_t event = {.pid = ctx->pid, .src = &src, .decoder = ctx->estream};
 	event_listener_t *listener = ctx->listener;
@@ -207,10 +211,17 @@ static int _src_attach(src_ctx_t *ctx, long index, decoder_t *decoder)
 	if (index > 0)
 		return -1;
 	ctx->estream = decoder;
+	ctx->pid = index;
 	ctx->out = ctx->estream->ops->jitter(ctx->estream->ctx, JITTE_LOW);
-	src_dbg("src: add producter to %s", ctx->out->ctx->name);
-	ctx->out->ctx->produce = (produce_t)_src_read;
-	ctx->out->ctx->producter = (void *)ctx;
+	if (ctx->out != NULL)
+	{
+		src_dbg("src: add producter to %s", ctx->out->ctx->name);
+		ctx->out->ctx->produce = (produce_t)_src_read;
+		ctx->out->ctx->producter = (void *)ctx;
+	}
+	else
+		return -1;
+	return 0;
 }
 
 static decoder_t *_src_estream(src_ctx_t *ctx, long index)

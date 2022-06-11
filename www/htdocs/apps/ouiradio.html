@@ -9,424 +9,326 @@
 		<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
 		<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
 		-->
+		<!--
 		<link type="text/css" rel="stylesheet" href="/trust/css/bootstrap.min.css">
-		<script type="text/javascript" src="/trust/js/jquery.min.js"></script>
 		<script type="text/javascript" src="/trust/js/bootstrap.min.js"></script>
-		<script type="text/javascript" src="/apps/js/jsonrpc.js"></script>
+		-->
+		<link type="text/css" rel="stylesheet" href="/trust/css/glyphicons.css">
+		<link type="text/css" rel="stylesheet" href="/trust/bootstrap-5/css/bootstrap.min.css">
+		<script type="text/javascript" src="/trust/bootstrap-5/js/bootstrap.min.js"></script>
+		<script type="text/javascript" src="/trust/js/jquery.min.js"></script>
+		<script type="text/javascript" src="/common/js/jsonrpc.js"></script>
+		<script type="text/javascript" src="/common/js/cmdbar.js"></script>
+		<script type="text/javascript" src="/apps/js/player.js"></script>
 		<script type="text/javascript">
-var g_player;
-var g_config;
-var g_imgbase = "";
-var g_maxitems = 5;
-initIHM = function()
-{
-	$('.action-btn').addClass('hidden');
-	$('#PlayList').addClass('hidden');
-	$('#volume').slideUp( 300 );
-}
-playerstate = function(result)
-{
-	this.state = result.state;
-	if (result.state == "play")
-		$('#playpause').find('.glyphicon').removeClass('glyphicon-play').addClass('glyphicon-pause');
-	else if (result.state == "pause")
-		$('#playpause').find('.glyphicon').removeClass('glyphicon-pause').addClass('glyphicon-play');
-	else
-	{
-		$('#playpause').find('.glyphicon').removeClass('glyphicon-pause').addClass('glyphicon-play');
-		$('#info').addClass('hidden');
-	}
-};
+var g_maxitems = 9;
+controle_viewport = function() {
+	const lg_height = 768;
+	const md_height = 520;
+	const xs_height = 428;
+	const height = window.innerHeight;
+	const width = window.innerWidth;
 
-playerlist = function(result)
+	if (height < lg_height) {
+		g_maxitems = 8;
+	}
+	if (height < md_height) {
+		g_maxitems = 7;
+	}
+	if (height < xs_height) {
+		g_maxitems = 6;
+	}
+	if (g_player) {
+		g_player.maxitems = g_maxitems;
+		g_player.list();
+	}
+	if ($('#playlist').hasClass('show'))
+		$('#info').removeClass('show');
+	else
+		$('#info').addClass('show');
+}
+
+class PlayerInfo extends PlayerCmd
 {
-	var table = result.playlist;
-	var firstid = 0;
-	if (table != undefined && typeof(table) == "object")
-	{
-		var deletemenu = "<a href='#' class='button remove'><span class='glyphicon glyphicon-trash'></span></a>";
-		var playlist = $('#PlayList');
-		var options = $(playlist).data('options');
-		if (typeof(options) == "string" && options != "")
-			options = JSON.parse(options);
-		$(playlist).html('');
-		firstid = table[0].id;
-		var i;
-		for (i = 0; i < table.length; i++)
+	#imgbase = "";
+	currentid = undefined;
+	constructor(config, maxitems, cmdbar) {
+		super(config, maxitems, cmdbar);
+	}
+	changestate(id, state) {
+		super.changestate(id, state);
+		if ($('#playlist').hasClass('hidden')) {
+			$('#playlist').removeClass('hidden');
+			this.list({id, id});
+		}
+		switch (state){
+		case "play":
+		case "pause":
+			$('#info').addClass('show');
+		break;
+		case "disconnect":
+			$('#playlist').removeClass('show');
+		case "stop":
+		default:
+			$('#info').removeClass('show');
+		break;
+		}
+		this.currentid = id;
+	}
+	changeduration(id, position, duration) {
+		super.changeduration(id, position, duration);
+		$('.position').removeClass('hidden');
+	}
+	changemedia(id, media) {
+		if (media == "changed")
 		{
-			var elem = $(playlist).find('#item-'+table[i].id);
-			if (elem.length == 0)
+			var $playlist = $('#playlist * .list-group');
+			$playlist.children("li").remove();
+			this.list({id:0});
+		}
+	}
+	changeinfo(id, info) {
+		super.changeinfo(id, info);
+		if (!this.currentid) {
+			this.currentid = id;
+			this.list({id:id});
+		}
+		info.id = id;
+		if (this.currentid == id) {
+			$('#playlist * .bg-secondary').removeClass('bg-secondary text-light');
+			$('#playlist * .text-light').removeClass('text-light');
+			var $item = $('#playlist').find('#item-'+id);
+			$item.addClass('bg-secondary text-light');
+			$item.find('.btn').addClass('text-light');
+			// clean "#info"
+			this.#setinfo($('#info'), {});
+			// fill "#info"
+			this.#setinfo($('#info'), info);
+		}
+		if ($('#infobox').css('display') == "visible" && $('#infobox').data('id') == id) {
+			// clean "#infobox"
+			this.#setinfo($('#infobox'), {});
+			// clean "#editorbox"
+			this.#setinfo($('#editorbox'), {});
+			// fill "#infobox"
+			this.#setinfo($('#infobox'), info);
+			// fill "#editorbox"
+			this.#setinfo($('#editorbox'), info);
+		}
+	}
+	#setinfo(parent, info, force) {
+		var elements = ["id","title","artist","album","track","genre","cover","gain"];
+		for (let elemt of elements) {
+			var $elem = $(parent).find('.'+elemt);
+			if ($elem != undefined) {
+				if ($elem.is("img")) {
+					if (info[elemt]) {
+						$elem.attr('src', this.#imgbase + encodeURI(info[elemt])).removeClass('hidden');
+					}
+					else {
+						$elem.attr('src', "").addClass('hidden');
+					}
+				}
+				else if ($elem.is("input")) {
+					if (info[elemt])
+						$elem.val(info[elemt]);
+					else
+						$elem.val("");
+				}
+				else {
+					if (info[elemt]) {
+						//var escapingname = encodeURIComponent(info[elemt]);
+						var escapingname = info[elemt];
+						$elem.text(escapingname);
+					}
+					else if (force) {
+						$elem.text("unknown");
+					}
+					else {
+						$elem.text("");
+					}
+				}
+			}
+		}
+	}
+	changeoptions(id, options) {
+		super.changeoptions(id, options);
+	}
+	changenext(nextid) {
+		var $item = $('#playlist').find('#item-'+nextid);
+		$('#playlist * .playlist-item').removeClass('bg-info');
+		if ($item) {
+			$item.addClass('bg-info');
+		}
+	}
+	changevolume(level) {
+		$('#volumebar').data('level',level);
+		$('#volumebar').attr('aria-valuenow',level).css('width', level+"%");
+		$('#volume').modal('show');
+	};
+	changelist(playlist, count) {
+		var firstid = 0;
+		var $deletemenu = undefined;
+		var $playlist = $('#playlist * .list-group');
+		var options = $playlist.data('options');
+		if (options && typeof(options) == "string" && options != "") {
+			options = JSON.parse(options);
+			for (let option of options)
 			{
-				var info = table[i].info;
-				if (info != undefined)
-				{
+				if (options[j] == "remove")
+					$deletemenu = $("<a href='#' class='button remove'><span class='glyphicon glyphicon-trash'></span></a>");
+			}
+		}
+
+		firstid = playlist[0].id;
+		if (playlist.length > 0) {
+			$playlist.removeClass('hidden');
+			if ($playlist.find('#item-'+playlist[0].id).length == 0)
+				$playlist.html('');
+			else {
+				$playlist.children('.bg-secondary').removeClass('bg-secondary text-light');
+				$playlist.children('.text-light').removeClass('bg-secondary text-light');
+			}
+		}
+		for (let item in playlist) {
+			var $elem = $playlist.find('#item-'+playlist[item].id);
+			if ($elem.length == 0) {
+				var info = playlist[item].info;
+				if (info != undefined) {
 					//var escapingname = encodeURIComponent(info.title);
 					var escapingname = info.title;
 					if (escapingname == undefined)
 						escapingname = "unknown";
 
-					elem = $(
-							"<div class='media list-group-item ' data-type='"+table[i].sources[0].mime+"' id='item-"+table[i].id+"' data-id='"+table[i].id+"' data-href=\""+escapingname+"\" >"+
-								"<a href='#' class='link col-xs-10 list-group-item-text'>"+
-									"<span class='title'>"+escapingname+"</span> - "+
-									"<span class='artist'>"+info.artist+"</span>"+
-								"</a>"+
-								"<a href='#' class='info col-xs-1 pull-right list-group-item-text'>"+
-										"<span class='sr-only'>open info</span>"+
+					$elem = $("<li class='playlist-item list-group-item list-group-item-action align-items-start' data-type='"+playlist[item].sources[0].mime+"' id='item-"+playlist[item].id+"' data-id='"+playlist[item].id+"' data-href=\""+escapingname+"\" >" +
+								"<div class='d-flex w-100 justify-content-between align-middle'>"+
+									"<a href='#' class='link btn'>"+
+										"<span class='title fw-bold'>"+escapingname+"</span> - "+
+										"<span class='artist'>"+info.artist+"</span>"+
+									"</a>"+
+									"<a href='#' class='info pt-2'>"+
+//										"<span class='visually-hidden'>open info</span>"+
 										"<span class='glyphicon glyphicon-comment'> </span>"+
-								"</a>"+
-							"</div>");
-					var j;
-					for (j in options)
-					{
-						if (options[i] == "remove")
-							$(elem).append(deletemenu);
-					}
-					$(playlist).append(elem);
-					elem.find('.link').on('click', function (event)
-					{
-						this.send("setnext", {id:$(event.currentTarget).parent('.media').data('id')});
-					}.bind(this));
-					elem.find('.info').on('click', function (event)
-					{
-						$(event.currentTarget).parent('.media').data('id');
-						this.send("info", {id:$(event.currentTarget).parent('.media').data('id')});
-					}.bind(this));
+									"</a>"+
+								"</div>"+
+							"</li>");
+					if ($deletemenu)
+						$elem.append($deletemenu);
+					$elem.find('.link').on('click', function (event)
+						{
+							var next = $(event.currentTarget).parents('.playlist-item').data('id');
+							this.change({next:next});
+						}.bind(this));
+					$elem.find('.info').on('click', function (event)
+						{
+							var id = $(event.currentTarget).parents('.playlist-item').data('id');
+							$('#infobox').data('id', id);
+							$('#infobox').modal('show');
+							this.about(id);
+						}.bind(this));
+					$playlist.append($elem);
 				}
 			}
-			if (table[i].id == this.currentid)
-				$(elem).addClass("active");
+			if (playlist[item].id == this.currentid) {
+				$elem.addClass('bg-secondary');
+				$elem.find('.btn').addClass('text-light');
+			}
+		}
+		if (count != undefined)
+		{
+			if (firstid > this.maxitems)
+			{
+				$('#playlist * .page-item.previous')
+					.removeClass('disabled')
+					.data('firstid',firstid );
+			}
+			else
+			{
+				$('#playlist * .page-item.previous')
+					.addClass('disabled')
+					.data('firstid',firstid);
+			}
+			if (firstid < count - this.maxitems)
+			{
+				$('#playlist * .page-item.next')
+					.removeClass('disabled')
+					.data('firstid',firstid );
+			}
+			else
+			{
+				$('#playlist * .page-item.next')
+					.addClass('disabled')
+					.data('firstid',firstid);
+			}
+			$('#media-count').html(count);
 		}
 	}
-	if (result.count != undefined)
-	{
-		if (firstid > g_maxitems)
-		{
-			$('#PagerList').find('.previous')
-				.removeClass('disabled')
-				.data('firstid',firstid );
-		}
-		else
-		{
-			$('#PagerList').find('.previous')
-				.addClass('disabled')
-				.data('firstid',firstid);
-		}
-		if (firstid < result.count - g_maxitems)
-		{
-			$('#PagerList').find('.next')
-				.removeClass('disabled')
-				.data('firstid',firstid );
-		}
-		else
-		{
-			$('#PagerList').find('.next')
-				.addClass('disabled')
-				.data('firstid',firstid);
-		}
-		$('#media-count').html(result.count);
+	saveinfo(message) {
+		$('#EditorSave').button('reset');
+		$('#savebox').modal('hide');
+		$('#editorbox').modal('hide');
 	}
-};
-
-playersetnext = function(result)
-{
-	var next = result.next;
-	$('.media').removeClass('list-group-item-info');
-	if (next != undefined)
+	setevents = undefined;
+	setactions(actions)
 	{
-		$('#item-'+next).addClass('list-group-item-info');
-	}
-}
-
-create_player = function (config)
-{
-	var player = new JsonRPC(config.player);
-	player.onopen = function ()
-	{
-		$('#connect').addClass('hidden').removeClass('disabled');
-		player.send('capabilities', null);
-	}.bind(player);
-	player.onchange = function(result)
-	{
-		if (result.state != undefined)
-		{
-			playerstate(result);
-		}
-		if (result.duration != undefined)
-		{
-			$('#positionbar').removeClass('hidden').attr('aria-valuemax', result.duration);
-			if (player.positiontimer != undefined)
-				clearInterval(player.positiontimer);
-			player.positiontimer = setInterval(function() {
-				player.send('getposition', null);
-			}, 1000);
-		}
-		else
-		{
-			$('#positionbar').addClass('hidden');
-			if (player.positiontimer != undefined)
-			{
-				clearInterval(player.positiontimer);
-				delete player.positiontimer;
-			}
-		}
-		if (result.info != undefined)
-		{
-			$('#PlayList').find('.active').removeClass('active');
-			$('#info').removeClass('hidden');
-			player.currentid = result.id;
-			var allelements = ["title","artist","album","track"];
-			for (info in allelements)
-			{
-				var elem = $("#"+info);
-				if (elem != undefined)
-				{
-					$(elem).text("");
-				}
-			}
-			$('#cover').attr("src", "").addClass("hidden");
-			for (info in result.info)
-			{
-				var elem = $("#"+info);
-				if (elem != undefined)
-				{
-					$(elem).removeClass("hidden");
-					if ($(elem).is("img"))
-					{
-						$(elem).attr("src", g_imgbase + encodeURI(result.info[info]));
-					}
-					else
-						$(elem).text(result.info[info]);
-				}
-			}
-		}
-		playersetnext.call(this, result);
-		if (result.options != undefined)
-		{
-			for (option in result.options)
-			{
-				 $('#'+result.options[option]).addClass('btn-primary');
-			}
-		}
-		if (result.id != undefined && result.id > -1)
-		{
-			$('#current-id').html(result.id);
-			var firstid = result.id - (result.id % g_maxitems);
-			player.send("list", {maxitems:g_maxitems, first:firstid});
-		}
-		if (result.volume != undefined)
-		{
-			$('#volume').data('level',result.volume);
-		}
-	}.bind(player);
-	player.options = function(result)
-	{
-		$('#random').removeClass('btn-primary');
-		if (result.random == true)
-			$('#random').addClass('btn-primary');
-		$('#repeat').removeClass('btn-primary');
-		if (result.loop == true)
-			$('#repeat').addClass('btn-primary');
-	}.bind(player);
-	player.volume = function(result)
-	{
-		$('#volumebar').data('level',result.level);
-		$('#volumebar').attr('aria-valuenow',result.level).css('width', result.level+"%");
-		$('#volume').delay( 2000 ).modal('hide');
-	}.bind(player);
-	player.capabilities = function(result)
-	{
-		var event;
-		for (event in result.events)
-		{
-			switch (result.events[event].method)
-			{
-			case "onchange":
-				// is too late to set player.onchange here
-			break;
-			}
-		}
-		var action;
-		for (action in result.actions)
-		{
-			switch (result.actions[action].method)
-			{
-			case "pause":
-				$('#playpause').removeClass('hidden');
-				player.play = playerstate.bind(player);
-				player.pause = playerstate.bind(player);
-			break;
-			case "stop":
-				$('#stop').removeClass('hidden');
-				player.stop = playerstate.bind(player);
-			break;
-			case "next":
-				$('#next').removeClass('hidden');
-				player.next = playerstate.bind(player);
-			break;
-			case "setnext":
-				player.setnext = playersetnext.bind(player);
-			break;
-			case "status":
-				player.status = player.onchange.bind(player);
-				player.send("status", null);
-			break;
-			case "options":
-				for (param in result.actions[action].params)
-				{
-					if (result.actions[action].params[param] == "random");
-					{
-						$('#random').removeClass('hidden')
-							.on("click", function()
-								{
-									if ($('#random').hasClass('btn-primary'))
-										player.send("options", {random:false});
-									else
-										player.send("options", {random:true});
-								});
-					}
-					if (result.actions[action].params[param] == "loop");
-					{
-						$('#repeat').removeClass('hidden')
-							.on("click", function()
-								{
-									if ($('#repeat').hasClass('btn-primary'))
-										player.send("options", {loop:false});
-									else
-										player.send("options", {loop:true});
-								});
-					}
-				}
-			break;
-			case "list":
-				$('#PlayList').removeClass('hidden');
-				player.list = playerlist.bind(player);
-				player.send("list", {maxitems:g_maxitems, first:0});
-			break;
+		for (let action of actions) {
+			switch (action.method) {
 			case "filter":
 				$('#openfilter').removeClass('hidden');
-			break;
-			case "info":
 			break;
 			case "setinfo":
 				$('#openeditor').removeClass('hidden');
 			break;
-			case "volume":
-				$('#volume_down').removeClass('hidden');
-				$('#volume_up').removeClass('hidden');
-			break;
 			}
 		}
-	}.bind(player);
-	player.filter = function ()
-	{
-		player.send("list", {maxitems:g_maxitems, first:0});
-		$('#filterbox').modal('hide');
-	}.bind(player);
-	player.setinfo = function ()
-	{
-		$('#EditorSave').button('reset');
-		$('#savebox').modal('hide');
-		$('#editorbox').modal('hide');
-	}.bind(player);
-	player.info = function (params)
-	{
-		$('#info-title').html(params.info.title);
-		$('#info-artist').html(params.info.artist);
-		$('#info-album').html(params.info.album);
-		$('#info-genre').html(params.info.genre);
-		$('#info-cover').attr('src', params.info.cover);
-		$('#editor-id').val(params.id);
-		$('#editor-title').val(params.info.title);
-		$('#editor-artist').val(params.info.artist);
-		$('#editor-album').val(params.info.album);
-		$('#editor-genre').val(params.info.genre);
-		if (params.info.gain != undefined)
-			$('#editor-gain').val(params.info.gain);
-		$('#infobox').modal('show');
-	}.bind(player);
-	player.getposition = function(result)
-	{
-		if (result.position >= 0)
-		{
-			if (result.duration > 0)
-				$('#positionbar').css('width', (result.position * 100 / result.duration) +"%");
-			$('#position').html(result.position);
-		}
-		else if (player.positiontimer != undefined)
-		{
-			clearInterval(player.positiontimer);
-			delete(player.positiontimer);
-		}
+		super.setactions(actions);
 	}
-	player.onclose = function()
-	{
-		initIHM();
-		$('#connect').removeClass('hidden').removeClass('disabled');
+}
+
+var g_config = undefined;
+var g_player;
+var g_cmdbar = new CmdBarClient(function(message) {
+	var composite = message.split(/ /);
+	switch(composite[0]) {
+	case "toggle":
+		if (composite[1] == "playlist") {
+			if ($('#playlist').hasClass("show")) {
+				$('#info').fadeIn().addClass("show")
+				$('#playlist').fadeOut().removeClass("show")
+			} else {
+				$('#playlist').fadeIn().addClass("show")
+				$('#info').fadeOut().removeClass("show")
+			}
+		}
+	break;
+	case "media":
+		var medium = undefined;
+		for (medium of g_config.media) {
+			if (medium.name == composite[1]) {
+				g_player.change(medium);
+				g_player.list({maxitems:g_player.maxitems, first: 0});
+				break;
+			}
+		}
+	break;
 	}
-	$('#playpause').on('click', function (event)
-		{
-			if (player.state == "play")
-				player.send("pause", null);
-			else
-				player.send("play", null);
-		});
-	$('#next').on('click', function (event)
-		{
-			player.send("next", null);
-		});
-	$('#stop').on('click', function (event)
-		{
-			player.send("stop", null);
-		});
-	$('#PagerList').find('.next')
-		.addClass('disabled')
+}, "player");
+var g_initialization = new CmdBarControl(true);
+initIHM = function()
+{
+	$('.action-btn').addClass('hidden');
+	$('.position').addClass('hidden');
+	$('#playlist').addClass('hidden');
+	$('#playlist * .page-item.next')
 		.on("click", function(evt)
 			{
-				player.send("list", {maxitems:5, first:$(this).data('firstid') + 5});
+				g_player.list({maxitems:g_player.maxitems, first:$(this).data('firstid') + g_player.maxitems});
 			});
-	$('#PagerList').find('.previous')
-		.addClass('disabled')
+	$('#playlist * .page-item.previous')
 		.on("click", function(evt)
 			{
-				player.send("list", {maxitems:5, first:$(this).data('firstid') - 5});
+				g_player.list({maxitems:g_player.maxitems, first:$(this).data('firstid') - g_player.maxitems});
 			});
-	$('#volume_down').on("click", function(evt)
-		{
-			player.send("volume", {step:-5});
-		});
-	$('#volume_up').on("click", function(evt)
-		{
-			player.send("volume", {step:5});
-		});
-	$('#EditorSave').on("click", function(evt)
-		{
-			$(this).button('loading');
-			var params = {};
-			params.info = {};
-			params.id = $('#editor-id').val();
-			params.info.artist = $('#editor-artist').val();
-			params.info.album = $('#editor-album').val();
-			params.info.title = $('#editor-title').val();
-			params.info.genre = $('#editor-genre').val();
-			if ($('#editor-gain').val())
-				params.info.gain = 1;
-			player.send("setinfo", params);
-		});
-	$('#showlist').on("click", function(evt)
-		{
-			var list = $('#media-list');
-			if ($(list).hasClass("hidden-xs"))
-			{
-				$('#media-list').removeClass("hidden-xs");
-				$('#info').addClass("hidden-xs");
-			}
-			else
-			{
-				$('#info').removeClass("hidden-xs");
-				$('#media-list').addClass("hidden-xs");
-			}
-		});
 	$('#filter').on("click", function(evt)
 		{
 			var params = {};
@@ -440,283 +342,154 @@ create_player = function (config)
 				params.title = "%"+$('#filter-title').val()+"%";
 			if ($('#filter-genre').val() != "")
 				params.genre = "%"+$('#filter-genre').val()+"%";
-			player.send("filter", params);
+			g_player.filter(params);
+			$('#filterbox').modal('hide');
 		});
-
-	if (config.media != undefined)
-	{
-		var i;
-		for (i in config.media)
+	$('#EditorSave').on("click", function(evt)
 		{
-			var media = config.media[i];
-			var options = "";
-			if (media.options != undefined && media.options.length > 0)
-			{
-				options = media.options;
-			}
-			var base = "";
-			if (media.base != undefined && media.base.length > 0)
-			{
-				base = media.base;
-			}
-			var entry = $("<li class='media'><a href='#' class='select' data-media='"+media.media+"' data-base='"+base+"' data-options='"+JSON.stringify(options)+"'>"+media.name+"</a></li>");
-			$(entry).find('a.select').on("click", function (evt)
-				{
-					$('#PlayList').data('options',$(evt.target).data('options'));
-					$('.media').removeClass('active');
-					$(evt.target).parent('li').addClass('active');
-					var media = $(evt.target).data('media');
-					var options = $(evt.target).data('options');
-					player.send('change', {media:media, options:options});
-					g_imgbase = $(evt.target).data('base');
-				});
-			$('#media').removeClass('hidden').append(entry);
-		}
+			$(this).button('loading');
+			var params = {};
+			params.info = {};
+			params.id = $('#editor-id').val();
+			params.info.artist = $('#editor-artist').val();
+			params.info.album = $('#editor-album').val();
+			params.info.title = $('#editor-title').val();
+			params.info.genre = $('#editor-genre').val();
+			if ($('#editor-gain').val())
+				params.info.gain = 1;
+			g_player.setinfo(params);
+		});
+	var volumemodal_update = function(timeout) {
+		clearTimeout($('#volume').data('timeout'));
+		$('#volume').data('timeout', setTimeout(function() {
+				$('#volume').modal('hide')}
+			,timeout));
 	}
-	player.connect();
-	return player;
+	$('#volume-down').on("click", function() {
+		g_player.volume(-5);
+		volumemodal_update(300);
+	});
+	$('#volume-up').on("click", function() {
+		g_player.volume(5);
+		volumemodal_update(300);
+	});
+	$('#volume').on('show.bs.modal', function() {
+		volumemodal_update(3000);
+	});
+	g_initialization.addgroup([{
+		id:"playlist-toggle",
+		glyphicon:"music",
+		name:"toggle playlist",
+		classes:"d-lg-none"
+	}]);
 }
-
 medialist = function()
 {
-	var xhr = new XMLHttpRequest();
-	xhr.onreadystatechange = function()
-	{
-		var xhr = this;
-		if (xhr.readyState === XMLHttpRequest.DONE)
-		{
-			if (xhr.status === 200)
-			{
-				g_config = JSON.parse(xhr.responseText);
-				g_player = create_player(g_config);
+	$.ajax({
+		url: "/apps/ouiradio.json"
+	}).done(function(config) {
+		g_config = config;
+		var playerid = 0;
+		if (config.players.length > 1) {
+			var menu = {name:"players", buttons:[]};
+			for  (player of config.players) {
+				var button = {}
+				if (player.default)
+					button.classes = "active";
+				button.name = player.name;
+				button.id = "player_"+player.name;
+				button.click = "send2app(\'player "+button.name+"\')";
+				menu.buttons.push(button);
 			}
+			g_initialization.addmenu(menu);
 		}
-		else if (xhr.readyState >= XMLHttpRequest.LOADING &&
-				xhr.status > 399)
-		{
-			console.log("Config request error "+xhr.status);
-			if (xhr.readyState === XMLHttpRequest.LOADING)
-				xhr.abort();
-		}
-		return true;
-	}.bind(xhr);
-	xhr.onerror = function(err)
-	{
-		console.log("Configr request error: "+err);
-	}.bind(xhr);
-
-	xhr.open("GET", "/apps/ouiradio.json");
-	xhr.responseType = "text/json";
-	xhr.withCredentials = true;
-	xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
-	xhr.send();
-}
-
-menulist = function()
-{
-	var xhr = new XMLHttpRequest();
-	xhr.onreadystatechange = function()
-	{
-		var xhr = this;
-		if (xhr.readyState === XMLHttpRequest.DONE)
-		{
-			if (xhr.status === 200)
-			{
-				var config = JSON.parse(xhr.responseText);
-				for (menu in config)
-				{
-					switch (config[menu].type)
-					{
-						case "button":
-							var button = $(
-							"<li>"+
-								"<a href='"+config[menu].href+"'>"+config[menu].name+"</a>"+
-							"</li>");
-							$("#mainmenu > .navbar-nav").append(button);
-						break;
-						case "dropdown":
-							var button = $(
-							"<li class='dropdown'>"+
-								"<a href='"+config[menu].href+"'>"+config[menu].name+"</a>"+
-								"<a href='#' class='dropdown-toggle' data-toggle='dropdown' role='button' aria-haspopup='true' aria-expanded='false'>"+
-									"<span class='caret'></span>"+
-								"</a>"+
-								"<ul class='dropdown-menu' id='"+config[menu].name+"'>"+
-								"</ul>"+
-							"</li>");
-							$("#mainmenu > .navbar-nav").append(button);
-						break;
-					}
-				}
-				medialist();
+		if (config.media.length > 1) {
+			var menu = {name:"media", href:"#", buttons:[]};
+			for  (medium of config.media) {
+				var button = {}
+				if (medium.default)
+					button.classes = "active";
+				button.name = medium.name;
+				button.id = "media_"+medium.name;
+				button.href = "#";
+				button.click = "send2app(\'media "+button.name+"\')";
+				menu.buttons.push(button);
 			}
+			g_initialization.addmenu(menu);
 		}
-		else if (xhr.readyState >= XMLHttpRequest.LOADING &&
-				xhr.status > 399)
-		{
-			console.log("Config request error "+xhr.status);
-			if (xhr.readyState === XMLHttpRequest.LOADING)
-				xhr.abort();
-		}
-		return true;
-	}.bind(xhr);
-	xhr.onerror = function(err)
-	{
-		console.log("Configr request error: "+err);
-	}.bind(xhr);
+		g_cmdbar.load(g_initialization);
 
-	xhr.open("GET", "/apps/apps.json");
-	xhr.responseType = "text/json";
-	xhr.withCredentials = true;
-	xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
-	xhr.send();
+		for (index in config.players) {
+			if (config.players[index].default)
+				playerid = index;
+		}
+		g_player = new PlayerInfo(config.players[playerid], g_maxitems, g_cmdbar);
+	}).fail(function(data) {
+		console.log( "error "+data.responseText);
+		var object = JSON.parse(data.responseText);
+	});
 }
 
 $(document).ready(function()
 {
+	controle_viewport();
 	initIHM();
-	menulist();
-
-	$('#connect').on('click', function (event)
-		{
-			if (g_player != undefined)
-			{
-				$('#connect').addClass('disabled');
-				g_player.connect();
-			}
-		});
-
-	var connectTimer;
-	$('#connect').mouseup(function()
-		{
-			clearTimeout(connectTimer);
-			return false;
-		}).mousedown(function()
-		{
-			connectTimer = window.setTimeout(function()
-				{
-				        var xhr = new XMLHttpRequest();
-				        xhr.onreadystatechange = function()
-				        {
-				                var xhr = this;
-					        if (xhr.readyState === XMLHttpRequest.DONE)
-				                {
-				                        if (xhr.status === 200)
-				                        {
-								g_player.connect();
-							}
-						}
-					}.bind(xhr);
-					xhr.open("GET", "/apps/totem-start.cgi");
-					xhr.responseType = "text/json";
-					xhr.withCredentials = true;
-					xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
-					xhr.send();
-				},1000);
-		});
+	medialist();
 });
 
 window.addEventListener('unload', function(event) {
 	if (g_player != undefined)
 		g_player.close();
 });
+window.addEventListener('resize', function(event) {
+	controle_viewport();
+});
 		</script>
 		<style>
+			@media only screen and (min-height: 768px) {
+				.playlist-item {padding-top: 15px;}
+
+			}
+			@media only screen and (max-height: 768px) {
+				.playlist-item {padding-top: 0;}
+				.h3,.h3 {
+					font-size:16px;
+					overflow: hidden;
+				}
+			}
 			@media only screen and (max-width: 768px) {
-				.navbar-fixed-body {padding-top: 142px;}
-				.media > .info {padding-left:5px;}
 			}
 			@media only screen and (max-width: 992px) {
-				.media > .info {padding-left:5px;}
-				.media > .link {height:34px;text-decoration: none;}
-				.media > .title {height:16px;overflow:hidden;display:inline-block;}
 			}
 			@media only screen and (min-width: 768px) {
-				.navbar-fixed-body {padding-top: 70px;}
 			}
 			.pager {margin: 10px 0;}
-			.cmdplayer  {}
-			.navbar-nav > li {padding-inline: 10px;}
-			.navbar-nav > li > a {
-				display: inline-block;
-				padding-inline: 0;
+			.media.active * {
+				color: #d9edf7;
 			}
+			.media.active {
+				z-index: 2;
+				color: #d9edf7;
+				background-color: #337ab7;
+				border-color: #337ab7;
+			}
+			.media {
+				padding-top:10px;
+			}
+			.hidden { display:none !important;}
 		</style>
 	</head>
-	<body class="navbar-fixed-body">
-		<nav class="navbar navbar-default navbar-fixed-top">
-			<div class="container-fluid">
-				<div class="navbar-header">
-					<button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#mainmenu" aria-expanded="false">
-						<span class="sr-only">Toggle navigation</span>
-						<span class="glyphicon glyphicon-th-list"></span>
-					</button>
-					<a href="/apps/signin.html?redirect_uri=/apps/ouiradio.html" class="navbar-brand">RadioGaga</a>
-					<button type="button" id='showlist' class="navbar-toggle visible-xs">
-						<span class="sr-only">Toggle playlist</span>
-						<span class="glyphicon glyphicon-music"></span>
-					</button>
-				</div>
-				<div class="navbar-header collapse navbar-collapse" id="mainmenu">
-					<ul class="nav navbar-nav">
-					</ul>
-				</div>
-				<div class="navbar-form navbar-header">
-					<div class="cmdplayer">
-					<div class="btn-toolbar" role="toolbar">
-							<div class="btn-group" role="group">
-								<button type="button" class="action-btn btn btn-default" id='connect' aria-expanded="false">
-									<span class="sr-only">Connect</span>
-									<span>Connect</span>
-								</button>
-								<button type="button" class="action-btn btn btn-default" id='stop' aria-expanded="false">
-									<span class="sr-only">Stop</span>
-									<span class="glyphicon glyphicon-stop" aria-hidden="true"></span>
-								</button>
-								<button type="button" class="action-btn btn btn-default" id='playpause' aria-expanded="false">
-									<span class="sr-only">Play</span>
-									<span class="glyphicon glyphicon-play" aria-hidden="true"></span>
-								</button>
-								<button type="button" class="action-btn btn btn-default" id='next' aria-expanded="false">
-									<span class="sr-only">Next</span>
-									<span class="glyphicon glyphicon-fast-forward" aria-hidden="true"></span>
-								</button>
-							</div>
-							<div class="btn-group" role="group">
-								<button type="button" class="action-btn btn btn-default" id='random' aria-expanded="false">
-									<span class="sr-only">Random</span>
-									<span class="glyphicon glyphicon-random" aria-hidden="true"></span>
-								</button>
-								<button type="button" class="action-btn btn btn-default" id='repeat' aria-expanded="false">
-									<span class="sr-only">Repeat</span>
-									<span class="glyphicon glyphicon-repeat" aria-hidden="true"></span>
-								</button>
-							</div>
-							<div class="btn-group" role="group">
-								<button type="button" class="action-btn btn btn-default" id='volume_down' aria-expanded="false" data-toggle="modal" data-target="#volume">
-									<span class="sr-only">Volume Down</span>
-									<span class="glyphicon glyphicon-volume-down" aria-hidden="true"></span>
-								</button>
-								<button type="button" class="action-btn btn btn-default" id='volume_up' aria-expanded="false" data-toggle="modal" data-target="#volume">
-									<span class="sr-only">Volume Up</span>
-									<span class="glyphicon glyphicon-volume-up" aria-hidden="true"></span>
-								</button>
-							</div>
-						</div>
-					</div>
-				</div>
-			</div>
-		</nav>
+	<body>
 		<div class="modal fade" id='volume' tabindex="-1" role="dialog" aria-labelledby="Info">
-			<div class="modal-dialog modal-lg" role="document">
-				<div class="modal-content">
-					<div class="col-xs-1 glyphicon glyphicon-volume-down" aria-hidden="true"></div>
-					<div class="col-xs-9 progress">
-						<div id='volumebar'class="progress-bar" role="progressbar" aria-valuenow="60" aria-valuemin="0" aria-valuemax="100" style="width: 60%;">
-							<span class="sr-only">60% Complete</span>
+			<div class="modal-dialog modal-lg " role="document">
+				<div class="modal-content container">
+					<div class="row">
+						<div id='volume-down'class="col-1 glyphicon glyphicon-volume-down" aria-hidden="true"></div>
+						<div class="col progress">
+							<div id='volumebar'class="progress-bar" role="progressbar" aria-valuenow="60" aria-valuemin="0" aria-valuemax="100" style="width: 60%;"></div>
 						</div>
+						<div id='volume-up'class="col-1 glyphicon glyphicon-volume-up" aria-hidden="true"></div>
 					</div>
-					<div class="col-xs-1 glyphicon glyphicon-volume-up" aria-hidden="true"></div>
 				</div>
 			</div>
 		</div>
@@ -725,7 +498,7 @@ window.addEventListener('unload', function(event) {
 				<div class="modal-content">
 					<form>
 						<div class="modal-header">
-							<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+							<button type="button" class="close" data-bs-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
 							<h4 class="modal-title">Filter</h4>
 						</div>
 						<div class="modal-body">
@@ -765,7 +538,7 @@ window.addEventListener('unload', function(event) {
 							</div>
 						</div>
 						<div class="modal-footer">
-							<button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+							<button type="button" class="btn btn-default" data-bs-dismiss="modal">Close</button>
 							<button type="button" class="btn btn-primary" id='filter'>Apply</button>
 						</div>
 					</form>
@@ -776,33 +549,33 @@ window.addEventListener('unload', function(event) {
 			<div class="modal-dialog modal-lg" role="document">
 				<div class="modal-content">
 					<div class="modal-header">
-						<button type="button" id="openeditor"class="action-btn btn btn-default pull-right" aria-expanded="false" data-toggle="modal" data-target="#editorbox">
+						<button type="button" id="openeditor"class="action-btn btn btn-default pull-right" aria-expanded="false" data-bs-toggle="modal" data-target="#editorbox">
 							<span class="sr-only">Editing</span>
 							<span class="glyphicon glyphicon-edit"></span>
 						</button>
 						<div class="row">
 							<div class="col-md-9 col-xs-8">
-									<h3 id='info-artist'></h3>
-									<h4 id='info-title'></h4>
+									<h3 class="artist" id='info-artist'></h3>
+									<h4 class="title" id='info-title'></h4>
 							</div>
 						</div>
 					</div>
 					<div class="modal-body">
 						<div class="container-fluid">
 							<div class="row">
-								<img class="col-xs-9 col-xs-offset-1" id ='info-cover'/>
+								<img class="col-xs-9 col-xs-offset-1 cover" id ='info-cover'/>
 							</div>
 							<div class="row">
-								<h4 class="col-xs-8" id ='info-album'></h4><div class="col-xs-3"> Track <span id='info-track'></span></div>
+								<h4 class="col-xs-8 album" id ='info-album'></h4><div class="col-xs-3"> Track <span class="track" id='info-track'></span></div>
 							</div>
 							<div class="row">
-								<div class="col-xs-3" id='info-genre'></div>
+								<div class="col-xs-3 genre" id='info-genre'></div>
 								<div class="col-xs-3 col-xs-offset-1" id='info-speed'></div>
 							</div>
 						</div>
 					</div>
 					<div class="modal-footer">
-						<button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+						<button type="button" class="btn btn-default" data-bs-dismiss="modal">Close</button>
 					</div>
 				</div>
 			</div>
@@ -815,33 +588,33 @@ window.addEventListener('unload', function(event) {
 					</div>
 					<div class="modal-body">
 						<form class="form-horizontal">
-							<input type="hidden" id='editor-id'></input>
+							<input type="hidden id" id='editor-id'></input>
 							<div class="form-group">
 								<label class="control-label col-sm-2" for="editor-artist">artist</label>
 								<div class="col-sm-8">
-									<input type="text" class="form-control" id='editor-artist'></input>
+									<input type="text" class="form-control artist" id='editor-artist'></input>
 								</div>
 							</div>
 							<div class="form-group">
 								<label class="control-label col-sm-2" for="editor-title">title</label>
 								<div class="col-sm-8">
-									<input type="text" class="form-control" id='editor-title'></input>
+									<input type="text" class="form-control title" id='editor-title'></input>
 								</div>
 							</div>
 							<div class="form-group">
 								<label class="control-label col-sm-2" for="editor-album">album</label>
 								<div class="col-sm-8">
-									<input type="text" class="form-control" id ='editor-album'></input>
+									<input type="text" class="form-control album" id ='editor-album'></input>
 								</div>
 							</div>
 							<div class="form-group">
 								<label class="control-label col-sm-2" for="editor-track">track</label>
 								<div class="col-sm-2">
-									<input type="number" class="form-control" id='editor-track'></input>
+									<input type="number" class="form-control track" id='editor-track'></input>
 								</div>
 								<label class="control-label col-sm-2" for="editor-genre">genre</label>
 								<div class="col-sm-6">
-									<select class="form-control" id='editor-genre'>
+									<select class="form-control genre" id='editor-genre'>
 									  <option>---</option>
 									  <option>rock</option>
 									  <option>electro</option>
@@ -854,14 +627,14 @@ window.addEventListener('unload', function(event) {
 							<div class="form-group">
 								<label class="control-label col-sm-2" for="editor-gain">gain</label>
 								<div class="col-sm-8">
-									<input type="checkbox" class="form-control" id ='editor-gain'></input>
+									<input type="checkbox" class="form-control gain" id ='editor-gain'></input>
 								</div>
 							</div>
 						</form>
 					</div>
 					<div class="modal-footer">
-						<button type="button" class="btn btn-primary" aria-expanded="false" data-toggle="modal" data-target="#savebox">Save</button>
-						<button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+						<button type="button" class="btn btn-primary" aria-expanded="false" data-bs-toggle="modal" data-target="#savebox">Save</button>
+						<button type="button" class="btn btn-default" data-bs-dismiss="modal">Close</button>
 					</div>
 				</div>
 			</div>
@@ -874,40 +647,41 @@ window.addEventListener('unload', function(event) {
 					</div>
 					<div class="modal-footer">
 						<button id='EditorSave' type="button" data-loading-text="Saving..." class="btn btn-primary" aria-expanded="false">Confirm</button>
-						<button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+						<button type="button" class="btn btn-default" data-bs-dismiss="modal">Cancel</button>
 					</div>
 				</div>
 			</div>
 		</div>
 		<div class="container-fluid">
 			<div id="Message" class="row hidden alert alert-warning"></div>
-			<div class="row">
-				<div id='media-list' class="col-md-4 col-sm-6 col-xs-12 hidden-xs">
-					<div class="panel panel-default">
-						<div class="panel-heading">
+			<div class="d-flex w-100 justify-content-between justify-content-xl-around gx-2 mt-2">
+				<div id='playlist' class="col-12 col-lg-5 collapse multi-collapse d-lg-block">
+					<div class="card">
+						<div class="card-header">
 							<div class="row row-no-gutters">
-								<h3 class="col-xs-9 hidden-xs" >Play List</h3>
-								<h4 class="col-xs-9 visible-xs" >Play List</h4>
-								<h3 class="col-xs-1 col-xs-offset-1">
-									<button type="button" id='openfilter' class="action-btn btn btn-default pull-right" aria-expanded="false" data-toggle="modal" data-target="#filterbox">
+								<div class="col-xs-9" >
+									<span class="h3">Play List</span>
+								</div>
+								<div class="col-xs-1 col-xs-offset-1">
+									<button type="button" id='openfilter' class="action-btn btn btn-default pull-right" aria-expanded="false" data-bs-toggle="modal" data-target="#filterbox">
 										<span class="sr-only">Filtering</span>
-										<span class="glyphicon glyphicon-search"> </span>
+										<span class="h3 glyphicon glyphicon-search"> </span>
 									</button>
-								</h3>
+								</div>
 							</div>
 						</div>
-						<div class="panel-body">
-							<div class="list-group container-fluid ProtectedButton" id='PlayList'>
-							</div>
+						<ul class="playlist list-group list-group-flush ProtectedButton">
+						</ul>
+						<div class="card-body">
 							<nav aria-label="Page navigation">
-							  <ul id='PagerList' or-class="pagination" class="pager">
-								<li class="disabled previous">
-								  <a href="#" aria-label="Previous">
+							  <ul class="pagination justify-content-between">
+								<li class="disabled page-item previous">
+								  <a class="page-link" href="#" aria-label="Previous">
 									<span aria-hidden="true">&laquo;</span>
 								  </a>
 								</li>
-								<li class="next">
-								  <a href="#" aria-label="Next">
+								<li class="disabled page-item next">
+								  <a class="page-link" href="#" aria-label="Next">
 									<span aria-hidden="true">&raquo;</span>
 								  </a>
 								</li>
@@ -917,27 +691,34 @@ window.addEventListener('unload', function(event) {
 					</div>
 				</div>
 
-				<div id='info' class="col-md-8 col-sm-6 col-xs-12">
-					<div class="panel panel-default">
-						<div class="panel-heading">
-							<div class="row">
-								<div class="col-md-9 col-xs-12">
-										<h3 id='artist'></h3>
-										<h4 id='title'></h4>
+				<div id='info' class="col-12 col-lg-6 collapse multi-collapse d-lg-block">
+					<div class="card">
+						<div class="card-header">
+							<div class="d-flex w-100 justify-content-between">
+								<div class="col-4 text-truncate mt-1">
+										<span class="h4 artist" id='artist'></span>
 								</div>
-								<div class="col-md-3 col-md-offset-0 hidden-xs"><h4 id='counter'><span id='current-id'></span>/<span id='media-count'></span></h4></div>
+								<div class="col-7 text-truncate">
+										<span class="h3 title" id='title'></span>
+								</div>
+								<div class="col-1 d-none d-md-block justify-content-end mt-1">
+									<span class="ḧ5" id='counter'>
+										<span class="id" id='current-id'></span>/<span class="count" id='media-count'></span>
+									</span>
+								</div>
 							</div>
 						</div>
-						<div class="panel-body">
+						<div class="card-body">
 							<div class="container-fluid">
 								<div class="row">
-									<img class="col-xs-9 col-xs-offset-1" id ='cover'/>
+									<img class="col cover" id ='cover'/>
 								</div>
-								<div class="row">
-									<h4 class="col-xs-8" id ='album'></h4><div class="col-xs-3"> Track <span id='track'></span></div>
+								<div class="row justify-content-between">
+									<div class="h5 col album" id ='album'></div>
+									<div class="h6 col-4"> Track <span class="track" id='track'></span></div>
 								</div>
-								<div class="row">
-									<div class="col-xs-3"><span id='position'></span></div>
+								<div class="row position">
+									<div class="h5 col-3"><span id='position'></span></div>
 								</div>
 							</div>
 						</div>

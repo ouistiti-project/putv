@@ -52,7 +52,8 @@ struct encoder_ctx_s
 	unsigned char nchannels;
 	unsigned char samplesize;
 	unsigned short samplesframe;
-	unsigned int framescnt;
+	uint64_t framescnt;
+	uint64_t maxframes;
 	int dumpfd;
 	pthread_t thread;
 	player_ctx_t *player;
@@ -85,7 +86,7 @@ struct encoder_ctx_s
 #define DEFAULT_SAMPLERATE 44100
 #endif
 
-#define SAMPLES_FRAME 300
+#define SAMPLES_FRAME 400
 #define NB_BUFFERS 6
 #define LATENCY 200 //ms
 #define MAX_SAMPLES (44100 * 60 * 2)
@@ -160,7 +161,7 @@ static int encoder_flac_init(encoder_ctx_t *ctx)
 	FLAC__stream_encoder_set_compression_level(ctx->encoder, 2);
 	FLAC__stream_encoder_set_blocksize(ctx->encoder, SAMPLES_FRAME);
 //	FLAC__stream_encoder_set_blocksize(ctx->encoder, 0);
-	FLAC__stream_encoder_set_total_samples_estimate(ctx->encoder, MAX_SAMPLES);
+	FLAC__stream_encoder_set_total_samples_estimate(ctx->encoder, ctx->maxframes * ctx->samplesframe);
 
 	ctx->framescnt = 0;
 	dbg("flac: initialized");
@@ -180,6 +181,10 @@ static encoder_ctx_t *encoder_init(player_ctx_t *player)
 	ctx->samplesize = sizeof(uint32_t);
 	ctx->samplesframe = SAMPLES_FRAME;
 	//ctx->samplesframe = LATENCY * DEFAULT_SAMPLERATE / 1000;
+	// in streaminfg, the number of samples is clearly unknown => 0
+	ctx->maxframes = 0;
+	// otherwise
+	// MAX_SAMPLES / SAMPLES_FRAME
 
 	ctx->encoder = FLAC__stream_encoder_new();
 
@@ -251,7 +256,7 @@ static void *_encoder_thread(void *arg)
 		unsigned int inlength = ctx->in->ops->length(ctx->in->ctx);
 		inlength /= ctx->samplesize * ctx->nchannels;
 		if (inlength < ctx->samplesframe)
-			warn("encoder lame: frame too small %d %ld", inlength, ctx->in->ctx->size);
+			warn("encoder: flac frame too small %d %ld", inlength, ctx->in->ctx->size);
 		if (ctx->in->ctx->frequence != ctx->samplerate)
 		{
 			ctx->samplerate = ctx->in->ctx->frequence;
@@ -266,8 +271,9 @@ static void *_encoder_thread(void *arg)
 			}
 		}
 		ctx->framescnt++;
-		if (ctx->framescnt > (MAX_SAMPLES / ctx->samplesframe))
+		if (ctx->maxframes && ctx->framescnt > ctx->maxframes)
 		{
+			warn("encoder: max flac frames");
 			encoder_flac_init(ctx);
 
 			FLAC__StreamEncoderInitStatus init_status;
@@ -326,7 +332,9 @@ static int encoder_run(encoder_ctx_t *ctx, jitter_t *jitter)
 	ctx->heartbeat.ops = heartbeat_samples;
 	ctx->heartbeat.ctx = ctx->heartbeat.ops->init(&config);
 	int timeslot = ctx->samplesframe / config.samplerate;
-	int bitrate = config.samplerate * ctx->samplesize;
+	int bitrate = config.samplerate * ctx->samplesize * ctx->nchannels;
+	dbg("set heart %s %uHz", jitter->ctx->name, ctx->samplerate);
+	dbg("set heart %s %dbytes", jitter->ctx->name, ctx->samplesframe);
 	dbg("set heart %s %dms %dkbps", jitter->ctx->name, timeslot, bitrate);
 	jitter->ops->heartbeat(jitter->ctx, &ctx->heartbeat);
 #endif

@@ -76,11 +76,13 @@ static int answer_proto(client_data_t * data, json_t *json_params)
 	funcdata = data->data;
 	data->proto = NULL;
 	data->data = NULL;
+	int ret = 0;
+	if (func)
+		ret = func(funcdata, json_params);
+	data->result = ret;
 	pthread_mutex_unlock(&data->mutex);
 	pthread_cond_broadcast(&data->cond);
-	if (func)
-		func(funcdata, json_params);
-	return 0;
+	return ret;
 }
 
 static int answer_subscribe(json_t *json_params, json_t **result, void *userdata)
@@ -104,13 +106,13 @@ static int answer_stdparams(json_t *json_params, json_t **result, void *userdata
 {
 	client_data_t *data = userdata;
 
-	answer_proto(data, json_params);
+	int ret = answer_proto(data, json_params);
 #ifdef DEBUG
 	char * dump = json_dumps(json_params, JSON_INDENT(2));
 	dbg("answer params %s", dump);
 	free(dump);
 #endif
-	return 0;
+	return ret;
 }
 
 static int method_stdparams(json_t *json_params, json_t **result, void *userdata)
@@ -135,11 +137,12 @@ static int notification_onchange(json_t *json_params, json_t **result, void *use
 			break;
 		event = event->next;
 	}
+	int ret = 0;
 	if (event)
 	{
-		event->proto(event->data, json_params);
+		ret = event->proto(event->data, json_params);
 	}
-	return 0;
+	return ret;
 }
 
 struct jsonrpc_method_entry_t table[] =
@@ -241,7 +244,7 @@ int client_wait(client_data_t *data, unsigned long int pid)
 	{
 		pthread_cond_wait(&data->cond, &data->mutex);
 	}
-	return 0;
+	return data->result;
 }
 
 static int _client_generic(client_data_t *data, client_event_prototype_t proto, void *protodata, const char *cmd)
@@ -253,15 +256,16 @@ static int _client_generic(client_data_t *data, client_event_prototype_t proto, 
 	pthread_mutex_lock(&data->mutex);
 	data->proto = proto;
 	data->data = protodata;
+	data->result = 0;
 	long int pid = client_cmd(data, cmd);
 	if (pid == -1)
 	{
 		pthread_mutex_unlock(&data->mutex);
 		return -1;
 	}
-	client_wait(data, (unsigned long int)pid);
+	int ret = client_wait(data, (unsigned long int)pid);
 	pthread_mutex_unlock(&data->mutex);
-	return 0;
+	return ret;
 }
 
 int client_next(client_data_t *data, client_event_prototype_t proto, void *protodata)
@@ -384,7 +388,8 @@ static size_t recv_cb(void *buffer, size_t len, void *arg)
 		ret = recv(data->sock, buffer, len, MSG_NOSIGNAL);
 		if (ret <= 0)
 		{
-			strncpy(buffer, "{}",len);
+			err("client: connection error %s", strerror(errno));
+			strcpy(buffer, "{}");
 			client_disconnect(data);
 			return -1;
 		}
@@ -396,27 +401,28 @@ static size_t recv_cb(void *buffer, size_t len, void *arg)
 		free(data->message);
 		data->message = NULL;
 	}
-	int length = strlen(buffer);
-	if ((length + 1) < ret)
-	{
-		err("client: two messages in ONE");
-		/**
-		 * disable the last command, the response may be lost
-		 * TODO
-		 * store the second message and call again the json parser.
-		 */
-		data->pid = 0;
-		client_dbg("client: recv %ld/%d" , strlen(buffer), ret);
-		data->message = malloc(ret - length - 1);
-		memcpy(data->message, buffer + length + 1, ret - length - 1);
-		data->messagelen = ret - length - 1;
-	}
-	client_dbg("client: recv %d %s", ret, (char *)buffer);
+	int length = strlen(buffer) + 1;
 	if (ret >= 0)
-		((char*)buffer)[ret] = 0;
-	else
-		length = -1;
-	return length;
+	{
+		if ((length) < ret)
+		{
+			err("client: two messages in ONE");
+			/**
+			 * disable the last command, the response may be lost
+			 * TODO
+			 * store the second message and call again the json parser.
+			 */
+			data->pid = 0;
+			client_dbg("client: recv %ld/%d" , strlen(buffer), ret);
+			data->message = malloc(ret - length);
+			memcpy(data->message, buffer + length, ret - length);
+			data->messagelen = ret - length;
+			ret = length;
+		}
+	}
+
+	client_dbg("client: recv %d %s", ret, (char *)buffer);
+	return ret;
 }
 #endif
 

@@ -90,6 +90,10 @@ struct demux_ctx_s
 	pthread_t thread;
 	event_listener_t *listener;
 	demux_profile_t *profiles;
+
+#ifdef DEMUX_DUMP
+	int dumpfd;
+#endif
 };
 #define SRC_CTX
 #define DEMUX_CTX
@@ -139,6 +143,10 @@ static demux_ctx_t *demux_init(player_ctx_t *player, const char *url, const char
 	warn("demux add %s %d", mime, pt);
 	demux_rtp_addprofile(ctx, pt, mime);
 
+#ifdef DEMUX_DUMP
+	ctx->dumpfd = open("rtp_dump.rtp", O_RDWR | O_CREAT, 0644);
+	err("dump %d", ctx->dumpfd);
+#endif
 	return ctx;
 }
 
@@ -305,6 +313,12 @@ static int demux_parseheader(demux_ctx_t *ctx, unsigned char *input, size_t len)
 		}
 		if (out->data == NULL)
 			out->data = out->jitter->ops->pull(out->jitter->ctx);
+#ifdef DEMUX_DUMP
+		if (ctx->dumpfd > 0)
+		{
+			write(ctx->dumpfd, input, len);
+		}
+#endif
 		while (len > out->jitter->ctx->size)
 		{
 			err("demux: udp packet has not to overflow 1500 bytes (%ld)", len);
@@ -490,6 +504,10 @@ static void demux_destroy(demux_ctx_t *ctx)
 	}
 	if (ctx->in != NULL)
 		ctx->in->destroy(ctx->in);
+#ifdef DEMUX_DUMP
+	if (ctx->dumpfd > 0)
+		close(ctx->dumpfd);
+#endif
 	free(ctx);
 }
 

@@ -907,6 +907,7 @@ SETCONFIGS=$(shell cat $(DEFCONFIG) | sed 's/\"/\\\"/g' | grep -v '^\#' | awk -F
 UNSETCONFIGS=$(shell cat $(DEFCONFIG) | awk '/^. .* is not set/{print $$2}')
 endif
 CONFIGS:=$(SETCONFIGS) $(UNSETCONFIGS)
+$(foreach config,$(CONFIGS),$(eval $(config):=$(if $($(config)),$($(config)),n)))
 
 oldconfig: _info $(builddir) $(CONFIG) FORCE
 	@$(call cmd,clean,$(PATHCACHE))

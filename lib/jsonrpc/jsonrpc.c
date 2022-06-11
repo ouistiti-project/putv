@@ -248,7 +248,7 @@ json_t *jsonrpc_handle_request_single(json_t *json_request,
 	struct jsonrpc_method_entry_t *entry;
 
 	rc = jsonrpc_validate_request(json_request, &str_method, &json_params, &json_id, &json_error);
-	is_notification = json_id==NULL;
+	is_notification = (json_id==NULL);
 
 	for (entry=method_table; entry->name!=NULL; entry++)
 	{
@@ -403,8 +403,9 @@ json_t *jsonrpc_jrequest(const char *method,
 		goto done;
 	}
 
+	int ret = 0;
 	if (entry->funcptr) {
-		entry->funcptr(NULL, &params, userdata);
+		ret = entry->funcptr(NULL, &params, userdata);
 	}
 	if (entry->params_spec) {
 		json_t *error_obj = jsonrpc_validate_params(params, entry->params_spec);
